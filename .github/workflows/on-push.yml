@@ -47,8 +47,13 @@ jobs:
       arch: ${{ matrix.arch }}
 
   update-lock:
-    needs: [build-php, build-ext]
-    if: github.event_name == 'push' && !cancelled() && !failure()
+    needs: [plan, build-php, build-ext]
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      needs.plan.result == 'success' &&
+      needs.build-php.result != 'failure' &&
+      needs.build-ext.result != 'failure'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
