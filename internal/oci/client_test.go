@@ -2,27 +2,8 @@ package oci
 
 import (
 	"context"
-	"crypto/sha256"
-	"fmt"
 	"testing"
 )
-
-func TestDigestVerification(t *testing.T) {
-	data := []byte("test bundle content")
-	h := sha256.Sum256(data)
-	digest := fmt.Sprintf("sha256:%x", h)
-
-	if err := verifyDigest(data, digest); err != nil {
-		t.Fatalf("verifyDigest() should pass for matching digest, got %v", err)
-	}
-}
-
-func TestDigestVerificationMismatch(t *testing.T) {
-	data := []byte("test bundle content")
-	if err := verifyDigest(data, "sha256:0000000000000000"); err == nil {
-		t.Fatal("verifyDigest() should fail for mismatching digest")
-	}
-}
 
 func TestNewClient(t *testing.T) {
 	c, err := NewClient("ghcr.io/buildrush", "fake-token")

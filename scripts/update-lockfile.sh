@@ -37,8 +37,8 @@ for ver in $PHP_VERSIONS; do
         REF="${REGISTRY}/php-core:${TAG}"
         echo -n "Checking ${REF}... "
 
-        # Fetch the manifest and extract the first layer's digest (the bundle content digest).
-        DIGEST=$(oras manifest fetch "${REF}" 2>/dev/null | python3 -c "import sys,json; m=json.load(sys.stdin); layers=m.get('layers',[]); print(layers[0]['digest'] if layers else '')" 2>/dev/null) || true
+        # Get the manifest digest (used for content-addressed OCI pulls).
+        DIGEST=$(oras manifest fetch "${REF}" --descriptor 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('digest',''))" 2>/dev/null) || true
         if [ -n "$DIGEST" ]; then
           # Key by the catalog version (e.g. "8.4"), matching the resolver's
           # lookup. Patch version info lives in the bundle manifest.
@@ -78,8 +78,8 @@ for ext_file in "${CATALOG_DIR}"/extensions/*.yaml; do
             REF="${REGISTRY}/php-ext-${EXT_NAME}:${TAG}"
             echo -n "Checking ${REF}... "
 
-            # Fetch the manifest and extract the first layer's digest (the bundle content digest).
-        DIGEST=$(oras manifest fetch "${REF}" 2>/dev/null | python3 -c "import sys,json; m=json.load(sys.stdin); layers=m.get('layers',[]); print(layers[0]['digest'] if layers else '')" 2>/dev/null) || true
+            # Get the manifest digest (used for content-addressed OCI pulls).
+        DIGEST=$(oras manifest fetch "${REF}" --descriptor 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('digest',''))" 2>/dev/null) || true
             if [ -n "$DIGEST" ]; then
               KEY="ext:${EXT_NAME}:${ext_ver}:${php}:${os}:${arch}:${ts}"
               add_bundle "$KEY" "$DIGEST"

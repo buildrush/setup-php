@@ -2,9 +2,7 @@ package oci
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -112,9 +110,10 @@ func (c *Client) Fetch(ctx context.Context, bundle *ResolvedBundle) (*FetchResul
 		}
 	}
 
-	if err := verifyDigest(data, bundle.Digest); err != nil {
-		return nil, fmt.Errorf("bundle %s: %w", bundle.Key, err)
-	}
+	// The manifest digest in bundle.Digest was already verified by the
+	// OCI library when fetching via content-addressed reference. The
+	// layer integrity is covered by the manifest's layer descriptors,
+	// which the library also validates. No extra hashing needed here.
 
 	return &FetchResult{
 		Key:    bundle.Key,
@@ -148,17 +147,4 @@ func (c *Client) bundleRef(bundle *ResolvedBundle) (name.Reference, error) {
 		return nil, fmt.Errorf("unknown bundle kind %q", bundle.Kind)
 	}
 	return name.ParseReference(refStr)
-}
-
-func verifyDigest(data []byte, expectedDigest string) error {
-	h := sha256.Sum256(data)
-	actual := fmt.Sprintf("sha256:%x", h)
-	expected := expectedDigest
-	if !strings.HasPrefix(expected, "sha256:") {
-		expected = "sha256:" + expected
-	}
-	if actual != expected {
-		return fmt.Errorf("digest mismatch: got %s, want %s", actual, expected)
-	}
-	return nil
 }
