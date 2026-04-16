@@ -24,6 +24,11 @@ type ExtensionComposition struct {
 }
 
 func Compose(layout *Layout, extensions []ExtensionComposition) error {
+	// PHP was built with --prefix=/usr/local so its compile-time extension_dir
+	// points to /usr/local/lib/... Override it to the actual bundle location.
+	if err := writeExtensionDirIni(layout); err != nil {
+		return fmt.Errorf("write extension_dir ini: %w", err)
+	}
 	for _, ext := range extensions {
 		if err := SymlinkExtension(ext.SOPath, layout.ExtensionDir, ext.Name); err != nil {
 			return fmt.Errorf("symlink extension %s: %w", ext.Name, err)
@@ -35,6 +40,15 @@ func Compose(layout *Layout, extensions []ExtensionComposition) error {
 		}
 	}
 	return nil
+}
+
+func writeExtensionDirIni(layout *Layout) error {
+	// PHP's default extension_dir (compiled at build time with --prefix=/usr/local)
+	// does not match where our bundle is extracted. Override it to the actual
+	// directory where SymlinkExtension places the .so files.
+	path := filepath.Join(layout.ConfDir, "00-extension-dir.ini")
+	content := fmt.Sprintf("extension_dir=%s\n", layout.ExtensionDir)
+	return os.WriteFile(path, []byte(content), 0o600)
 }
 
 func SymlinkExtension(soPath, extensionDir, name string) error {
