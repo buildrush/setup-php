@@ -51,10 +51,18 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      packages: read
       pull-requests: write
     steps:
       - uses: actions/checkout@v6
+      - name: Install tools
+        run: |
+          curl -sSfLO "https://github.com/oras-project/oras/releases/download/v1.3.1/oras_1.3.1_linux_amd64.tar.gz"
+          tar -xzf oras_1.3.1_linux_amd64.tar.gz -C /usr/local/bin oras
+          pip install pyyaml --quiet
       - name: Update lockfile
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./scripts/update-lockfile.sh
       - uses: peter-evans/create-pull-request@v8
         with:
