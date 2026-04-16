@@ -55,7 +55,7 @@ jobs:
             /tmp/bundle.tar.zst:application/vnd.oci.image.layer.v1.tar+zstd \
             /tmp/meta.json:application/vnd.buildrush.meta.v1+json
 
-      - uses: sigstore/cosign-installer@v4
+      - uses: sigstore/cosign-installer@v3
       - name: Sign bundle
         run: |
           DIGEST=$(cat /tmp/bundle.tar.zst.sha256)
