@@ -24,13 +24,15 @@ if [ -n "${GHCR_TOKEN:-}" ]; then
 fi
 
 # Pull the core bundle
+# The OCI artifact stores files with absolute paths (/tmp/bundle.tar.zst),
+# so oras writes them there regardless of -o flag.
 mkdir -p "$CORE_DIR"
-oras pull --allow-path-traversal "${REGISTRY}/php-core:${TAG}" -o /tmp/core-bundle/
+oras pull --allow-path-traversal "${REGISTRY}/php-core:${TAG}"
 
 # Extract the tarball
-BUNDLE_FILE=$(find /tmp/core-bundle/ -name '*.tar.zst' -o -name '*.tar.zstd' | head -1)
-if [ -z "$BUNDLE_FILE" ]; then
-  echo "Error: no tarball found in pulled bundle"
+BUNDLE_FILE="/tmp/bundle.tar.zst"
+if [ ! -f "$BUNDLE_FILE" ]; then
+  echo "Error: ${BUNDLE_FILE} not found after pull"
   exit 1
 fi
 
