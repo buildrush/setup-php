@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-04-16T23:08:58Z",
+  "generated_at": "2026-04-16T23:20:40Z",
   "bundles": {
-    "ext:redis:6.2.0:8.4:linux:x86_64:nts": "sha256:d33fac1a5e136aeabe96d6541154a6d141313e24fafa7f85eee834516563edff",
-    "php:8.4:linux:x86_64:nts": "sha256:2202bafa08d8a5cf5a19d6d6fb3b1ea484cfbc68ed9c55f375ee970b3ed08079"
+    "ext:redis:6.2.0:8.4:linux:x86_64:nts": "sha256:aad3816af95ac4fa89e4e14310ef0772a05dc9e56b9bb35cfb2236d1b11a1bb2",
+    "php:8.4:linux:x86_64:nts": "sha256:dafe79ae3f1b9ce3fb5a09f8f31fe660a6002946d8de52ac5a562906a3187496"
   }
 }
