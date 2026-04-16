@@ -1,0 +1,10 @@
+name: security-rebuild
+on:
+  repository_dispatch:
+    types: [security-rebuild]
+
+jobs:
+  rebuild:
+    uses: ./.github/workflows/plan.yml
+    with:
+      force: true

@@ -1,0 +1,32 @@
+name: watch-php-releases
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Poll php.net
+        id: poll
+        run: |
+          curl -sSf https://www.php.net/releases/active > /tmp/active.json
+          if ! cmp -s /tmp/active.json .state/php-versions.json; then
+            cp /tmp/active.json .state/php-versions.json
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Commit state
+        if: steps.poll.outputs.changed == 'true'
+        run: |
+          git config user.name "buildrush-bot"
+          git config user.email "bot@buildrush.dev"
+          git add .state/php-versions.json
+          git commit -m "chore: observed new PHP release"
+          git push
+      - name: Dispatch rebuild
+        if: steps.poll.outputs.changed == 'true'
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          event-type: php-release-detected

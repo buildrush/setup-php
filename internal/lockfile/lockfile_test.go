@@ -1,0 +1,111 @@
+package lockfile
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func TestParse(t *testing.T) {
+	data := []byte(`{
+		"schema_version": 1,
+		"generated_at": "2026-04-16T03:00:00Z",
+		"bundles": {
+			"php:8.4.6:linux:x86_64:nts": "sha256:abc123",
+			"ext:redis:6.2.0:8.4:linux:x86_64:nts": "sha256:def456"
+		}
+	}`)
+
+	lf, err := Parse(data)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if lf.SchemaVersion != 1 {
+		t.Errorf("SchemaVersion = %d, want 1", lf.SchemaVersion)
+	}
+	if len(lf.Bundles) != 2 {
+		t.Errorf("len(Bundles) = %d, want 2", len(lf.Bundles))
+	}
+}
+
+func TestParseInvalid(t *testing.T) {
+	_, err := Parse([]byte(`not json`))
+	if err == nil {
+		t.Fatal("Parse() should return error for invalid JSON")
+	}
+}
+
+func TestParseUnsupportedSchema(t *testing.T) {
+	data := []byte(`{"schema_version": 99, "generated_at": "2026-01-01T00:00:00Z", "bundles": {}}`)
+	_, err := Parse(data)
+	if err == nil {
+		t.Fatal("Parse() should return error for unsupported schema version")
+	}
+}
+
+func TestLookup(t *testing.T) {
+	lf := &Lockfile{
+		Bundles: map[BundleKey]Digest{
+			"php:8.4.6:linux:x86_64:nts": "sha256:abc123",
+		},
+	}
+
+	d, ok := lf.Lookup("php:8.4.6:linux:x86_64:nts")
+	if !ok || d != "sha256:abc123" {
+		t.Errorf("Lookup() = (%q, %v), want (sha256:abc123, true)", d, ok)
+	}
+
+	_, ok = lf.Lookup("php:8.3.0:linux:x86_64:nts")
+	if ok {
+		t.Error("Lookup() should return false for missing key")
+	}
+}
+
+func TestPHPBundleKey(t *testing.T) {
+	key := PHPBundleKey("8.4.6", "linux", "x86_64", "nts")
+	want := BundleKey("php:8.4.6:linux:x86_64:nts")
+	if key != want {
+		t.Errorf("PHPBundleKey() = %q, want %q", key, want)
+	}
+}
+
+func TestExtBundleKey(t *testing.T) {
+	key := ExtBundleKey("redis", "6.2.0", "8.4", "linux", "x86_64", "nts")
+	want := BundleKey("ext:redis:6.2.0:8.4:linux:x86_64:nts")
+	if key != want {
+		t.Errorf("ExtBundleKey() = %q, want %q", key, want)
+	}
+}
+
+func TestWriteAndParseRoundTrip(t *testing.T) {
+	lf := &Lockfile{
+		SchemaVersion: 1,
+		GeneratedAt:   time.Date(2026, 4, 16, 3, 0, 0, 0, time.UTC),
+		Bundles: map[BundleKey]Digest{
+			"php:8.4.6:linux:x86_64:nts": "sha256:abc123",
+		},
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bundles.lock")
+
+	if err := lf.Write(path); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	lf2, err := Parse(data)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	d, ok := lf2.Lookup("php:8.4.6:linux:x86_64:nts")
+	if !ok || d != "sha256:abc123" {
+		t.Errorf("round-trip failed: got (%q, %v)", d, ok)
+	}
+}

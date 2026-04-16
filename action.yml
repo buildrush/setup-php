@@ -1,0 +1,37 @@
+name: 'Setup PHP'
+description: 'Fast, reproducible PHP setup with prebuilt bundles'
+author: 'buildrush'
+branding:
+  icon: 'box'
+  color: 'purple'
+inputs:
+  php-version:
+    description: 'PHP version to set up'
+    required: false
+    default: '8.4'
+  extensions:
+    description: 'Comma-separated list of PHP extensions to install'
+    required: false
+  ini-values:
+    description: 'Comma-separated list of php.ini values (key=value)'
+    required: false
+  coverage:
+    description: 'Coverage driver to set up (xdebug, pcov, none)'
+    required: false
+    default: 'none'
+  tools:
+    description: 'Comma-separated list of tools to install'
+    required: false
+  php-version-file:
+    description: 'File containing PHP version'
+    required: false
+  github-token:
+    description: 'GitHub token for authenticated registry access'
+    required: false
+    default: ${{ github.token }}
+outputs:
+  php-version:
+    description: 'The installed PHP version'
+runs:
+  using: 'node20'
+  main: 'src/index.js'

@@ -1,0 +1,64 @@
+name: build-php-core
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      os:
+        required: true
+        type: string
+      arch:
+        required: true
+        type: string
+      ts:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install oras
+        run: |
+          curl -sSfLO "https://github.com/oras-project/oras/releases/download/v1.3.1/oras_1.3.1_linux_amd64.tar.gz"
+          tar -xzf oras_1.3.1_linux_amd64.tar.gz -C /usr/local/bin oras
+
+      - name: Build PHP
+        env:
+          PHP_VERSION: ${{ inputs.version }}
+          ARCH: ${{ inputs.arch }}
+          WORKSPACE: ${{ github.workspace }}
+        run: ./builders/linux/build-php.sh
+
+      - name: Push to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GHCR_TOKEN" | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+          DIGEST=$(cat /tmp/bundle.tar.zst.sha256)
+          TAG="${{ inputs.version }}-${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.ts }}"
+          oras push \
+            "ghcr.io/${{ github.repository_owner }}/php-core:${TAG}" \
+            --artifact-type application/vnd.buildrush.php-core.v1 \
+            /tmp/bundle.tar.zst:application/vnd.oci.image.layer.v1.tar+zstd \
+            /tmp/meta.json:application/vnd.buildrush.meta.v1+json
+
+      - uses: sigstore/cosign-installer@v4
+      - name: Sign bundle
+        run: |
+          DIGEST=$(cat /tmp/bundle.tar.zst.sha256)
+          cosign sign --yes \
+            "ghcr.io/${{ github.repository_owner }}/php-core@sha256:${DIGEST}"
+
+      - name: Smoke test
+        run: |
+          mkdir -p /tmp/smoke
+          tar --zstd -xf /tmp/bundle.tar.zst -C /tmp/smoke
+          /tmp/smoke/usr/local/bin/php -v
+          /tmp/smoke/usr/local/bin/php -m

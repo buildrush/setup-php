@@ -1,0 +1,3 @@
+name: mbstring
+kind: bundled
+note: "Built into PHP core via --enable-mbstring."

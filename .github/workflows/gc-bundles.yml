@@ -1,0 +1,11 @@
+name: gc-bundles
+on:
+  schedule:
+    - cron: "0 0 1 */3 *"
+  workflow_dispatch:
+
+jobs:
+  gc:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "GC workflow stub — Phase 7 will implement retention cleanup"

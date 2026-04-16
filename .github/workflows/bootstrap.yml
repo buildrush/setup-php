@@ -1,0 +1,40 @@
+name: bootstrap
+on:
+  workflow_dispatch:
+
+permissions:
+  packages: write
+  id-token: write
+
+jobs:
+  plan:
+    uses: ./.github/workflows/plan.yml
+    with:
+      force: true
+
+  build-php:
+    needs: plan
+    if: needs.plan.outputs.php_matrix != '{"include":[]}'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.php_matrix) }}
+    uses: ./.github/workflows/build-php-core.yml
+    with:
+      version: ${{ matrix.version }}
+      os: ${{ matrix.os }}
+      arch: ${{ matrix.arch }}
+      ts: ${{ matrix.ts }}
+
+  build-ext:
+    needs: [plan, build-php]
+    if: needs.plan.outputs.ext_matrix != '{"include":[]}'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.ext_matrix) }}
+    uses: ./.github/workflows/build-extension.yml
+    with:
+      extension: ${{ matrix.extension }}
+      ext_version: ${{ matrix.ext_version }}
+      php_abi: ${{ matrix.php_abi }}
+      os: ${{ matrix.os }}
+      arch: ${{ matrix.arch }}

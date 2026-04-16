@@ -1,0 +1,75 @@
+name: php
+versions:
+  - "8.4"
+source:
+  url: "https://www.php.net/distributions/php-{version}.tar.xz"
+  sig: "https://www.php.net/distributions/php-{version}.tar.xz.asc"
+abi_matrix:
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+configure_flags:
+  common: >-
+    --enable-mbstring
+    --with-curl
+    --with-zlib
+    --with-openssl
+    --enable-bcmath
+    --enable-calendar
+    --enable-exif
+    --enable-ftp
+    --enable-intl
+    --with-zip
+    --enable-soap
+    --enable-sockets
+    --with-pdo-mysql
+    --with-pdo-sqlite
+    --with-sqlite3
+    --with-readline
+    --with-sodium
+    --enable-gd
+    --with-freetype
+    --with-jpeg
+    --with-webp
+  linux: >-
+    --with-pdo-pgsql
+    --with-pgsql
+bundled_extensions:
+  - mbstring
+  - curl
+  - intl
+  - zip
+  - json
+  - pdo
+  - pdo_mysql
+  - pdo_sqlite
+  - sqlite3
+  - tokenizer
+  - xml
+  - dom
+  - simplexml
+  - xmlreader
+  - xmlwriter
+  - ctype
+  - filter
+  - hash
+  - iconv
+  - session
+  - bcmath
+  - calendar
+  - exif
+  - ftp
+  - soap
+  - sockets
+  - sodium
+  - gd
+  - readline
+  - openssl
+  - zlib
+  - opcache
+  - pgsql
+  - pdo_pgsql
+smoke:
+  - "php -v"
+  - "php -m"
+  - 'php -r "echo PHP_VERSION;"'

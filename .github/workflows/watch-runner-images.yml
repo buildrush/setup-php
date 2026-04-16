@@ -1,0 +1,34 @@
+name: watch-runner-images
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check runner images
+        id: check
+        run: |
+          LATEST=$(curl -sSf "https://api.github.com/repos/actions/runner-images/releases/latest" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" | jq -r .tag_name)
+          CURRENT=$(cat .state/runner-images-tag.txt 2>/dev/null || echo "")
+          if [ "$LATEST" != "$CURRENT" ]; then
+            echo "$LATEST" > .state/runner-images-tag.txt
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Commit state
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "buildrush-bot"
+          git config user.email "bot@buildrush.dev"
+          git add .state/
+          git commit -m "chore: observed runner image update"
+          git push
+      - name: Dispatch rebuild
+        if: steps.check.outputs.changed == 'true'
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          event-type: runner-image-updated

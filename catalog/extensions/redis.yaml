@@ -1,0 +1,17 @@
+name: redis
+kind: pecl
+source:
+  pecl_package: redis
+versions:
+  - "6.2.0"
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+runtime_deps:
+  linux: []
+ini:
+  - "extension=redis"
+smoke:
+  - 'php -r "assert(extension_loaded(\"redis\"));"'

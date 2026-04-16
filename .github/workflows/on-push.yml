@@ -1,0 +1,65 @@
+name: on-push
+on:
+  push:
+    branches: [main]
+    paths: ['catalog/**', 'builders/**']
+  pull_request:
+    paths: ['catalog/**', 'builders/**']
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  plan:
+    uses: ./.github/workflows/plan.yml
+
+  build-php:
+    needs: plan
+    if: needs.plan.outputs.php_matrix != '{"include":[]}'
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix: ${{ fromJSON(needs.plan.outputs.php_matrix) }}
+    uses: ./.github/workflows/build-php-core.yml
+    with:
+      version: ${{ matrix.version }}
+      os: ${{ matrix.os }}
+      arch: ${{ matrix.arch }}
+      ts: ${{ matrix.ts }}
+
+  build-ext:
+    needs: [plan, build-php]
+    if: needs.plan.outputs.ext_matrix != '{"include":[]}'
+    strategy:
+      fail-fast: false
+      max-parallel: 30
+      matrix: ${{ fromJSON(needs.plan.outputs.ext_matrix) }}
+    uses: ./.github/workflows/build-extension.yml
+    with:
+      extension: ${{ matrix.extension }}
+      ext_version: ${{ matrix.ext_version }}
+      php_abi: ${{ matrix.php_abi }}
+      os: ${{ matrix.os }}
+      arch: ${{ matrix.arch }}
+
+  update-lock:
+    needs: [build-php, build-ext]
+    if: github.event_name == 'push' && !cancelled() && !failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Update lockfile
+        run: ./scripts/update-lockfile.sh
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "chore: update bundles.lock"
+          title: "chore: update bundles.lock"
+          branch: bot/lockfile-update
+          body: |
+            Automated lockfile update from build pipeline run ${{ github.run_id }}.

@@ -1,0 +1,76 @@
+version: "2"
+run:
+  go: "1.26"
+linters:
+  enable:
+    - gocritic
+    - gosec
+    - misspell
+    - nilerr
+    - prealloc
+    - revive
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: exported
+          disabled: true
+        - name: increment-decrement
+        - name: var-naming
+        - name: package-comments
+          disabled: true
+  exclusions:
+    generated: lax
+    rules:
+      - linters: [errcheck, gosec]
+        path: _test\.go
+      # Taint analysis: paths from env vars are intentionally user-configurable in a CLI tool
+      - linters: [gosec]
+        text: "G703"
+      - linters: [gosec]
+        text: "G706"
+      # Tar extraction: runtime path validation and mode masking are in place but
+      # gosec static analysis cannot verify them
+      - linters: [gosec]
+        text: "G305"
+      - linters: [gosec]
+        text: "G115"
+      # WalkDir callback: symlink filtering and path validation are in place
+      - linters: [gosec]
+        text: "G122"
+      # File operations on paths constructed internally (extract, env append)
+      - linters: [gosec]
+        text: "G304"
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+      - node_modules
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/buildrush/setup-php
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
