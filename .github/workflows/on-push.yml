@@ -5,6 +5,7 @@ on:
     paths: ['catalog/**', 'builders/**']
   pull_request:
     paths: ['catalog/**', 'builders/**']
+  workflow_dispatch:
 
 permissions:
   contents: write
