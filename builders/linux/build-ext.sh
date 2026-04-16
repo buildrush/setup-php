@@ -27,7 +27,15 @@ PHP_VER=$(echo "$PHP_ABI" | rev | cut -d- -f2- | rev)
 echo "Fetching PHP core for ABI ${PHP_ABI}"
 "${WORKSPACE}/builders/common/fetch-core.sh" "$PHP_ABI" linux x86_64
 
-export PATH="/opt/buildrush/core/usr/local/bin:$PATH"
+# Symlink so that phpize/php-config resolve their compiled prefix correctly.
+# PHP was built with --prefix=/usr/local but extracted to /opt/buildrush/core/usr/local.
+$SUDO rm -rf /usr/local/include/php /usr/local/lib/php /usr/local/bin/php* /usr/local/bin/phpize /usr/local/bin/php-config
+$SUDO ln -sf /opt/buildrush/core/usr/local/bin/php /usr/local/bin/php
+$SUDO ln -sf /opt/buildrush/core/usr/local/bin/phpize /usr/local/bin/phpize
+$SUDO ln -sf /opt/buildrush/core/usr/local/bin/php-config /usr/local/bin/php-config
+$SUDO ln -sf /opt/buildrush/core/usr/local/include/php /usr/local/include/php
+$SUDO ln -sf /opt/buildrush/core/usr/local/lib/php /usr/local/lib/php
+export PATH="/usr/local/bin:$PATH"
 
 # Download extension source from PECL
 PECL_URL="https://pecl.php.net/get/${EXT_NAME}-${EXT_VERSION}.tgz"
