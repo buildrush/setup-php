@@ -3,6 +3,6 @@
   "generated_at": "2026-04-16T23:08:58Z",
   "bundles": {
     "ext:redis:6.2.0:8.4:linux:x86_64:nts": "sha256:d33fac1a5e136aeabe96d6541154a6d141313e24fafa7f85eee834516563edff",
-    "php:8.4.20:linux:x86_64:nts": "sha256:2202bafa08d8a5cf5a19d6d6fb3b1ea484cfbc68ed9c55f375ee970b3ed08079"
+    "php:8.4:linux:x86_64:nts": "sha256:2202bafa08d8a5cf5a19d6d6fb3b1ea484cfbc68ed9c55f375ee970b3ed08079"
   }
 }

@@ -30,15 +30,6 @@ ARCH_LIST=$(python3 -c "import yaml; d=yaml.safe_load(open('${CATALOG_DIR}/php.y
 TS_LIST=$(python3 -c "import yaml; d=yaml.safe_load(open('${CATALOG_DIR}/php.yaml')); [print(v) for v in d['abi_matrix']['ts']]")
 
 for ver in $PHP_VERSIONS; do
-  # Resolve minor version to latest patch
-  FULL_VER="$ver"
-  if [[ "$ver" =~ ^[0-9]+\.[0-9]+$ ]]; then
-    RESOLVED=$(curl -sSf "https://www.php.net/releases/index.php?json&version=${ver}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('version',''))" 2>/dev/null) || true
-    if [ -n "$RESOLVED" ]; then
-      FULL_VER="$RESOLVED"
-    fi
-  fi
-
   for os in $OS_LIST; do
     for arch in $ARCH_LIST; do
       for ts in $TS_LIST; do
@@ -48,7 +39,9 @@ for ver in $PHP_VERSIONS; do
 
         DIGEST=$(oras manifest fetch "${REF}" --descriptor 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('digest',''))" 2>/dev/null) || true
         if [ -n "$DIGEST" ]; then
-          KEY="php:${FULL_VER}:${os}:${arch}:${ts}"
+          # Key by the catalog version (e.g. "8.4"), matching the resolver's
+          # lookup. Patch version info lives in the bundle manifest.
+          KEY="php:${ver}:${os}:${arch}:${ts}"
           add_bundle "$KEY" "$DIGEST"
           echo "${KEY} = ${DIGEST}"
         else
