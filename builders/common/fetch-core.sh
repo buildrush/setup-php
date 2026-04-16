@@ -25,7 +25,7 @@ fi
 
 # Pull the core bundle
 mkdir -p "$CORE_DIR"
-oras pull "${REGISTRY}/php-core:${TAG}" -o /tmp/core-bundle/
+oras pull --allow-path-traversal "${REGISTRY}/php-core:${TAG}" -o /tmp/core-bundle/
 
 # Extract the tarball
 BUNDLE_FILE=$(find /tmp/core-bundle/ -name '*.tar.zst' -o -name '*.tar.zstd' | head -1)
