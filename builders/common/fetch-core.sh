@@ -11,7 +11,12 @@ ARCH="${3:?}"
 REGISTRY="${REGISTRY:-ghcr.io/buildrush}"
 CORE_DIR="${CORE_DIR:-/opt/buildrush/core}"
 
-echo "Fetching PHP core: ${PHP_ABI}-${OS}-${ARCH} from ${REGISTRY}"
+# Split PHP_ABI (e.g. "8.4-nts") into version and thread safety
+PHP_VER=$(echo "$PHP_ABI" | rev | cut -d- -f2- | rev)
+PHP_TS=$(echo "$PHP_ABI" | rev | cut -d- -f1 | rev)
+TAG="${PHP_VER}-${OS}-${ARCH}-${PHP_TS}"
+
+echo "Fetching PHP core: ${TAG} from ${REGISTRY}"
 
 # Login to GHCR
 if [ -n "${GHCR_TOKEN:-}" ]; then
@@ -20,7 +25,7 @@ fi
 
 # Pull the core bundle
 mkdir -p "$CORE_DIR"
-oras pull "${REGISTRY}/php-core:${PHP_ABI}-${OS}-${ARCH}" -o /tmp/core-bundle/
+oras pull --disable-path-validation "${REGISTRY}/php-core:${TAG}" -o /tmp/core-bundle/
 
 # Extract the tarball
 BUNDLE_FILE=$(find /tmp/core-bundle/ -name '*.tar.zst' -o -name '*.tar.zstd' | head -1)
