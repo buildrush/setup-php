@@ -44,6 +44,7 @@ jobs:
           DIGEST=$(cat /tmp/bundle.tar.zst.sha256)
           TAG="${{ inputs.version }}-${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.ts }}"
           oras push \
+            --disable-path-validation \
             "ghcr.io/${{ github.repository_owner }}/php-core:${TAG}" \
             --artifact-type application/vnd.buildrush.php-core.v1 \
             /tmp/bundle.tar.zst:application/vnd.oci.image.layer.v1.tar+zstd \

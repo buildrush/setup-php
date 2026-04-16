@@ -50,6 +50,7 @@ jobs:
           DIGEST=$(cat /tmp/bundle.tar.zst.sha256)
           TAG="${{ inputs.ext_version }}-${{ inputs.php_abi }}-${{ inputs.os }}-${{ inputs.arch }}"
           oras push \
+            --disable-path-validation \
             "ghcr.io/${{ github.repository_owner }}/php-ext-${{ inputs.extension }}:${TAG}" \
             --artifact-type application/vnd.buildrush.php-ext.v1 \
             /tmp/bundle.tar.zst:application/vnd.oci.image.layer.v1.tar+zstd \
