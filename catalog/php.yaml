@@ -1,4 +1,5 @@
 name: php
+# Phase 1: single version, expanded as more versions are added
 versions:
   - "8.4"
 source:
