@@ -10,19 +10,31 @@ ARCH="${ARCH:-x86_64}"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp/out}"
 WORKSPACE="${WORKSPACE:-$(pwd)}"
 
+# Resolve minor version (e.g. "8.4") to latest patch version (e.g. "8.4.20")
+if [[ "$PHP_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
+  RESOLVED=$(curl -sSf "https://www.php.net/releases/index.php?json&version=${PHP_VERSION}" | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+  if [ -z "$RESOLVED" ]; then
+    echo "Error: could not resolve PHP ${PHP_VERSION} to a patch version"
+    exit 1
+  fi
+  echo "Resolved PHP ${PHP_VERSION} -> ${RESOLVED}"
+  PHP_VERSION="$RESOLVED"
+fi
+
 echo "Building PHP ${PHP_VERSION} for linux/${ARCH}"
 
 # Install build dependencies
 export DEBIAN_FRONTEND=noninteractive
 SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"
+echo "::group::Installing build dependencies"
 $SUDO apt-get update -qq
 $SUDO apt-get install -y -qq \
   autoconf bison re2c pkg-config build-essential \
   libicu-dev libcurl4-openssl-dev libzip-dev libsqlite3-dev \
   libpq-dev libonig-dev libreadline-dev libsodium-dev \
   libfreetype6-dev libjpeg-dev libwebp-dev libxml2-dev \
-  zlib1g-dev libssl-dev gnupg2 xz-utils curl \
-  > /dev/null 2>&1
+  zlib1g-dev libssl-dev gnupg2 xz-utils curl
+echo "::endgroup::"
 
 # Download PHP source
 PHP_URL="https://www.php.net/distributions/php-${PHP_VERSION}.tar.xz"
@@ -34,6 +46,7 @@ mkdir -p /tmp/php-src
 tar -xf /tmp/php.tar.xz -C /tmp/php-src --strip-components=1
 
 # Configure
+echo "::group::Configuring PHP ${PHP_VERSION}"
 cd /tmp/php-src
 ./configure \
   --prefix=/usr/local \
@@ -61,16 +74,19 @@ cd /tmp/php-src
   --with-pdo-pgsql \
   --with-pgsql \
   --disable-cgi \
-  --enable-opcache \
-  > /dev/null 2>&1
+  --enable-opcache
+echo "::endgroup::"
 
 # Build
-echo "Compiling PHP ${PHP_VERSION}..."
-make -j"$(nproc)" > /dev/null 2>&1
+echo "::group::Compiling PHP ${PHP_VERSION} ($(nproc) cores)"
+make -j"$(nproc)"
+echo "::endgroup::"
 
 # Install to output directory
+echo "::group::Installing to ${OUTPUT_DIR}"
 mkdir -p "$OUTPUT_DIR"
-make install INSTALL_ROOT="$OUTPUT_DIR" > /dev/null 2>&1
+make install INSTALL_ROOT="$OUTPUT_DIR"
+echo "::endgroup::"
 
 # Strip binaries
 find "${OUTPUT_DIR}/usr/local/bin" -type f -exec strip {} \; 2>/dev/null || true

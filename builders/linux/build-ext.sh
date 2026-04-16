@@ -16,12 +16,15 @@ echo "Building extension ${EXT_NAME} ${EXT_VERSION} for PHP ${PHP_ABI}"
 # Install build dependencies
 export DEBIAN_FRONTEND=noninteractive
 SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"
+echo "::group::Installing build dependencies"
 $SUDO apt-get update -qq
-$SUDO apt-get install -y -qq build-essential autoconf pkg-config curl > /dev/null 2>&1
+$SUDO apt-get install -y -qq build-essential autoconf pkg-config curl
+echo "::endgroup::"
 
 # Fetch PHP core bundle (provides phpize, php-config, headers)
 PHP_TS=$(echo "$PHP_ABI" | rev | cut -d- -f1 | rev)
 PHP_VER=$(echo "$PHP_ABI" | rev | cut -d- -f2- | rev)
+echo "Fetching PHP core for ABI ${PHP_ABI}"
 "${WORKSPACE}/builders/common/fetch-core.sh" "$PHP_ABI" linux x86_64
 
 export PATH="/opt/buildrush/core/usr/local/bin:$PATH"
@@ -36,14 +39,18 @@ mkdir -p /tmp/ext-src
 tar -xf /tmp/ext.tgz -C /tmp/ext-src --strip-components=1
 
 # Build
+echo "::group::Building ${EXT_NAME} ${EXT_VERSION}"
 cd /tmp/ext-src
 phpize
 ./configure
 make -j"$(nproc)"
+echo "::endgroup::"
 
 # Install to output directory
+echo "::group::Installing to ${OUTPUT_DIR}"
 mkdir -p "$OUTPUT_DIR"
 make install INSTALL_ROOT="$OUTPUT_DIR"
+echo "::endgroup::"
 
 # Find the .so file
 SO_FILE=$(find "$OUTPUT_DIR" -name "${EXT_NAME}.so" | head -1)
