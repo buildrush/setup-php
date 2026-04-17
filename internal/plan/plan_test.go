@@ -160,6 +160,97 @@ func TestHashDeterminism(t *testing.T) {
 	}
 }
 
+func TestFromEnvPHPTSDefaults(t *testing.T) {
+	t.Setenv("INPUT_PHPTS", "")
+	t.Setenv("RUNNER_OS", "Linux")
+	t.Setenv("RUNNER_ARCH", "X64")
+	p, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if p.ThreadSafety != "nts" {
+		t.Errorf("ThreadSafety = %q, want nts", p.ThreadSafety)
+	}
+}
+
+func TestFromEnvPHPTSZTS(t *testing.T) {
+	t.Setenv("INPUT_PHPTS", "zts")
+	t.Setenv("RUNNER_OS", "Linux")
+	t.Setenv("RUNNER_ARCH", "X64")
+	p, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if p.ThreadSafety != "zts" {
+		t.Errorf("ThreadSafety = %q, want zts", p.ThreadSafety)
+	}
+}
+
+func TestFromEnvUpdate(t *testing.T) {
+	t.Setenv("INPUT_UPDATE", "true")
+	t.Setenv("RUNNER_OS", "Linux")
+	t.Setenv("RUNNER_ARCH", "X64")
+	p, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if !p.Update {
+		t.Errorf("Update = false, want true")
+	}
+}
+
+func TestFromEnvUpdateDefault(t *testing.T) {
+	t.Setenv("INPUT_UPDATE", "")
+	t.Setenv("RUNNER_OS", "Linux")
+	t.Setenv("RUNNER_ARCH", "X64")
+	p, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if p.Update {
+		t.Errorf("Update default = true, want false")
+	}
+}
+
+func TestFromEnvFailFast(t *testing.T) {
+	t.Setenv("INPUT_FAIL-FAST", "true")
+	t.Setenv("RUNNER_OS", "Linux")
+	t.Setenv("RUNNER_ARCH", "X64")
+	p, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if !p.FailFast {
+		t.Errorf("FailFast = false, want true")
+	}
+}
+
+func TestFromEnvIniFileDefault(t *testing.T) {
+	t.Setenv("INPUT_INI-FILE", "")
+	t.Setenv("RUNNER_OS", "Linux")
+	t.Setenv("RUNNER_ARCH", "X64")
+	p, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if p.IniFile != "production" {
+		t.Errorf("IniFile default = %q, want production", p.IniFile)
+	}
+}
+
+func TestFromEnvIniFileDevelopment(t *testing.T) {
+	t.Setenv("INPUT_INI-FILE", "development")
+	t.Setenv("RUNNER_OS", "Linux")
+	t.Setenv("RUNNER_ARCH", "X64")
+	p, err := FromEnv()
+	if err != nil {
+		t.Fatalf("FromEnv: %v", err)
+	}
+	if p.IniFile != "development" {
+		t.Errorf("IniFile = %q, want development", p.IniFile)
+	}
+}
+
 func TestNormalizeArch(t *testing.T) {
 	tests := map[string]string{
 		"X64":     "x86_64",
