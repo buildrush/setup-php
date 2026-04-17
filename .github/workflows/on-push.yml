@@ -30,6 +30,8 @@ jobs:
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
       ts: ${{ matrix.ts }}
+      spec_hash: ${{ matrix.spec_hash }}
+      push: ${{ github.event_name != 'pull_request' }}
 
   build-ext:
     needs: [plan, build-php]
@@ -49,6 +51,8 @@ jobs:
       php_abi: ${{ matrix.php_abi }}
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
+      spec_hash: ${{ matrix.spec_hash }}
+      push: ${{ github.event_name != 'pull_request' }}
 
   update-lock:
     needs: [plan, build-php, build-ext]
@@ -65,15 +69,13 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v6
-      - name: Install tools
-        run: |
-          curl -sSfL -o /tmp/oras.tar.gz "https://github.com/oras-project/oras/releases/download/v1.3.1/oras_1.3.1_linux_amd64.tar.gz"
-          sudo tar -xzf /tmp/oras.tar.gz -C /usr/local/bin oras
-          pip install pyyaml --quiet
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
       - name: Update lockfile
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./scripts/update-lockfile.sh
+        run: go run ./cmd/lockfile-update -catalog ./catalog -lockfile ./bundles.lock -registry ghcr.io/${{ github.repository_owner }}
       - uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore: update bundles.lock"
