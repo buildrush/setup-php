@@ -110,6 +110,42 @@ func TestNormalizeExtensionName(t *testing.T) {
 	}
 }
 
+func TestBundledExtensionsAcceptsFullTriple(t *testing.T) {
+	// User may supply "8.4.6" (from php-version-file or explicit input).
+	// BundledExtensions should normalize to the minor and return the same
+	// data as for "8.4".
+	minor := BundledExtensions("8.4")
+	triple := BundledExtensions("8.4.6")
+	if len(triple) == 0 {
+		t.Fatalf("BundledExtensions(8.4.6) returned nil; expected to normalize to 8.4")
+	}
+	if len(minor) != len(triple) {
+		t.Fatalf("BundledExtensions(8.4) len=%d, BundledExtensions(8.4.6) len=%d", len(minor), len(triple))
+	}
+	for i := range minor {
+		if minor[i] != triple[i] {
+			t.Errorf("diff at [%d]: minor=%q, triple=%q", i, minor[i], triple[i])
+		}
+	}
+}
+
+func TestMinorOf(t *testing.T) {
+	tests := map[string]string{
+		"8.4":       "8.4",
+		"8.4.6":     "8.4",
+		"8.4.20-rc": "8.4",
+		"8.10":      "8.10",
+		"8.10.0":    "8.10",
+		"":          "",
+		"8":         "8",
+	}
+	for in, want := range tests {
+		if got := minorOf(in); got != want {
+			t.Errorf("minorOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestBundledExtensionsUnknownVersion(t *testing.T) {
 	if got := BundledExtensions("7.4"); got != nil {
 		t.Errorf("BundledExtensions(7.4) = %v, want nil", got)
