@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.2.0](https://github.com/buildrush/setup-php/compare/v1.1.2...v1.2.0) (2026-04-17)
+
+
+### Features
+
+* **action:** declare phpts, update, fail-fast, ini-file inputs for v2 compat ([4fd27fd](https://github.com/buildrush/setup-php/commit/4fd27fd7e90b4b6149d41caf98fb0d2e14641e76))
+* **builders,catalog:** add ffi, gettext, pcntl, posix, shmop, sysv* for v2 baseline parity ([cb1ce9b](https://github.com/buildrush/setup-php/commit/cb1ce9b2dd978aace200f2a36497bf18008b75a7))
+* **cmd:** port update-lockfile to Go against versioned catalog ([cff322a](https://github.com/buildrush/setup-php/commit/cff322ae80f29c8c494fbf415d9e27eaae36d5fe))
+* **compat:** add DefaultIniValues matching v2 Linux defaults ([26190fe](https://github.com/buildrush/setup-php/commit/26190fee775aa5300587d2311dddfdc51c3d352b))
+* **compat:** add per-version BundledExtensions for 8.1-8.5 ([39ee516](https://github.com/buildrush/setup-php/commit/39ee5161952466b1fccc765b3b231fbf29a0c031))
+* **compat:** scaffold compat package with unimplemented-input warning ([fa67b95](https://github.com/buildrush/setup-php/commit/fa67b954aa339ff49f72d5cd0809556de7d3700d))
+* **compose:** merge compat default ini values and write disable fragments ([d77f8be](https://github.com/buildrush/setup-php/commit/d77f8beb5e03f0cda4ac5426f2f5eac0405dc100))
+* **lockfile:** schema v2 with per-entry spec_hash ([f5a458d](https://github.com/buildrush/setup-php/commit/f5a458d63c8cd3c381b267fea3471bee42017ccf))
+* **phpup:** wire compat defaults, exclusions, warnings, and X.Y.Z output ([21385b5](https://github.com/buildrush/setup-php/commit/21385b5c658f6c0d1f0df73ff5824a904968d576))
+* **planner:** filterExisting honors spec_hash drift with grandfather rule ([653c1aa](https://github.com/buildrush/setup-php/commit/653c1aa980818895cd67b521fa6398da88836bdc))
+* **planner:** HashFile, PerVersionYAML, ExtensionYAML helpers + SpecHash field ([4ff1254](https://github.com/buildrush/setup-php/commit/4ff1254d205012cf93da3aa076736b874acecb5b))
+* **plan:** parse update, phpts, fail-fast, ini-file v2-compat inputs ([0544649](https://github.com/buildrush/setup-php/commit/05446490d4cd00da4b8acf854657473d3a86f6f4))
+* **plan:** support v2 extension syntax (:ext exclusion, none reset) ([fabb11f](https://github.com/buildrush/setup-php/commit/fabb11f074d5341a68e2bfdc35e9c8a4b42f556f))
+* **resolve:** ZTS-&gt;NTS fallback and fail-fast promotion ([764e593](https://github.com/buildrush/setup-php/commit/764e593fef3e9132fb1bad6ee0a1e879c779f9e2))
+* **workflows:** carry spec_hash and gate push on caller input ([eb9ef0e](https://github.com/buildrush/setup-php/commit/eb9ef0e9cabbe5acb57ebf742b93699ab6952af5))
+* **workflows:** thread spec_hash through matrix and use Go lockfile-update ([c23f6aa](https://github.com/buildrush/setup-php/commit/c23f6aa39fe16f253ded28bb3ca68a8480cf8865))
+
+
+### Bug Fixes
+
+* **cmd:** reject malformed php_abi in lockfile-update splitAbi ([5b10420](https://github.com/buildrush/setup-php/commit/5b10420f4020886b5a2fe882de49b9f443cbfa6b))
+* **compat,catalog:** normalize X.Y.Z to minor and mark lexicographic sort TODO ([4c23656](https://github.com/buildrush/setup-php/commit/4c23656f9661c82ed7c8e86c8aedea105716596d))
+* **compat,phpup:** normalize bundled-ext casing and let include win over exclude ([16c9189](https://github.com/buildrush/setup-php/commit/16c9189e1d6cb90b0c50ef5bcfea36bf915fa30d))
+* **phpup,compat:** resolve php -v via absolute path and expose build extras to runtime ([8e31dc1](https://github.com/buildrush/setup-php/commit/8e31dc1068afc72bd4594d21f0543fb7af1f5edc))
+
+
+### Documentation
+
+* **action:** tighten input descriptions to match actual behavior ([713e507](https://github.com/buildrush/setup-php/commit/713e5073bab096c8f192d2afd00c2fd1923c2d04))
+* add lockfile spec-hash and PR-time build design spec ([89a79bb](https://github.com/buildrush/setup-php/commit/89a79bb15c52542232c3342081bf56d5c4952c3c))
+* add Phase 2 compat-first slice design spec ([bfdf498](https://github.com/buildrush/setup-php/commit/bfdf4985a6b2f107cbc8a00f8cb25be13454f043))
+* add T12 hand-off with concrete configure-flag diff for local iteration ([422a927](https://github.com/buildrush/setup-php/commit/422a92719a8357c3962575676d5b5099a8d0c3ea))
+* audit shivammathur/setup-php@v2 compatibility baseline ([c515d70](https://github.com/buildrush/setup-php/commit/c515d70c41130c3845eee9e8aa0b3aa274bd5c6c))
+* **compose:** correct WriteDisableExtension doc to match codebase conventions ([8bc9a70](https://github.com/buildrush/setup-php/commit/8bc9a70d7bde3dff1d373a7013abd94ab471e13b))
+* fix duplicate pdo row and non-atomic priority in compat matrix ([e1f7cee](https://github.com/buildrush/setup-php/commit/e1f7ceee20e9f4450df7cd7f135cc33064fbb929))
+* **readme:** advertise drop-in compat and list v2-compat inputs ([9862122](https://github.com/buildrush/setup-php/commit/98621224e53c2aac764549c2018b1c7e822177f6))
+* **readme:** hedge compiled-in baseline claim to acknowledge current delta ([1378cda](https://github.com/buildrush/setup-php/commit/1378cda6ae577d3b8b3269c8e60c58afa729e057))
+* **smoke:** drop reference to non-existent BUILDRUSH_OFFLINE_DIR ([81ab529](https://github.com/buildrush/setup-php/commit/81ab529349e67ed40c3c523ea8284ec3c1800e7d))
+
 ## [1.1.2](https://github.com/buildrush/setup-php/compare/v1.1.1...v1.1.2) (2026-04-17)
 
 
