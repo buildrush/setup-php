@@ -110,6 +110,38 @@ func TestParsePHPVersionFile(t *testing.T) {
 	}
 }
 
+func TestApplyCoverage(t *testing.T) {
+	tests := []struct {
+		name     string
+		coverage CoverageDriver
+		initial  []string
+		want     []string
+	}{
+		{"none is no-op", CoverageNone, []string{"intl"}, []string{"intl"}},
+		{"empty is no-op", CoverageDriver(""), []string{"intl"}, []string{"intl"}},
+		{"xdebug adds driver", CoverageXdebug, []string{"intl"}, []string{"intl", "xdebug"}},
+		{"pcov adds driver", CoveragePCOV, []string{"intl"}, []string{"intl", "pcov"}},
+		{"xdebug keeps sort order", CoverageXdebug, []string{"redis"}, []string{"redis", "xdebug"}},
+		{"pcov sorted before redis", CoveragePCOV, []string{"redis"}, []string{"pcov", "redis"}},
+		{"already present: no duplicate", CoverageXdebug, []string{"xdebug"}, []string{"xdebug"}},
+		{"empty extensions + xdebug", CoverageXdebug, nil, []string{"xdebug"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Plan{Coverage: tt.coverage, Extensions: append([]string(nil), tt.initial...)}
+			p.ApplyCoverage()
+			if len(p.Extensions) != len(tt.want) {
+				t.Fatalf("Extensions = %v, want %v", p.Extensions, tt.want)
+			}
+			for i := range p.Extensions {
+				if p.Extensions[i] != tt.want[i] {
+					t.Errorf("Extensions[%d] = %q, want %q", i, p.Extensions[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestHashDeterminism(t *testing.T) {
 	p := &Plan{
 		PHPVersion:   "8.4",

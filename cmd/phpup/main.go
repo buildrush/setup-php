@@ -45,10 +45,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("parse inputs: %v", err)
 	}
+	p.ApplyCoverage()
 
 	if p.Verbose {
-		log.Printf("Plan: PHP %s, extensions=%v, os=%s, arch=%s, ts=%s",
-			p.PHPVersion, p.Extensions, p.OS, p.Arch, p.ThreadSafety)
+		log.Printf("Plan: PHP %s, extensions=%v, os=%s, arch=%s, ts=%s, coverage=%s",
+			p.PHPVersion, p.Extensions, p.OS, p.Arch, p.ThreadSafety, p.Coverage)
 	}
 
 	// 2. Load embedded lockfile
@@ -61,7 +62,9 @@ func main() {
 	cat := &catalog.Catalog{
 		PHP: &catalog.PHPSpec{BundledExtensions: bundledExtensions},
 		Extensions: map[string]*catalog.ExtensionSpec{
-			"redis": {Name: "redis", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.2.0"}},
+			"redis":  {Name: "redis", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.2.0"}},
+			"xdebug": {Name: "xdebug", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.5.1"}, Ini: []string{"zend_extension=xdebug", "xdebug.mode=coverage"}},
+			"pcov":   {Name: "pcov", Kind: catalog.ExtensionKindPECL, Versions: []string{"1.0.12"}, Ini: []string{"extension=pcov", "pcov.enabled=1"}},
 		},
 	}
 
