@@ -192,3 +192,20 @@ func TestLookupStringCompat(t *testing.T) {
 		t.Errorf("Lookup(k) = %q,%v; want sha256:abc,true", d, ok)
 	}
 }
+
+func TestSetAndSetEntry(t *testing.T) {
+	lf := &Lockfile{
+		SchemaVersion: currentSchemaVersion,
+		Bundles:       map[BundleKey]Entry{},
+	}
+	// Set writes digest only; SpecHash deliberately left empty.
+	lf.Set("k1", "sha256:aaa")
+	if e, _ := lf.LookupEntry("k1"); e.Digest != "sha256:aaa" || e.SpecHash != "" {
+		t.Errorf("Set entry = %+v, want {Digest:sha256:aaa SpecHash:}", e)
+	}
+	// SetEntry writes the full struct.
+	lf.SetEntry("k2", Entry{Digest: "sha256:bbb", SpecHash: "sha256:ccc"})
+	if e, _ := lf.LookupEntry("k2"); e.Digest != "sha256:bbb" || e.SpecHash != "sha256:ccc" {
+		t.Errorf("SetEntry entry = %+v", e)
+	}
+}
