@@ -185,6 +185,14 @@ versions:
         --with-freetype
         --with-jpeg
         --with-webp
+        --with-ffi
+        --with-gettext
+        --enable-pcntl
+        --enable-posix
+        --enable-shmop
+        --enable-sysvmsg
+        --enable-sysvsem
+        --enable-sysvshm
       linux: >-
         --with-pdo-pgsql
         --with-pgsql
