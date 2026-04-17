@@ -1,56 +1,164 @@
 'use strict';
 
 const { execFileSync } = require('child_process');
-const { existsSync, mkdirSync, chmodSync, createWriteStream } = require('fs');
+const { existsSync, mkdirSync, chmodSync, createWriteStream, unlinkSync } = require('fs');
 const { join } = require('path');
+const http = require('http');
 const https = require('https');
 
-const TOOL_CACHE = process.env.RUNNER_TOOL_CACHE || join(process.env.HOME, '.buildrush', 'cache');
-const OS = process.env.RUNNER_OS?.toLowerCase() || 'linux';
-const ARCH = process.env.RUNNER_ARCH === 'ARM64' ? 'arm64' : 'amd64';
+const USER_AGENT = 'buildrush/setup-php';
+const DEFAULT_API_BASE = 'https://api.github.com';
+const DEFAULT_REPO = 'buildrush/setup-php';
 
-async function downloadFile(url, dest) {
+function requestLib(url) {
+  return new URL(url).protocol === 'http:' ? http : https;
+}
+
+function httpGet(url, { headers = {}, maxRedirects = 5 } = {}) {
   return new Promise((resolve, reject) => {
-    const file = createWriteStream(dest);
-    https
-      .get(url, { headers: { 'User-Agent': 'buildrush/setup-php' } }, (res) => {
-        if (res.statusCode === 302 || res.statusCode === 301) {
-          https
-            .get(res.headers.location, (redirectRes) => {
-              redirectRes.pipe(file);
-              file.on('finish', () => {
-                file.close();
-                resolve();
-              });
-            })
-            .on('error', reject);
-          return;
-        }
-        res.pipe(file);
-        file.on('finish', () => {
-          file.close();
-          resolve();
-        });
-      })
-      .on('error', reject);
+    const follow = (current, redirects) => {
+      if (redirects > maxRedirects) {
+        reject(new Error(`Too many redirects fetching ${url}`));
+        return;
+      }
+      requestLib(current)
+        .get(current, { headers: { 'User-Agent': USER_AGENT, ...headers } }, (res) => {
+          const status = res.statusCode;
+          if (
+            (status === 301 || status === 302 || status === 307 || status === 308) &&
+            res.headers.location
+          ) {
+            res.resume();
+            const next = new URL(res.headers.location, current).toString();
+            follow(next, redirects + 1);
+            return;
+          }
+          const chunks = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () =>
+            resolve({
+              statusCode: status,
+              headers: res.headers,
+              body: Buffer.concat(chunks),
+            }),
+          );
+          res.on('error', reject);
+        })
+        .on('error', reject);
+    };
+    follow(url, 0);
   });
 }
 
-async function main() {
-  // Determine binary name
-  const binaryName = OS === 'windows' ? 'phpup.exe' : 'phpup';
-  const platform = OS === 'macos' ? 'darwin' : OS;
-  const releaseBinary = `phpup-${platform}-${ARCH}`;
+async function githubJson(path, { token, apiBase = DEFAULT_API_BASE } = {}) {
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await httpGet(`${apiBase}${path}`, { headers });
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    const snippet = res.body.toString('utf8').slice(0, 200);
+    const err = new Error(`GitHub API ${path} returned HTTP ${res.statusCode}: ${snippet}`);
+    err.statusCode = res.statusCode;
+    throw err;
+  }
+  return JSON.parse(res.body.toString('utf8'));
+}
 
-  // Check tool cache for binary
-  const cacheDir = join(TOOL_CACHE, 'buildrush-bin');
+async function resolveReleaseTag(repo, ref, { token, apiBase } = {}) {
+  if (ref) {
+    try {
+      const release = await githubJson(`/repos/${repo}/releases/tags/${encodeURIComponent(ref)}`, {
+        token,
+        apiBase,
+      });
+      return release.tag_name;
+    } catch (err) {
+      if (err.statusCode !== 404) throw err;
+    }
+  }
+  const latest = await githubJson(`/repos/${repo}/releases/latest`, {
+    token,
+    apiBase,
+  });
+  const majorMatch = /^v(\d+)$/.exec(ref || '');
+  if (majorMatch) {
+    const latestMajor = /^v(\d+)/.exec(latest.tag_name);
+    if (!latestMajor || latestMajor[1] !== majorMatch[1]) {
+      throw new Error(`No release found for ${ref}; latest release is ${latest.tag_name}`);
+    }
+  }
+  return latest.tag_name;
+}
+
+async function downloadFile(url, dest, { maxRedirects = 5 } = {}) {
+  return new Promise((resolve, reject) => {
+    const follow = (current, redirects) => {
+      if (redirects > maxRedirects) {
+        reject(new Error(`Too many redirects fetching ${url}`));
+        return;
+      }
+      requestLib(current)
+        .get(current, { headers: { 'User-Agent': USER_AGENT } }, (res) => {
+          const status = res.statusCode;
+          if (
+            (status === 301 || status === 302 || status === 307 || status === 308) &&
+            res.headers.location
+          ) {
+            res.resume();
+            const next = new URL(res.headers.location, current).toString();
+            follow(next, redirects + 1);
+            return;
+          }
+          if (status < 200 || status >= 300) {
+            res.resume();
+            reject(new Error(`Download failed: ${current} returned HTTP ${status}`));
+            return;
+          }
+          const file = createWriteStream(dest);
+          let failed = false;
+          const fail = (err) => {
+            if (failed) return;
+            failed = true;
+            file.destroy();
+            try {
+              unlinkSync(dest);
+            } catch {
+              /* ignore */
+            }
+            reject(err);
+          };
+          res.on('error', fail);
+          file.on('error', fail);
+          res.pipe(file);
+          file.on('finish', () => file.close((err) => (err ? fail(err) : resolve())));
+        })
+        .on('error', reject);
+    };
+    follow(url, 0);
+  });
+}
+
+async function runMain({ env = process.env } = {}) {
+  const osName = (env.RUNNER_OS || 'linux').toLowerCase();
+  const arch = env.RUNNER_ARCH === 'ARM64' ? 'arm64' : 'amd64';
+  const toolCache = env.RUNNER_TOOL_CACHE || join(env.HOME || '/tmp', '.buildrush', 'cache');
+  const binaryName = osName === 'windows' ? 'phpup.exe' : 'phpup';
+  const platform = osName === 'macos' ? 'darwin' : osName;
+  const releaseBinary = `phpup-${platform}-${arch}`;
+
+  const cacheDir = join(toolCache, 'buildrush-bin');
   const cachedBinary = join(cacheDir, binaryName);
 
   if (!existsSync(cachedBinary)) {
-    // Download from this action's release
-    const actionRef = process.env.GITHUB_ACTION_REF || 'main';
-    const actionRepo = process.env.GITHUB_ACTION_REPOSITORY || 'buildrush/setup-php';
-    const releaseUrl = `https://github.com/${actionRepo}/releases/download/${actionRef}/${releaseBinary}`;
+    const repo = env.GITHUB_ACTION_REPOSITORY || DEFAULT_REPO;
+    const ref = env.GITHUB_ACTION_REF || '';
+    const token = env.INPUT_GITHUB_TOKEN || env.GITHUB_TOKEN || '';
+
+    console.log(`Resolving release tag for ${repo}@${ref || '(unknown ref, will use latest)'}`);
+    const tag = await resolveReleaseTag(repo, ref, { token });
+    const releaseUrl = `https://github.com/${repo}/releases/download/${tag}/${releaseBinary}`;
 
     console.log(`Downloading phpup binary from ${releaseUrl}`);
     mkdirSync(cacheDir, { recursive: true });
@@ -58,18 +166,27 @@ async function main() {
     chmodSync(cachedBinary, 0o755);
   }
 
-  // Execute phpup with all inputs forwarded via env
   try {
     execFileSync(cachedBinary, [], {
       stdio: 'inherit',
-      env: process.env,
+      env,
     });
   } catch (err) {
     process.exitCode = err.status || 1;
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exitCode = 1;
-});
+module.exports = {
+  httpGet,
+  githubJson,
+  resolveReleaseTag,
+  downloadFile,
+  runMain,
+};
+
+if (require.main === module) {
+  runMain().catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  });
+}
