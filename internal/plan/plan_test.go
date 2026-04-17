@@ -3,6 +3,7 @@ package plan
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -82,14 +83,18 @@ func TestParseExtensions(t *testing.T) {
 		{"none then include", "none, redis, curl", []string{"curl", "redis"}, nil, true},
 		{"none then include and exclude", "none, redis, :opcache", []string{"redis"}, []string{"opcache"}, true},
 		{"none anywhere resets before it", "redis, none, curl", []string{"curl"}, nil, true},
+		{"exclude literal 'none' with :none", ":none", nil, []string{"none"}, false},
+		{"bare colon is dropped", ":", nil, nil, false},
+		{"uppercase NONE is reset", "NONE, redis", []string{"redis"}, nil, true},
+		{"same name in both sets is preserved", "redis, :redis", []string{"redis"}, []string{"redis"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			incl, excl, reset := ParseExtensions(tt.input)
-			if !equalStringSlice(incl, tt.wantInclude) {
+			if !slices.Equal(incl, tt.wantInclude) {
 				t.Errorf("include = %v, want %v", incl, tt.wantInclude)
 			}
-			if !equalStringSlice(excl, tt.wantExclude) {
+			if !slices.Equal(excl, tt.wantExclude) {
 				t.Errorf("exclude = %v, want %v", excl, tt.wantExclude)
 			}
 			if reset != tt.wantReset {
@@ -97,18 +102,6 @@ func TestParseExtensions(t *testing.T) {
 			}
 		})
 	}
-}
-
-func equalStringSlice(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func TestParseIniValues(t *testing.T) {

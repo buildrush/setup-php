@@ -87,7 +87,7 @@ func FromEnv() (*Plan, error) {
 //   - ":name" → exclude
 //   - "none" → reset both include and exclude to empty; subsequent tokens process normally
 //
-// Output is sorted, deduplicated, and lower-cased.
+// Both include and exclude are sorted, deduplicated, and lower-cased.
 func ParseExtensions(raw string) (include, exclude []string, reset bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
