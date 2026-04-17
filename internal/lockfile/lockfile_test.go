@@ -3,6 +3,7 @@ package lockfile
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -21,8 +22,8 @@ func TestParse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	if lf.SchemaVersion != 1 {
-		t.Errorf("SchemaVersion = %d, want 1", lf.SchemaVersion)
+	if lf.SchemaVersion != currentSchemaVersion {
+		t.Errorf("SchemaVersion = %d, want %d", lf.SchemaVersion, currentSchemaVersion)
 	}
 	if len(lf.Bundles) != 2 {
 		t.Errorf("len(Bundles) = %d, want 2", len(lf.Bundles))
@@ -46,8 +47,8 @@ func TestParseUnsupportedSchema(t *testing.T) {
 
 func TestLookup(t *testing.T) {
 	lf := &Lockfile{
-		Bundles: map[BundleKey]Digest{
-			"php:8.4.6:linux:x86_64:nts": "sha256:abc123",
+		Bundles: map[BundleKey]Entry{
+			"php:8.4.6:linux:x86_64:nts": {Digest: "sha256:abc123"},
 		},
 	}
 
@@ -80,10 +81,10 @@ func TestExtBundleKey(t *testing.T) {
 
 func TestWriteAndParseRoundTrip(t *testing.T) {
 	lf := &Lockfile{
-		SchemaVersion: 1,
+		SchemaVersion: currentSchemaVersion,
 		GeneratedAt:   time.Date(2026, 4, 16, 3, 0, 0, 0, time.UTC),
-		Bundles: map[BundleKey]Digest{
-			"php:8.4.6:linux:x86_64:nts": "sha256:abc123",
+		Bundles: map[BundleKey]Entry{
+			"php:8.4.6:linux:x86_64:nts": {Digest: "sha256:abc123"},
 		},
 	}
 
@@ -107,5 +108,87 @@ func TestWriteAndParseRoundTrip(t *testing.T) {
 	d, ok := lf2.Lookup("php:8.4.6:linux:x86_64:nts")
 	if !ok || d != "sha256:abc123" {
 		t.Errorf("round-trip failed: got (%q, %v)", d, ok)
+	}
+}
+
+func TestParseV1Upgrades(t *testing.T) {
+	v1 := []byte(`{
+		"schema_version": 1,
+		"generated_at": "2026-04-17T08:53:34Z",
+		"bundles": {
+			"php:8.4:linux:x86_64:nts": "sha256:abc"
+		}
+	}`)
+	lf, err := Parse(v1)
+	if err != nil {
+		t.Fatalf("Parse v1: %v", err)
+	}
+	entry, ok := lf.LookupEntry("php:8.4:linux:x86_64:nts")
+	if !ok {
+		t.Fatal("entry missing")
+	}
+	if entry.Digest != "sha256:abc" {
+		t.Errorf("digest = %q, want sha256:abc", entry.Digest)
+	}
+	if entry.SpecHash != "" {
+		t.Errorf("spec_hash = %q, want empty (grandfathered)", entry.SpecHash)
+	}
+}
+
+func TestParseV2RoundTrip(t *testing.T) {
+	v2 := []byte(`{
+		"schema_version": 2,
+		"generated_at": "2026-04-17T08:53:34Z",
+		"bundles": {
+			"php:8.4:linux:x86_64:nts": {"digest": "sha256:abc", "spec_hash": "sha256:def"}
+		}
+	}`)
+	lf, err := Parse(v2)
+	if err != nil {
+		t.Fatalf("Parse v2: %v", err)
+	}
+	entry, _ := lf.LookupEntry("php:8.4:linux:x86_64:nts")
+	if entry.Digest != "sha256:abc" || entry.SpecHash != "sha256:def" {
+		t.Errorf("entry = %+v", entry)
+	}
+}
+
+func TestWriteEmitsV2(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bundles.lock")
+	lf := &Lockfile{
+		SchemaVersion: currentSchemaVersion,
+		Bundles:       map[BundleKey]Entry{"k": {Digest: "sha256:abc", SpecHash: "sha256:def"}},
+	}
+	if err := lf.Write(path); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), `"schema_version": 2`) {
+		t.Errorf("write did not emit v2; got:\n%s", data)
+	}
+	if !strings.Contains(string(data), `"spec_hash"`) {
+		t.Errorf("write did not emit spec_hash field; got:\n%s", data)
+	}
+}
+
+func TestParseSchemaVersionTooNew(t *testing.T) {
+	_, err := Parse([]byte(`{"schema_version": 99, "bundles": {}}`))
+	if err == nil {
+		t.Fatal("expected error on schema v99")
+	}
+	if !strings.Contains(err.Error(), "schema version") {
+		t.Errorf("error should mention schema version; got %v", err)
+	}
+}
+
+func TestLookupStringCompat(t *testing.T) {
+	lf := &Lockfile{
+		SchemaVersion: currentSchemaVersion,
+		Bundles:       map[BundleKey]Entry{"k": {Digest: "sha256:abc", SpecHash: "sha256:def"}},
+	}
+	d, ok := lf.Lookup("k")
+	if !ok || d != "sha256:abc" {
+		t.Errorf("Lookup(k) = %q,%v; want sha256:abc,true", d, ok)
 	}
 }

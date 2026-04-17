@@ -25,9 +25,9 @@ func testCatalog() *catalog.Catalog {
 
 func testLockfile() *lockfile.Lockfile {
 	return &lockfile.Lockfile{
-		Bundles: map[string]string{
-			"php:8.4.6:linux:x86_64:nts":           "sha256:phpdigest",
-			"ext:redis:6.2.0:8.4:linux:x86_64:nts": "sha256:redisdigest",
+		Bundles: map[lockfile.BundleKey]lockfile.Entry{
+			"php:8.4.6:linux:x86_64:nts":           {Digest: "sha256:phpdigest"},
+			"ext:redis:6.2.0:8.4:linux:x86_64:nts": {Digest: "sha256:redisdigest"},
 		},
 	}
 }
@@ -175,7 +175,7 @@ func TestResolveZTSFallbackFailFast(t *testing.T) {
 
 func TestResolveZTSUnresolvable(t *testing.T) {
 	// Neither ZTS nor NTS present for the requested version → hard error regardless of FailFast.
-	lf := &lockfile.Lockfile{Bundles: map[string]string{}}
+	lf := &lockfile.Lockfile{Bundles: map[lockfile.BundleKey]lockfile.Entry{}}
 	cat := testCatalog()
 	p := &plan.Plan{
 		PHPVersion:   "8.4.6",
