@@ -4,7 +4,27 @@
 // deliberate PRs that bump the pinned reference.
 package compat
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
+
+// normalizeExtensionName converts a raw `php -m` extension name to the
+// user-facing identifier used in `extensions:` input and throughout the rest
+// of the codebase (lowercase, with the one historical alias fixup).
+//
+// Rules:
+//   - Lowercase the input.
+//   - "Zend OPcache" (lowercased to "zend opcache") → "opcache", matching the
+//     identifier users type and shivammathur/setup-php@v2's convention.
+//   - All other inputs: just lowercase.
+func normalizeExtensionName(raw string) string {
+	lower := strings.ToLower(raw)
+	if lower == "zend opcache" {
+		return "opcache"
+	}
+	return lower
+}
 
 // UnimplementedInputWarning returns the canonical one-line warning emitted when
 // a user sets an input that buildrush cannot implement given its architecture.
@@ -47,6 +67,11 @@ func DefaultIniValues(phpVersion string) map[string]string {
 // input, based on the Ondrej PPA build for that version. Returns nil for
 // unknown versions.
 //
+// Names are returned as user-facing extension identifiers (lowercase,
+// `Zend OPcache` → `opcache`), suitable for matching against `extensions:`
+// input. The underlying golden files preserve the raw `php -m` casing for
+// audit purposes; normalization happens here.
+//
 // The returned slice is a copy; callers may mutate it without affecting other
 // callers.
 //
@@ -67,7 +92,11 @@ func BundledExtensions(phpVersion string) []string {
 	default:
 		return nil
 	}
-	return append([]string(nil), src...)
+	out := make([]string, len(src))
+	for i, name := range src {
+		out[i] = normalizeExtensionName(name)
+	}
+	return out
 }
 
 // Per-version bundled extension lists. Order matches the native `php -m`
