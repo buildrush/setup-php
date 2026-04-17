@@ -1,8 +1,10 @@
 package compat
 
 import (
-	"bufio"
+	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -37,19 +39,8 @@ func TestUnimplementedInputWarning(t *testing.T) {
 func TestDefaultIniValuesMatchesGolden(t *testing.T) {
 	got := DefaultIniValues("8.4")
 
-	f, err := os.Open("testdata/default_ini_values.golden")
-	if err != nil {
-		t.Fatalf("open golden: %v", err)
-	}
-	defer f.Close()
-
 	want := map[string]string{}
-	s := bufio.NewScanner(f)
-	for s.Scan() {
-		line := strings.TrimSpace(s.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
+	for _, line := range readGoldenLines(t, "default_ini_values.golden") {
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) != 2 {
 			t.Fatalf("bad golden line: %q", line)
@@ -65,4 +56,54 @@ func TestDefaultIniValuesMatchesGolden(t *testing.T) {
 			t.Errorf("DefaultIniValues[%q] = %q, want %q", k, got[k], v)
 		}
 	}
+}
+
+func TestBundledExtensionsMatchGolden(t *testing.T) {
+	versions := []string{"8.1", "8.2", "8.3", "8.4", "8.5"}
+	for _, v := range versions {
+		v := v
+		t.Run(v, func(t *testing.T) {
+			got := BundledExtensions(v)
+			want := readGoldenLines(t, fmt.Sprintf("bundled_extensions_%s.golden", v))
+			gotSorted := append([]string(nil), got...)
+			wantSorted := append([]string(nil), want...)
+			sort.Strings(gotSorted)
+			sort.Strings(wantSorted)
+			if len(gotSorted) != len(wantSorted) {
+				t.Fatalf("BundledExtensions(%q) len=%d, want %d\n got: %v\nwant: %v",
+					v, len(gotSorted), len(wantSorted), gotSorted, wantSorted)
+			}
+			for i := range wantSorted {
+				if gotSorted[i] != wantSorted[i] {
+					t.Errorf("BundledExtensions(%q)[%d] = %q, want %q", v, i, gotSorted[i], wantSorted[i])
+				}
+			}
+		})
+	}
+}
+
+func TestBundledExtensionsUnknownVersion(t *testing.T) {
+	if got := BundledExtensions("7.4"); got != nil {
+		t.Errorf("BundledExtensions(7.4) = %v, want nil", got)
+	}
+}
+
+// readGoldenLines reads testdata/<name>, strips blank lines and # comments,
+// returns the remaining non-empty lines in file order.
+func readGoldenLines(t *testing.T, name string) []string {
+	t.Helper()
+	path := filepath.Join("testdata", name)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read golden %s: %v", path, err)
+	}
+	var out []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
 }

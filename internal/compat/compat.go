@@ -40,3 +40,227 @@ func DefaultIniValues(phpVersion string) map[string]string {
 		"memory_limit":  "-1",
 	}
 }
+
+// BundledExtensions returns the set of extensions compiled in to (or bundled
+// with) the shivammathur/setup-php@v2 Linux build for a given PHP version —
+// i.e. what `php -m` reports after setup-php runs with an empty `extensions:`
+// input, based on the Ondrej PPA build for that version. Returns nil for
+// unknown versions.
+//
+// The returned slice is a copy; callers may mutate it without affecting other
+// callers.
+//
+// Data source: docs/compat-matrix.md §3; mirrored in testdata/bundled_extensions_<ver>.golden.
+func BundledExtensions(phpVersion string) []string {
+	var src []string
+	switch phpVersion {
+	case "8.1":
+		src = bundled81
+	case "8.2":
+		src = bundled82
+	case "8.3":
+		src = bundled83
+	case "8.4":
+		src = bundled84
+	case "8.5":
+		src = bundled85
+	default:
+		return nil
+	}
+	return append([]string(nil), src...)
+}
+
+// Per-version bundled extension lists. Order matches the native `php -m`
+// output captured in the audit (see docs/compat-matrix.md §3.x and the
+// matching testdata/bundled_extensions_<ver>.golden file).
+
+var bundled81 = []string{
+	"calendar",
+	"Core",
+	"ctype",
+	"date",
+	"exif",
+	"FFI",
+	"fileinfo",
+	"filter",
+	"ftp",
+	"gettext",
+	"hash",
+	"iconv",
+	"json",
+	"libxml",
+	"openssl",
+	"pcntl",
+	"pcre",
+	"PDO",
+	"Phar",
+	"posix",
+	"readline",
+	"Reflection",
+	"session",
+	"shmop",
+	"sockets",
+	"sodium",
+	"SPL",
+	"standard",
+	"sysvmsg",
+	"sysvsem",
+	"sysvshm",
+	"tokenizer",
+	"Zend OPcache",
+	"zlib",
+}
+
+var bundled82 = []string{
+	"calendar",
+	"Core",
+	"ctype",
+	"date",
+	"exif",
+	"FFI",
+	"fileinfo",
+	"filter",
+	"ftp",
+	"gettext",
+	"hash",
+	"iconv",
+	"json",
+	"libxml",
+	"openssl",
+	"pcntl",
+	"pcre",
+	"PDO",
+	"Phar",
+	"posix",
+	"random",
+	"readline",
+	"Reflection",
+	"session",
+	"shmop",
+	"sockets",
+	"sodium",
+	"SPL",
+	"standard",
+	"sysvmsg",
+	"sysvsem",
+	"sysvshm",
+	"tokenizer",
+	"Zend OPcache",
+	"zlib",
+}
+
+var bundled83 = []string{
+	"calendar",
+	"Core",
+	"ctype",
+	"date",
+	"exif",
+	"FFI",
+	"fileinfo",
+	"filter",
+	"ftp",
+	"gettext",
+	"hash",
+	"iconv",
+	"json",
+	"libxml",
+	"openssl",
+	"pcntl",
+	"pcre",
+	"PDO",
+	"Phar",
+	"posix",
+	"random",
+	"readline",
+	"Reflection",
+	"session",
+	"shmop",
+	"sockets",
+	"sodium",
+	"SPL",
+	"standard",
+	"sysvmsg",
+	"sysvsem",
+	"sysvshm",
+	"tokenizer",
+	"Zend OPcache",
+	"zlib",
+}
+
+var bundled84 = []string{
+	"calendar",
+	"Core",
+	"ctype",
+	"date",
+	"exif",
+	"FFI",
+	"fileinfo",
+	"filter",
+	"ftp",
+	"gettext",
+	"hash",
+	"iconv",
+	"json",
+	"libxml",
+	"openssl",
+	"pcntl",
+	"pcre",
+	"PDO",
+	"Phar",
+	"posix",
+	"random",
+	"readline",
+	"Reflection",
+	"session",
+	"shmop",
+	"sockets",
+	"sodium",
+	"SPL",
+	"standard",
+	"sysvmsg",
+	"sysvsem",
+	"sysvshm",
+	"tokenizer",
+	"Zend OPcache",
+	"zlib",
+}
+
+var bundled85 = []string{
+	"calendar",
+	"Core",
+	"ctype",
+	"date",
+	"exif",
+	"FFI",
+	"fileinfo",
+	"filter",
+	"ftp",
+	"gettext",
+	"hash",
+	"iconv",
+	"json",
+	"lexbor",
+	"libxml",
+	"openssl",
+	"pcntl",
+	"pcre",
+	"PDO",
+	"Phar",
+	"posix",
+	"random",
+	"readline",
+	"Reflection",
+	"session",
+	"shmop",
+	"sockets",
+	"sodium",
+	"SPL",
+	"standard",
+	"sysvmsg",
+	"sysvsem",
+	"sysvshm",
+	"tokenizer",
+	"uri",
+	"Zend OPcache",
+	"zlib",
+}
