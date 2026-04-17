@@ -54,5 +54,6 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
-      - run: npx eslint src/
-      - run: npx prettier --check src/
+      - run: npx eslint src/ test/
+      - run: npx prettier --check src/ test/
+      - run: npm test

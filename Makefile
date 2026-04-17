@@ -1,4 +1,4 @@
-.PHONY: check fmt fmt-check vet lint tidy tidy-check test build clean \
+.PHONY: check fmt fmt-check vet lint tidy tidy-check test test-node build clean \
         build-linux-amd64 build-linux-arm64 bundle-php bundle-ext
 
 # Ensure the embedded lockfile is available for go vet/test/build
@@ -6,18 +6,18 @@ cmd/phpup/bundles.lock: bundles.lock
 	@cp bundles.lock cmd/phpup/bundles.lock
 
 # Run all checks locally (mirrors CI exactly)
-check: fmt-check vet lint tidy-check test build
+check: fmt-check vet lint tidy-check test test-node build
 	@rm -f cmd/phpup/bundles.lock
 
 # Format all code
 fmt:
 	gofmt -s -w .
-	npx prettier --write src/
+	npx prettier --write src/ test/
 
 # Check formatting without modifying (CI mode)
 fmt-check:
 	@test -z "$$(gofmt -s -l .)" || (echo "Files need gofmt:"; gofmt -s -l .; exit 1)
-	npx prettier --check src/
+	npx prettier --check src/ test/
 
 # Go vet
 vet: cmd/phpup/bundles.lock
@@ -26,7 +26,7 @@ vet: cmd/phpup/bundles.lock
 # Lint (requires golangci-lint)
 lint:
 	golangci-lint run ./...
-	npx eslint src/
+	npx eslint src/ test/
 
 # Go mod tidy
 tidy:
@@ -43,6 +43,10 @@ tidy-check:
 # Test with race detector
 test: cmd/phpup/bundles.lock
 	go test -race -cover ./...
+
+# Node unit tests
+test-node:
+	npm test
 
 # Build all binaries (native platform)
 build: cmd/phpup/bundles.lock
