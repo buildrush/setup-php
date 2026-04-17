@@ -1,0 +1,17 @@
+name: pcov
+kind: pecl
+source:
+  pecl_package: pcov
+versions:
+  - "1.0.12"
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+runtime_deps:
+  linux: []
+ini:
+  - "extension=pcov"
+smoke:
+  - 'php -r "assert(extension_loaded(\"pcov\"));"'

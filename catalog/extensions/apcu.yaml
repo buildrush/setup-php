@@ -1,0 +1,18 @@
+name: apcu
+kind: pecl
+source:
+  pecl_package: apcu
+versions:
+  - "5.1.28"
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+runtime_deps:
+  linux: []
+ini:
+  - "extension=apcu"
+  - "apc.enable_cli=1"
+smoke:
+  - 'php -r "assert(extension_loaded(\"apcu\"));"'
