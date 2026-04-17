@@ -61,7 +61,6 @@ func TestDefaultIniValuesMatchesGolden(t *testing.T) {
 func TestBundledExtensionsMatchGolden(t *testing.T) {
 	versions := []string{"8.1", "8.2", "8.3", "8.4", "8.5"}
 	for _, v := range versions {
-		v := v
 		t.Run(v, func(t *testing.T) {
 			got := BundledExtensions(v)
 			want := readGoldenLines(t, fmt.Sprintf("bundled_extensions_%s.golden", v))
@@ -98,7 +97,7 @@ func readGoldenLines(t *testing.T, name string) []string {
 		t.Fatalf("read golden %s: %v", path, err)
 	}
 	var out []string
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
