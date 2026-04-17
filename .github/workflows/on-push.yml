@@ -33,7 +33,11 @@ jobs:
 
   build-ext:
     needs: [plan, build-php]
-    if: needs.plan.outputs.ext_matrix != '{"include":[]}'
+    if: |
+      always() &&
+      needs.plan.result == 'success' &&
+      needs.build-php.result != 'failure' &&
+      needs.plan.outputs.ext_matrix != '{"include":[]}'
     strategy:
       fail-fast: false
       max-parallel: 30
