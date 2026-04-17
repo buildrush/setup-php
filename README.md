@@ -65,7 +65,7 @@ bcmath, calendar, ctype, curl, dom, exif, filter, ftp, gd, hash, iconv, intl, js
 
 Every input declared by v2 is declared here: `php-version`, `php-version-file`, `extensions`, `ini-file`, `ini-values`, `coverage`, `tools`, plus the env-var-driven `phpts`, `update`, `fail-fast`. Inputs we cannot implement given our prebuilt-bundle architecture (e.g. `update`) are accepted for parse compatibility and emit a `::warning::` line when set to a non-default value, so your workflow keeps running.
 
-Defaults match v2 where they are observable: `date.timezone=UTC` and `memory_limit=-1` are applied unless you override them in `ini-values`. The per-PHP-version compiled-in extension set is tracked against the `ondrej/php` PPA baseline v2 relies on.
+Defaults match v2 where they are observable: `date.timezone=UTC` and `memory_limit=-1` are applied unless you override them in `ini-values`. The per-PHP-version compiled-in extension baseline is audited against the `ondrej/php` PPA that v2 relies on; see [docs/compat-matrix.md](docs/compat-matrix.md) for the current delta.
 
 Extension list syntax works the same way:
 
