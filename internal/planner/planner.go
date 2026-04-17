@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/buildrush/setup-php/internal/catalog"
 )
 
@@ -17,6 +19,7 @@ type MatrixCell struct {
 	Arch      string `json:"arch"`
 	TS        string `json:"ts"`
 	Digest    string `json:"digest,omitempty"`
+	SpecHash  string `json:"spec_hash,omitempty"`
 	Extension string `json:"extension,omitempty"`
 	ExtVer    string `json:"ext_version,omitempty"`
 	PHPAbi    string `json:"php_abi,omitempty"`
@@ -114,6 +117,35 @@ func ComputeSpecHash(cell *MatrixCell, catalogData []byte, builderHash string) s
 	_, _ = fmt.Fprintf(h, "%s:%s:%s:%s:%s:%s",
 		cell.Version, cell.Extension, cell.OS, cell.Arch, cell.TS, cell.PHPAbi)
 	return fmt.Sprintf("sha256:%x", h.Sum(nil))
+}
+
+// HashFile returns "sha256:<hex>" of file contents. Intentionally bails on
+// missing files so callers don't silently produce an empty spec_hash and skip
+// rebuilds when a builder script has been deleted/moved.
+func HashFile(path string) (string, error) {
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("hash file %s: %w", path, err)
+	}
+	sum := sha256.Sum256(data)
+	return fmt.Sprintf("sha256:%x", sum[:]), nil
+}
+
+// PerVersionYAML marshals a single version entry from a PHP spec into
+// canonical YAML, suitable for hashing. Only the named version is included;
+// unrelated versions and the top-level Name/Smoke fields are omitted so that
+// editing one version does not bust the hash of others.
+func PerVersionYAML(spec *catalog.PHPSpec, version string) ([]byte, error) {
+	vs, ok := spec.Versions[version]
+	if !ok {
+		return nil, fmt.Errorf("version %q not in spec", version)
+	}
+	return yaml.Marshal(vs)
+}
+
+// ExtensionYAML marshals an extension spec into canonical YAML for hashing.
+func ExtensionYAML(spec *catalog.ExtensionSpec) ([]byte, error) {
+	return yaml.Marshal(spec)
 }
 
 // WriteMatrices writes php.json, ext.json, tool.json to the output directory.
