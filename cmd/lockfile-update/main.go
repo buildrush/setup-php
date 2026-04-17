@@ -104,7 +104,11 @@ func main() {
 				log.Printf("WARNING: skip %s %s: %v", c.Extension, tag, err)
 				continue
 			}
-			phpMinor, _, _ := splitAbi(c.PHPAbi)
+			phpMinor, _, ok := splitAbi(c.PHPAbi)
+			if !ok {
+				log.Printf("WARNING: skip %s: malformed php_abi %q", c.Extension, c.PHPAbi)
+				continue
+			}
 			key := lockfile.ExtBundleKey(c.Extension, c.ExtVer, phpMinor, c.OS, c.Arch, c.TS)
 			resolved = append(resolved, resolvedEntry{Key: key, Digest: digest, SpecHash: c.SpecHash})
 		}
@@ -133,10 +137,12 @@ func buildLockfile(entries []resolvedEntry) *lockfile.Lockfile {
 }
 
 // splitAbi parses "8.4-nts" → ("8.4", "nts", true). Splits on the last hyphen
-// so patch-level versions like "8.4.6-nts" also work.
+// so patch-level versions like "8.4.6-nts" also work. Rejects inputs with no
+// dash or a leading dash (empty minor) so a malformed ABIMatrix.PHP entry
+// cannot silently yield a key like "ext:redis:6.2.0::linux:...".
 func splitAbi(abi string) (phpMinor, ts string, ok bool) {
 	idx := strings.LastIndex(abi, "-")
-	if idx < 0 {
+	if idx <= 0 {
 		return abi, "", false
 	}
 	return abi[:idx], abi[idx+1:], true
