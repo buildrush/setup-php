@@ -67,7 +67,13 @@ async function githubJson(path, { token, apiBase = DEFAULT_API_BASE } = {}) {
 }
 
 async function resolveReleaseTag(repo, ref, { token, apiBase } = {}) {
-  if (ref) {
+  const isFloatingMajor = /^v\d+$/.test(ref || '');
+  const isSpecificVersion = /^v\d+\.\d+\.\d+/.test(ref || '');
+
+  // Floating major tags (v1, v2) are a git-ref convenience for `uses:` syntax only.
+  // They must never have a corresponding GitHub Release; resolve via latest + major-match
+  // so a stray major-tag release can't hijack resolution.
+  if (ref && !isFloatingMajor) {
     try {
       const release = await githubJson(`/repos/${repo}/releases/tags/${encodeURIComponent(ref)}`, {
         token,
@@ -76,14 +82,19 @@ async function resolveReleaseTag(repo, ref, { token, apiBase } = {}) {
       return release.tag_name;
     } catch (err) {
       if (err.statusCode !== 404) throw err;
+      if (isSpecificVersion) {
+        throw new Error(`No release found for pinned version ${ref}`);
+      }
+      // Branch/SHA ref: fall through to latest (development use case).
     }
   }
+
   const latest = await githubJson(`/repos/${repo}/releases/latest`, {
     token,
     apiBase,
   });
-  const majorMatch = /^v(\d+)$/.exec(ref || '');
-  if (majorMatch) {
+  if (isFloatingMajor) {
+    const majorMatch = /^v(\d+)$/.exec(ref);
     const latestMajor = /^v(\d+)/.exec(latest.tag_name);
     if (!latestMajor || latestMajor[1] !== majorMatch[1]) {
       throw new Error(`No release found for ${ref}; latest release is ${latest.tag_name}`);

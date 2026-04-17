@@ -53,3 +53,9 @@ All code changes MUST pass `make check` before committing. This runs:
 - Smoke tests: `test/smoke/run.sh` for bundle verification.
 - Integration tests: `.github/workflows/integration-test.yml` (CI only).
 - Local bundle builds: `make bundle-php` and `make bundle-ext` (requires Docker).
+
+## Release Engineering
+
+- Only specific-version tags (`vX.Y.Z`) get GitHub Releases with built assets. The floating major-tag (`vN`) is a git-ref convenience for `uses: buildrush/setup-php@v1` only and MUST NOT have a corresponding GitHub Release.
+- Release assets are built and uploaded inside `release-please.yml`, in the same job that creates the release. Never add a separate `push: tags:` workflow for release artifacts — `GITHUB_TOKEN`-originated tag pushes don't trigger downstream workflows, so such a workflow would silently skip release-please-created tags.
+- `src/index.js:resolveReleaseTag` enforces the major-tag convention: floating-major refs (matching `/^v\d+$/`) bypass `/releases/tags/<ref>` and resolve through `/releases/latest` + major-match. Specific-version refs (matching `/^v\d+\.\d+\.\d+/`) that 404 on lookup throw instead of silently substituting `latest`, to honor pin reproducibility.
