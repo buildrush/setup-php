@@ -226,21 +226,31 @@ func main() {
 //   - if the user wrote "none" in extensions (ExtensionsReset), every bundled
 //     extension not in their explicit include list.
 //
+// Include wins: a name that appears in p.Extensions is never added to the
+// disabled set — not from ExtensionsExclude (e.g. `extensions: redis, :redis`
+// is a contradiction that resolves to "redis stays enabled") nor from the
+// reset-minus-include logic.
+//
 // Sorted output ensures deterministic filesystem ordering across runs.
 func computeDisabledExtensions(p *plan.Plan, bundled []string) []string {
+	included := map[string]bool{}
+	for _, name := range p.Extensions {
+		included[name] = true
+	}
+
 	disabled := map[string]bool{}
 	for _, name := range p.ExtensionsExclude {
+		if included[name] {
+			continue // include wins
+		}
 		disabled[name] = true
 	}
 	if p.ExtensionsReset {
-		included := map[string]bool{}
-		for _, name := range p.Extensions {
-			included[name] = true
-		}
 		for _, name := range bundled {
-			if !included[name] {
-				disabled[name] = true
+			if included[name] {
+				continue
 			}
+			disabled[name] = true
 		}
 	}
 	if len(disabled) == 0 {

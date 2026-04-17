@@ -37,6 +37,18 @@ func TestComputeDisabledExtensions(t *testing.T) {
 			bundled: []string{"curl", "opcache"},
 			want:    nil,
 		},
+		{
+			name:    "include wins over explicit exclude (redis, :redis)",
+			p:       plan.Plan{Extensions: []string{"redis"}, ExtensionsExclude: []string{"redis"}},
+			bundled: []string{"curl", "opcache"},
+			want:    nil,
+		},
+		{
+			name:    "reset with include overlap does not disable included",
+			p:       plan.Plan{Extensions: []string{"curl", "opcache"}, ExtensionsReset: true},
+			bundled: []string{"curl", "opcache", "mbstring"},
+			want:    []string{"mbstring"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -63,7 +63,15 @@ func TestBundledExtensionsMatchGolden(t *testing.T) {
 	for _, v := range versions {
 		t.Run(v, func(t *testing.T) {
 			got := BundledExtensions(v)
-			want := readGoldenLines(t, fmt.Sprintf("bundled_extensions_%s.golden", v))
+			raw := readGoldenLines(t, fmt.Sprintf("bundled_extensions_%s.golden", v))
+			// Golden files preserve raw `php -m` casing for audit; apply the
+			// same normalization BundledExtensions does before comparing, so
+			// the test asserts the normalization is stable without coupling
+			// the golden to the user-facing identifier form.
+			want := make([]string, len(raw))
+			for i, line := range raw {
+				want[i] = normalizeExtensionName(line)
+			}
 			gotSorted := append([]string(nil), got...)
 			wantSorted := append([]string(nil), want...)
 			sort.Strings(gotSorted)
@@ -76,6 +84,27 @@ func TestBundledExtensionsMatchGolden(t *testing.T) {
 				if gotSorted[i] != wantSorted[i] {
 					t.Errorf("BundledExtensions(%q)[%d] = %q, want %q", v, i, gotSorted[i], wantSorted[i])
 				}
+			}
+		})
+	}
+}
+
+func TestNormalizeExtensionName(t *testing.T) {
+	tests := []struct {
+		name, in, want string
+	}{
+		{"zend opcache native", "Zend OPcache", "opcache"},
+		{"zend opcache lowercase", "zend opcache", "opcache"},
+		{"PDO", "PDO", "pdo"},
+		{"Core", "Core", "core"},
+		{"mbstring idempotent", "mbstring", "mbstring"},
+		{"empty", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeExtensionName(tt.in)
+			if got != tt.want {
+				t.Errorf("normalizeExtensionName(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}
