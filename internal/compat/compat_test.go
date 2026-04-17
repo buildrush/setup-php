@@ -3,7 +3,6 @@ package compat
 import (
 	"bufio"
 	"os"
-	"sort"
 	"strings"
 	"testing"
 )
@@ -65,15 +64,5 @@ func TestDefaultIniValuesMatchesGolden(t *testing.T) {
 		if got[k] != v {
 			t.Errorf("DefaultIniValues[%q] = %q, want %q", k, got[k], v)
 		}
-	}
-
-	// determinism reminder — map iteration is random; ensuring keys sortable
-	keys := make([]string, 0, len(got))
-	for k := range got {
-		keys = append(keys, k)
-	}
-	if !sort.StringsAreSorted(keys) {
-		// allowed — just an observation, not a failure
-		_ = keys
 	}
 }
