@@ -25,6 +25,12 @@ func TestFromEnvFull(t *testing.T) {
 	if len(p.Extensions) != 3 {
 		t.Errorf("len(Extensions) = %d, want 3", len(p.Extensions))
 	}
+	if len(p.ExtensionsExclude) != 0 {
+		t.Errorf("len(ExtensionsExclude) = %d, want 0", len(p.ExtensionsExclude))
+	}
+	if p.ExtensionsReset {
+		t.Errorf("ExtensionsReset = true, want false for plain-list input")
+	}
 	if p.Coverage != CoverageXdebug {
 		t.Errorf("Coverage = %q, want xdebug", p.Coverage)
 	}
@@ -60,27 +66,49 @@ func TestFromEnvDefaults(t *testing.T) {
 
 func TestParseExtensions(t *testing.T) {
 	tests := []struct {
-		input string
-		want  []string
+		name        string
+		input       string
+		wantInclude []string
+		wantExclude []string
+		wantReset   bool
 	}{
-		{"mbstring, redis, curl", []string{"curl", "mbstring", "redis"}},
-		{"Redis, MBSTRING, curl", []string{"curl", "mbstring", "redis"}},
-		{" redis , redis , curl ", []string{"curl", "redis"}},
-		{"", nil},
-		{"none", nil},
+		{"empty", "", nil, nil, false},
+		{"plain list", "mbstring, redis, curl", []string{"curl", "mbstring", "redis"}, nil, false},
+		{"case and whitespace", " Redis , MBSTRING , curl ", []string{"curl", "mbstring", "redis"}, nil, false},
+		{"dedupe", "redis, redis, curl", []string{"curl", "redis"}, nil, false},
+		{"single exclusion", ":opcache", nil, []string{"opcache"}, false},
+		{"exclusion with includes", "redis, :opcache, curl", []string{"curl", "redis"}, []string{"opcache"}, false},
+		{"none alone", "none", nil, nil, true},
+		{"none then include", "none, redis, curl", []string{"curl", "redis"}, nil, true},
+		{"none then include and exclude", "none, redis, :opcache", []string{"redis"}, []string{"opcache"}, true},
+		{"none anywhere resets before it", "redis, none, curl", []string{"curl"}, nil, true},
 	}
 	for _, tt := range tests {
-		got := ParseExtensions(tt.input)
-		if len(got) != len(tt.want) {
-			t.Errorf("ParseExtensions(%q) = %v, want %v", tt.input, got, tt.want)
-			continue
-		}
-		for i := range got {
-			if got[i] != tt.want[i] {
-				t.Errorf("ParseExtensions(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
+		t.Run(tt.name, func(t *testing.T) {
+			incl, excl, reset := ParseExtensions(tt.input)
+			if !equalStringSlice(incl, tt.wantInclude) {
+				t.Errorf("include = %v, want %v", incl, tt.wantInclude)
 			}
+			if !equalStringSlice(excl, tt.wantExclude) {
+				t.Errorf("exclude = %v, want %v", excl, tt.wantExclude)
+			}
+			if reset != tt.wantReset {
+				t.Errorf("reset = %v, want %v", reset, tt.wantReset)
+			}
+		})
+	}
+}
+
+func equalStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
 		}
 	}
+	return true
 }
 
 func TestParseIniValues(t *testing.T) {

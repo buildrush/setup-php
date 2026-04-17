@@ -11,19 +11,21 @@ import (
 )
 
 type Plan struct {
-	PHPVersion   string
-	Extensions   []string
-	IniValues    []IniValue
-	Coverage     CoverageDriver
-	Tools        []string
-	ThreadSafety string
-	OS           string
-	Arch         string
-	FailFast     bool
-	Update       bool
-	IniFile      string
-	Debug        bool
-	Verbose      bool
+	PHPVersion        string
+	Extensions        []string
+	ExtensionsExclude []string
+	ExtensionsReset   bool
+	IniValues         []IniValue
+	Coverage          CoverageDriver
+	Tools             []string
+	ThreadSafety      string
+	OS                string
+	Arch              string
+	FailFast          bool
+	Update            bool
+	IniFile           string
+	Debug             bool
+	Verbose           bool
 }
 
 type IniValue struct {
@@ -59,7 +61,10 @@ func FromEnv() (*Plan, error) {
 		}
 	}
 
-	p.Extensions = ParseExtensions(os.Getenv("INPUT_EXTENSIONS"))
+	incl, excl, reset := ParseExtensions(os.Getenv("INPUT_EXTENSIONS"))
+	p.Extensions = incl
+	p.ExtensionsExclude = excl
+	p.ExtensionsReset = reset
 
 	if raw := os.Getenv("INPUT_INI-VALUES"); raw != "" {
 		vals, err := ParseIniValues(raw)
@@ -76,24 +81,52 @@ func FromEnv() (*Plan, error) {
 	return p, nil
 }
 
-func ParseExtensions(raw string) []string {
+// ParseExtensions parses shivammathur/setup-php@v2's extensions syntax.
+// Recognized tokens:
+//   - bare name (e.g. "redis") → include
+//   - ":name" → exclude
+//   - "none" → reset both include and exclude to empty; subsequent tokens process normally
+//
+// Output is sorted, deduplicated, and lower-cased.
+func ParseExtensions(raw string) (include, exclude []string, reset bool) {
 	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "none" {
-		return nil
+	if raw == "" {
+		return nil, nil, false
 	}
 
-	seen := make(map[string]bool)
-	var result []string
-	for ext := range strings.SplitSeq(raw, ",") {
-		ext = strings.TrimSpace(strings.ToLower(ext))
-		if ext == "" || seen[ext] {
-			continue
+	seenIncl := map[string]bool{}
+	seenExcl := map[string]bool{}
+
+	for tok := range strings.SplitSeq(raw, ",") {
+		tok = strings.TrimSpace(strings.ToLower(tok))
+		switch {
+		case tok == "":
+			// skip
+		case tok == "none":
+			include = nil
+			exclude = nil
+			seenIncl = map[string]bool{}
+			seenExcl = map[string]bool{}
+			reset = true
+		case strings.HasPrefix(tok, ":"):
+			name := strings.TrimPrefix(tok, ":")
+			if name == "" || seenExcl[name] {
+				continue
+			}
+			seenExcl[name] = true
+			exclude = append(exclude, name)
+		default:
+			if seenIncl[tok] {
+				continue
+			}
+			seenIncl[tok] = true
+			include = append(include, tok)
 		}
-		seen[ext] = true
-		result = append(result, ext)
 	}
-	sort.Strings(result)
-	return result
+
+	sort.Strings(include)
+	sort.Strings(exclude)
+	return include, exclude, reset
 }
 
 func ParseIniValues(raw string) ([]IniValue, error) {
@@ -150,6 +183,8 @@ func (p *Plan) Hash() string {
 	_, _ = fmt.Fprintf(h, "arch:%s\n", p.Arch)
 	_, _ = fmt.Fprintf(h, "ts:%s\n", p.ThreadSafety)
 	_, _ = fmt.Fprintf(h, "exts:%s\n", strings.Join(p.Extensions, ","))
+	_, _ = fmt.Fprintf(h, "excl:%s\n", strings.Join(p.ExtensionsExclude, ","))
+	_, _ = fmt.Fprintf(h, "reset:%t\n", p.ExtensionsReset)
 	_, _ = fmt.Fprintf(h, "coverage:%s\n", p.Coverage)
 	for _, iv := range p.IniValues {
 		_, _ = fmt.Fprintf(h, "ini:%s=%s\n", iv.Key, iv.Value)
