@@ -74,14 +74,13 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./scripts/update-lockfile.sh
-      - name: Commit lockfile changes
-        run: |
-          if git diff --quiet bundles.lock; then
-            echo "No lockfile changes to commit"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add bundles.lock
-          git commit -m "chore: update bundles.lock"
-          git push origin HEAD:main
+      - uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "chore: update bundles.lock"
+          title: "chore: update bundles.lock"
+          branch: bot/lockfile-update
+          delete-branch: true
+          body: |
+            Automated lockfile update from build pipeline.
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
