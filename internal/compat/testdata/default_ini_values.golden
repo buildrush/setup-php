@@ -1,0 +1,7 @@
+# Defaults set by shivammathur/setup-php@v2 on Linux runners (unconditional).
+# Source: docs/compat-matrix.md §2.1, pinned SHA accd6127cb78bee3e8082180cb391013d204ef9f.
+# NOTE: version-conditional defaults (xdebug.mode=coverage when coverage:xdebug,
+# opcache.* when opcache loaded) are handled at compose time, not here.
+
+date.timezone=UTC
+memory_limit=-1
