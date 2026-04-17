@@ -57,3 +57,13 @@ jobs:
       - run: npx eslint src/ test/
       - run: npx prettier --check src/ test/
       - run: npm test
+
+  ci-lint-gate:
+    name: ci-lint gate
+    if: always()
+    needs: [go-lint, node-lint]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
