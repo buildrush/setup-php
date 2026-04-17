@@ -1,0 +1,17 @@
+name: xdebug
+kind: pecl
+source:
+  pecl_package: xdebug
+versions:
+  - "3.5.1"
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+runtime_deps:
+  linux: []
+ini:
+  - "zend_extension=xdebug"
+smoke:
+  - 'php -r "assert(extension_loaded(\"xdebug\"));"'
