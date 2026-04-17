@@ -22,26 +22,30 @@ This means setup typically completes in single-digit seconds, and every run gets
 
 ## Inputs
 
-| Input | Description | Default |
-|-------|-------------|---------|
-| `php-version` | PHP version to install | `8.4` |
-| `extensions` | Comma-separated extensions | — |
-| `ini-values` | Comma-separated ini settings | — |
-| `coverage` | Coverage driver (xdebug, pcov, none) | `none` |
-| `tools` | Comma-separated tools | — |
-| `php-version-file` | File containing PHP version | — |
+| Input              | Description                                                                                                    | Default      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- | ------------ |
+| `php-version`      | PHP version to install                                                                                         | `8.4`        |
+| `phpts`            | Thread safety (`nts` or `zts`). Only `nts` bundles are published today; see compat section below.              | `nts`        |
+| `extensions`       | Comma-separated extensions (supports `:ext` to exclude and `none` to reset).                                   | —            |
+| `ini-values`       | Comma-separated ini settings (`key=value`).                                                                    | —            |
+| `ini-file`         | Base ini template (`production` or `development`). Only `production` is currently applied; see compat section. | `production` |
+| `coverage`         | Coverage driver (`xdebug`, `pcov`, `none`).                                                                    | `none`       |
+| `tools`            | Comma-separated tools to install.                                                                              | —            |
+| `update`           | Accepted for v2 parse compatibility; no-op under prebuilt bundles. See compat section.                         | `false`      |
+| `fail-fast`        | Promote soft fallbacks (e.g. ZTS not available) to hard errors.                                                | `false`      |
+| `php-version-file` | File containing PHP version.                                                                                   | —            |
 
 ## Outputs
 
-| Output | Description |
-|--------|-------------|
+| Output        | Description                          |
+| ------------- | ------------------------------------ |
 | `php-version` | Resolved PHP version (e.g., `8.4.6`) |
 
 ## Supported Matrix
 
-| OS | Arch | PHP | Thread Safety |
-|----|------|-----|---------------|
-| Linux (Ubuntu 24.04) | x86_64 | 8.4 | NTS |
+| OS                   | Arch   | PHP | Thread Safety |
+| -------------------- | ------ | --- | ------------- |
+| Linux (Ubuntu 24.04) | x86_64 | 8.4 | NTS           |
 
 ### Bundled Extensions
 
@@ -52,8 +56,25 @@ bcmath, calendar, ctype, curl, dom, exif, filter, ftp, gd, hash, iconv, intl, js
 ### Separately Installable Extensions
 
 | Extension | Version |
-|-----------|---------|
-| redis | 6.2.0 |
+| --------- | ------- |
+| redis     | 6.2.0   |
+
+## Compatibility with `shivammathur/setup-php@v2`
+
+`buildrush/setup-php` is designed as a drop-in replacement for `shivammathur/setup-php@v2`. Existing workflows can migrate by changing only the `uses:` line.
+
+Every input declared by v2 is declared here: `php-version`, `php-version-file`, `extensions`, `ini-file`, `ini-values`, `coverage`, `tools`, plus the env-var-driven `phpts`, `update`, `fail-fast`. Inputs we cannot implement given our prebuilt-bundle architecture (e.g. `update`) are accepted for parse compatibility and emit a `::warning::` line when set to a non-default value, so your workflow keeps running.
+
+Defaults match v2 where they are observable: `date.timezone=UTC` and `memory_limit=-1` are applied unless you override them in `ini-values`. The per-PHP-version compiled-in extension set is tracked against the `ondrej/php` PPA baseline v2 relies on.
+
+Extension list syntax works the same way:
+
+```yaml
+extensions: redis, :opcache        # include redis, exclude opcache
+extensions: none, redis, curl      # reset, then only redis + curl
+```
+
+Details, deliberate deviations, and deferred behavioral quirks are catalogued in [docs/compat-matrix.md](docs/compat-matrix.md).
 
 ## Contributing
 
