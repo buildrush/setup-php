@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/buildrush/setup-php/compare/v1.0.1...v1.1.0) (2026-04-17)
+
+
+### Features
+
+* install coverage driver when coverage input is set ([#14](https://github.com/buildrush/setup-php/issues/14)) ([e3b90cd](https://github.com/buildrush/setup-php/commit/e3b90cdbfc37b373c0a8628593cebef2d3b3f3b6))
+
+
+### Bug Fixes
+
+* move floating major tag from release-please workflow ([#10](https://github.com/buildrush/setup-php/issues/10)) ([1852579](https://github.com/buildrush/setup-php/commit/1852579f483774a3a7b5c0bf1296e4b50c106467))
+
 ## [1.0.1](https://github.com/buildrush/setup-php/compare/v1.0.0...v1.0.1) (2026-04-17)
 
 
