@@ -115,7 +115,7 @@ func Resolve(p *plan.Plan, lf *lockfile.Lockfile, cat *catalog.Catalog) (*Resolu
 	if len(p.Tools) > 0 {
 		msg := fmt.Sprintf("tools input is not yet supported (requested: %s); will be ignored", strings.Join(p.Tools, ","))
 		if p.FailFast {
-			return nil, fmt.Errorf("%s", msg)
+			return nil, fmt.Errorf("%s (fail-fast)", msg)
 		}
 		res.Warnings = append(res.Warnings, "::warning::"+msg)
 	}
