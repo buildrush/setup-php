@@ -1,0 +1,46 @@
+# Built-in / default-loaded extensions for PHP 8.3 on Ondrej PPA, Ubuntu 24.04 noble.
+# Source: docs/compat-matrix.md §3.3, pinned SHA accd6127cb78bee3e8082180cb391013d204ef9f.
+# Snapshot: Sat, 11 Apr 2026 10:46:03 UTC.
+#
+# Includes: compiled-in extensions + default-loaded extensions from clean
+# `apt install php8.3-cli` (no extras). One name per line, native `php -m` order.
+#
+# NOT included (and why):
+#   - Separately-installed PECL/PPA extensions (redis, xdebug, pcov, apcu, imagick,
+#     memcached, mongodb, etc.) — those come from the catalog + lockfile at runtime.
+
+calendar
+Core
+ctype
+date
+exif
+FFI
+fileinfo
+filter
+ftp
+gettext
+hash
+iconv
+json
+libxml
+openssl
+pcntl
+pcre
+PDO
+Phar
+posix
+random
+readline
+Reflection
+session
+shmop
+sockets
+sodium
+SPL
+standard
+sysvmsg
+sysvsem
+sysvshm
+tokenizer
+Zend OPcache
+zlib
