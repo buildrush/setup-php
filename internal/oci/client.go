@@ -134,6 +134,20 @@ func (c *Client) Exists(ctx context.Context, ref, digest string) (bool, error) {
 	return true, nil
 }
 
+// ResolveDigest looks up the OCI manifest digest for the given tagged or
+// digest-form reference. Returns "sha256:..." on success.
+func (c *Client) ResolveDigest(ctx context.Context, ref string) (string, error) {
+	r, err := name.ParseReference(ref)
+	if err != nil {
+		return "", fmt.Errorf("parse ref %s: %w", ref, err)
+	}
+	desc, err := remote.Head(r, remote.WithAuth(c.auth), remote.WithContext(ctx))
+	if err != nil {
+		return "", fmt.Errorf("head %s: %w", ref, err)
+	}
+	return desc.Digest.String(), nil
+}
+
 func (c *Client) bundleRef(bundle *ResolvedBundle) (name.Reference, error) {
 	var refStr string
 	switch bundle.Kind {
