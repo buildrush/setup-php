@@ -10,7 +10,6 @@
 # Pre-reqs:
 #   - phpup binary on PATH (or override with PHPUP=... env var)
 #   - the PHP 8.4 bundle already built and pushed to GHCR
-#     (OR: BUILDRUSH_OFFLINE_DIR pointing at a pre-extracted bundle layout)
 #   - GITHUB_TOKEN exported if pulling from GHCR
 #   - running on linux/x86_64
 
