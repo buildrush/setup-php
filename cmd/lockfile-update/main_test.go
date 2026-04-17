@@ -46,8 +46,11 @@ func TestSplitAbi(t *testing.T) {
 	}{
 		{"8.4-nts", "8.4", "nts", true},
 		{"8.5-zts", "8.5", "zts", true},
+		{"8.4.6-nts", "8.4.6", "nts", true},
 		{"8.4", "8.4", "", false},
 		{"", "", "", false},
+		{"-nts", "-nts", "", false},
+		{"nts", "nts", "", false},
 	}
 	for _, tt := range tests {
 		m, ts, ok := splitAbi(tt.in)
