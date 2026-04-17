@@ -6,9 +6,15 @@ on:
         description: 'Force rebuild even if digests match'
         type: boolean
         default: false
+      push:
+        description: 'Push bundles to GHCR and update bundles.lock'
+        type: boolean
+        default: true
 
 jobs:
-  build:
-    uses: ./.github/workflows/plan.yml
+  pipeline:
+    uses: ./.github/workflows/plan-and-build.yml
     with:
       force: ${{ inputs.force }}
+      push: ${{ inputs.push }}
+    secrets: inherit
