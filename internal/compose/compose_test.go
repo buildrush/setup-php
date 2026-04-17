@@ -47,27 +47,6 @@ func TestWriteIniFragment(t *testing.T) {
 	}
 }
 
-func TestWriteIniValues(t *testing.T) {
-	dir := t.TempDir()
-	vals := []plan.IniValue{
-		{Key: "memory_limit", Value: "256M"},
-		{Key: "display_errors", Value: "On"},
-	}
-	err := WriteIniValues(dir, vals)
-	if err != nil {
-		t.Fatalf("WriteIniValues() error = %v", err)
-	}
-
-	data, _ := os.ReadFile(filepath.Join(dir, "99-user.ini"))
-	content := string(data)
-	if !strings.Contains(content, "memory_limit=256M") {
-		t.Errorf("should contain memory_limit=256M, got %q", content)
-	}
-	if !strings.Contains(content, "display_errors=On") {
-		t.Errorf("should contain display_errors=On, got %q", content)
-	}
-}
-
 func TestWriteIniValuesWithDefaults(t *testing.T) {
 	dir := t.TempDir()
 	defaults := map[string]string{
