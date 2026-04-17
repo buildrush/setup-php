@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/buildrush/setup-php/internal/catalog"
 	"github.com/buildrush/setup-php/internal/lockfile"
@@ -46,6 +47,23 @@ func main() {
 
 	// Expand PHP matrix
 	phpCells := planner.ExpandPHPMatrix(cat.PHP)
+	builderHashPHP, err := planner.HashFile(filepath.Join("builders", "linux", "build-php.sh"))
+	if err != nil {
+		log.Fatalf("hash php builder: %v", err)
+	}
+	for i := range phpCells {
+		yamlBytes, err := planner.PerVersionYAML(cat.PHP, phpCells[i].Version)
+		if err != nil {
+			log.Fatalf("per-version yaml for %s: %v", phpCells[i].Version, err)
+		}
+		phpCells[i].SpecHash = planner.ComputeSpecHash(&phpCells[i], yamlBytes, builderHashPHP)
+	}
+
+	builderHashExt, err := planner.HashFile(filepath.Join("builders", "linux", "build-ext.sh"))
+	if err != nil {
+		log.Fatalf("hash ext builder: %v", err)
+	}
+
 	if !*force {
 		phpCells = filterExisting(ctx, phpCells, lf, client)
 	}
@@ -58,6 +76,13 @@ func main() {
 			continue
 		}
 		cells := planner.ExpandExtMatrix(ext)
+		extYAML, err := planner.ExtensionYAML(ext)
+		if err != nil {
+			log.Fatalf("ext yaml for %s: %v", ext.Name, err)
+		}
+		for i := range cells {
+			cells[i].SpecHash = planner.ComputeSpecHash(&cells[i], extYAML, builderHashExt)
+		}
 		if !*force {
 			cells = filterExisting(ctx, cells, lf, client)
 		}
@@ -80,7 +105,7 @@ func filterExisting(ctx context.Context, cells []planner.MatrixCell, lf *lockfil
 	var filtered []planner.MatrixCell
 	for i := range cells {
 		cell := &cells[i]
-		// Build the lockfile key for this cell
+
 		var key string
 		if cell.Extension != "" {
 			key = lockfile.ExtBundleKey(cell.Extension, cell.ExtVer, cell.PHPAbi, cell.OS, cell.Arch, cell.TS)
@@ -88,24 +113,28 @@ func filterExisting(ctx context.Context, cells []planner.MatrixCell, lf *lockfil
 			key = lockfile.PHPBundleKey(cell.Version, cell.OS, cell.Arch, cell.TS)
 		}
 
-		digest, ok := lf.Lookup(key)
+		entry, ok := lf.LookupEntry(key)
 		if !ok {
-			filtered = append(filtered, *cell) // not in lockfile, needs building
+			filtered = append(filtered, *cell) // not in lockfile, must build
+			continue
+		}
+		if entry.SpecHash != "" && entry.SpecHash != cell.SpecHash {
+			filtered = append(filtered, *cell) // inputs drifted, must rebuild
 			continue
 		}
 
-		// Check if digest exists on registry
 		var ref string
 		if cell.Extension != "" {
-			ref = fmt.Sprintf("ghcr.io/buildrush/php-ext-%s@%s", cell.Extension, digest)
+			ref = fmt.Sprintf("ghcr.io/buildrush/php-ext-%s@%s", cell.Extension, entry.Digest)
 		} else {
-			ref = fmt.Sprintf("ghcr.io/buildrush/php-core@%s", digest)
+			ref = fmt.Sprintf("ghcr.io/buildrush/php-core@%s", entry.Digest)
 		}
-		exists, _ := client.Exists(ctx, ref, digest)
+		exists, _ := client.Exists(ctx, ref, entry.Digest)
 		if !exists {
-			filtered = append(filtered, *cell) // not on registry, needs building
+			filtered = append(filtered, *cell) // missing from registry, rebuild
 		}
-		// else: skip, already built and published
+		// else: skip — lockfile digest exists on registry and spec_hash either
+		// matches or is empty (grandfathered).
 	}
 	return filtered
 }
