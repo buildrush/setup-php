@@ -43,7 +43,7 @@ Source: `action.yml` @ `<SHA>` (lines 1-38).
 | `ini-values` | false | *(unset)* | `Add values to php.ini.` | `action.yml` L21-23 |
 | `coverage` | false | *(unset)* | `Setup code coverage driver.` | `action.yml` L24-26 |
 | `tools` | false | *(unset)* | `Setup popular tools globally.` | `action.yml` L27-29 |
-| `github-token` | *(unspecified)* | `${{ github.token }}` | `GitHub token to use for authentication.` | `action.yml` L30-32 |
+| `github-token` | false | `${{ github.token }}` | `GitHub token to use for authentication.` | `action.yml` L30-32 |
 
 Notes:
 
@@ -197,16 +197,14 @@ at `<SHA>`:
 
 | Extension | Priority | Notes |
 | --- | --- | --- |
-| `apc`, `apcu_bc`, `apcu-bc` | `25` | |
-| `blackfire`, `couchbase`, `decimal`, `ds`, `event`, `ev`, `grpc`, `inotify`, `maxminddb`, `mysqlnd_ms`, `protobuf`, `rdkafka`, `vips`, `zstd` | `30` | |
-| `http`, `pecl_http`, `pecl-http`, `mailparse`, `memcached`, `openswoole`, `swoole` | `25` / `30` (see file) | |
-| `libvirt-php` | `40` | |
 | `mysqlnd`, `opcache`, `pdo` | `10` | Must load early. |
-| `phalcon` | `35` | |
 | `psr`, `xml` | `15` | |
-| `pdo` | `10` | |
+| `apc`, `apcu_bc`, `apcu-bc`, `http`, `pecl_http`, `pecl-http`, `mailparse`, `memcached`, `openswoole`, `swoole` | `25` | |
+| `blackfire`, `couchbase`, `decimal`, `ds`, `event`, `ev`, `grpc`, `inotify`, `maxminddb`, `mysqlnd_ms`, `protobuf`, `rdkafka`, `vips`, `zstd` | `30` | |
+| `phalcon` | `35` | |
+| `libvirt-php` | `40` | |
 
-Complete raw file: `src/configs/mod_priority` @ `<SHA>`.
+Complete raw file: `https://raw.githubusercontent.com/shivammathur/setup-php/<SHA>/src/configs/mod_priority` (31 entries).
 
 ---
 
