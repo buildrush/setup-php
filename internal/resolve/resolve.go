@@ -91,7 +91,7 @@ func Resolve(p *plan.Plan, lf *lockfile.Lockfile, cat *catalog.Catalog) (*Resolu
 					continue
 				}
 				extKey = k
-				extDigest = d
+				extDigest = d.Digest
 				// Extract version from key: ext:<name>:<version>:<phpMinor>:...
 				inner := k[len(prefix):]
 				extVersion = strings.SplitN(inner, ":", 2)[0]
