@@ -12,7 +12,9 @@ import (
 func testCatalog() *catalog.Catalog {
 	return &catalog.Catalog{
 		PHP: &catalog.PHPSpec{
-			BundledExtensions: []string{"mbstring", "curl", "intl", "zip"},
+			Versions: map[string]*catalog.PHPVersionSpec{
+				"8.4.6": {BundledExtensions: []string{"mbstring", "curl", "intl", "zip"}},
+			},
 		},
 		Extensions: map[string]*catalog.ExtensionSpec{
 			"redis":    {Name: "redis", Kind: catalog.ExtensionKindPECL},

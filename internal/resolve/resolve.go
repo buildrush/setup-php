@@ -54,7 +54,7 @@ func Resolve(p *plan.Plan, lf *lockfile.Lockfile, cat *catalog.Catalog) (*Resolu
 	}
 
 	for _, extName := range p.Extensions {
-		if cat.IsBundled(extName) {
+		if cat.IsBundled(p.PHPVersion, extName) {
 			continue
 		}
 

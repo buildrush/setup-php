@@ -61,9 +61,15 @@ func main() {
 		log.Fatalf("parse embedded lockfile: %v", err)
 	}
 
-	// 3. Build minimal catalog for resolution
+	// 3. Build minimal catalog for resolution. The runtime keys the Versions
+	// map by the exact PHPVersion that resolve.Resolve will look up, so the
+	// per-version bundled list is always found for IsBundled.
 	cat := &catalog.Catalog{
-		PHP: &catalog.PHPSpec{BundledExtensions: compat.BundledExtensions(p.PHPVersion)},
+		PHP: &catalog.PHPSpec{
+			Versions: map[string]*catalog.PHPVersionSpec{
+				p.PHPVersion: {BundledExtensions: compat.BundledExtensions(p.PHPVersion)},
+			},
+		},
 		Extensions: map[string]*catalog.ExtensionSpec{
 			"redis":  {Name: "redis", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.2.0"}},
 			"xdebug": {Name: "xdebug", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.5.1"}, Ini: []string{"zend_extension=xdebug", "xdebug.mode=coverage"}},

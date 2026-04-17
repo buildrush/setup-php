@@ -11,11 +11,16 @@ import (
 
 func TestExpandPHPMatrix(t *testing.T) {
 	spec := &catalog.PHPSpec{
-		Versions: []string{"8.4"},
-		ABIMatrix: catalog.ABIMatrix{
-			OS:   []string{"linux"},
-			Arch: []string{"x86_64"},
-			TS:   []string{"nts"},
+		Versions: map[string]*catalog.PHPVersionSpec{
+			"8.4": {
+				BundledExtensions: []string{"mbstring"},
+				Sources:           &catalog.PHPSource{URL: "https://example/php-{version}.tar.xz"},
+				ABIMatrix: catalog.ABIMatrix{
+					OS:   []string{"linux"},
+					Arch: []string{"x86_64"},
+					TS:   []string{"nts"},
+				},
+			},
 		},
 	}
 
@@ -33,17 +38,56 @@ func TestExpandPHPMatrix(t *testing.T) {
 
 func TestExpandPHPMatrixMulti(t *testing.T) {
 	spec := &catalog.PHPSpec{
-		Versions: []string{"8.3", "8.4"},
-		ABIMatrix: catalog.ABIMatrix{
-			OS:   []string{"linux"},
-			Arch: []string{"x86_64", "aarch64"},
-			TS:   []string{"nts"},
+		Versions: map[string]*catalog.PHPVersionSpec{
+			"8.3": {
+				BundledExtensions: []string{"mbstring"},
+				Sources:           &catalog.PHPSource{URL: "https://example/php-{version}.tar.xz"},
+				ABIMatrix: catalog.ABIMatrix{
+					OS:   []string{"linux"},
+					Arch: []string{"x86_64", "aarch64"},
+					TS:   []string{"nts"},
+				},
+			},
+			"8.4": {
+				BundledExtensions: []string{"mbstring"},
+				Sources:           &catalog.PHPSource{URL: "https://example/php-{version}.tar.xz"},
+				ABIMatrix: catalog.ABIMatrix{
+					OS:   []string{"linux"},
+					Arch: []string{"x86_64", "aarch64"},
+					TS:   []string{"nts"},
+				},
+			},
 		},
 	}
 	// 2 versions × 1 OS × 2 arch × 1 TS = 4 cells
 	cells := ExpandPHPMatrix(spec)
 	if len(cells) != 4 {
 		t.Fatalf("len(cells) = %d, want 4", len(cells))
+	}
+}
+
+func TestExpandPHPMatrixSkipsCompatOnlyVersions(t *testing.T) {
+	spec := &catalog.PHPSpec{
+		Versions: map[string]*catalog.PHPVersionSpec{
+			"8.1": {BundledExtensions: []string{"mbstring"}}, // no sources → compat only
+			"8.4": {
+				BundledExtensions: []string{"mbstring"},
+				Sources:           &catalog.PHPSource{URL: "https://example/php-{version}.tar.xz"},
+				ABIMatrix: catalog.ABIMatrix{
+					OS:   []string{"linux"},
+					Arch: []string{"x86_64"},
+					TS:   []string{"nts"},
+				},
+			},
+		},
+	}
+
+	cells := ExpandPHPMatrix(spec)
+	if len(cells) != 1 {
+		t.Fatalf("len(cells) = %d, want 1 (compat-only versions must be skipped)", len(cells))
+	}
+	if cells[0].Version != "8.4" {
+		t.Errorf("expected only 8.4 cell, got %+v", cells[0])
 	}
 }
 
