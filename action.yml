@@ -10,7 +10,7 @@ inputs:
     required: false
     default: '8.4'
   phpts:
-    description: 'Thread safety (nts or zts). Only nts is currently built; zts falls back to nts with a warning.'
+    description: "Thread safety ('nts' or 'zts'). Only nts bundles are currently published; zts falls back to nts with a warning (or errors under fail-fast: true)."
     required: false
     default: 'nts'
   extensions:
@@ -20,7 +20,7 @@ inputs:
     description: 'Comma-separated list of php.ini values (key=value)'
     required: false
   ini-file:
-    description: "Base ini template ('production' or 'development'). Currently only 'production' is honored; other values emit a warning."
+    description: "Base ini template ('production' or 'development'). Only 'production' is currently supported; other values emit a warning and are ignored."
     required: false
     default: 'production'
   coverage:
@@ -35,7 +35,7 @@ inputs:
     required: false
     default: 'false'
   fail-fast:
-    description: 'Promote soft fallbacks (e.g. ZTS not available, unknown extension, unsupported tools) to hard errors.'
+    description: 'Promote soft fallbacks (e.g. ZTS not available, unsupported tools input) to hard errors.'
     required: false
     default: 'false'
   php-version-file:
