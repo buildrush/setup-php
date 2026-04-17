@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -116,6 +117,26 @@ func ParsePHPVersionFile(path string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(data)), nil
+}
+
+// ApplyCoverage adds the requested coverage driver (xdebug or pcov) to the
+// extensions list so it is resolved, fetched, and composed like any other
+// extension. "none" is a no-op.
+func (p *Plan) ApplyCoverage() {
+	var driver string
+	switch p.Coverage {
+	case CoverageXdebug:
+		driver = "xdebug"
+	case CoveragePCOV:
+		driver = "pcov"
+	default:
+		return
+	}
+	if slices.Contains(p.Extensions, driver) {
+		return
+	}
+	p.Extensions = append(p.Extensions, driver)
+	sort.Strings(p.Extensions)
 }
 
 func (p *Plan) Hash() string {
