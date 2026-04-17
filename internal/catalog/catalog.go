@@ -57,6 +57,8 @@ func (s *PHPSpec) BuildTargets() []BuildTarget {
 			out = append(out, BuildTarget{Version: v, Spec: vs})
 		}
 	}
+	// TODO(8.10): lexicographic string compare — "8.10" < "8.2" is true. Revisit
+	// when PHP 8.10 arrives (estimated post-2028) and switch to semver-aware sort.
 	sort.Slice(out, func(i, j int) bool { return out[i].Version < out[j].Version })
 	return out
 }

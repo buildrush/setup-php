@@ -26,6 +26,22 @@ func normalizeExtensionName(raw string) string {
 	return lower
 }
 
+// minorOf returns the X.Y prefix of a PHP version string. "8.4.6" → "8.4",
+// "8.4" → "8.4", anything without a second dot is returned unchanged.
+// Used to normalize user-supplied PHP versions before looking up per-minor
+// compat data (which is keyed by X.Y only).
+func minorOf(phpVersion string) string {
+	first := strings.IndexByte(phpVersion, '.')
+	if first < 0 {
+		return phpVersion
+	}
+	second := strings.IndexByte(phpVersion[first+1:], '.')
+	if second < 0 {
+		return phpVersion
+	}
+	return phpVersion[:first+1+second]
+}
+
 // UnimplementedInputWarning returns the canonical one-line warning emitted when
 // a user sets an input that buildrush cannot implement given its architecture.
 // The text starts with GitHub Actions' "::warning::" prefix so runners fold it.
@@ -78,7 +94,7 @@ func DefaultIniValues(phpVersion string) map[string]string {
 // Data source: docs/compat-matrix.md §3; mirrored in testdata/bundled_extensions_<ver>.golden.
 func BundledExtensions(phpVersion string) []string {
 	var src []string
-	switch phpVersion {
+	switch minorOf(phpVersion) {
 	case "8.1":
 		src = bundled81
 	case "8.2":
