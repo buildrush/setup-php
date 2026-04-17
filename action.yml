@@ -9,12 +9,20 @@ inputs:
     description: 'PHP version to set up'
     required: false
     default: '8.4'
+  phpts:
+    description: 'Thread safety (nts or zts). Only nts is currently built; zts falls back to nts with a warning.'
+    required: false
+    default: 'nts'
   extensions:
     description: 'Comma-separated list of PHP extensions to install'
     required: false
   ini-values:
     description: 'Comma-separated list of php.ini values (key=value)'
     required: false
+  ini-file:
+    description: "Base ini template ('production' or 'development'). Currently only 'production' is honored; other values emit a warning."
+    required: false
+    default: 'production'
   coverage:
     description: 'Coverage driver to set up (xdebug, pcov, none)'
     required: false
@@ -22,6 +30,14 @@ inputs:
   tools:
     description: 'Comma-separated list of tools to install'
     required: false
+  update:
+    description: 'Update pre-installed PHP. No-op under prebuilt bundles; accepted for compatibility with shivammathur/setup-php@v2.'
+    required: false
+    default: 'false'
+  fail-fast:
+    description: 'Promote soft fallbacks (e.g. ZTS not available, unknown extension, unsupported tools) to hard errors.'
+    required: false
+    default: 'false'
   php-version-file:
     description: 'File containing PHP version'
     required: false
