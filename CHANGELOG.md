@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/buildrush/setup-php/compare/v1.0.0...v1.0.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* drop component prefix from release-please tags ([#4](https://github.com/buildrush/setup-php/issues/4)) ([29a47c5](https://github.com/buildrush/setup-php/commit/29a47c54bcea60eac11a47cc176d92732ed25806))
+* resolve release tag via GitHub API when downloading phpup ([#6](https://github.com/buildrush/setup-php/issues/6)) ([f6676ca](https://github.com/buildrush/setup-php/commit/f6676ca45470ac25d310c044ef90acf3b1b9b265))
+
 ## 1.0.0 (2026-04-17)
 
 
