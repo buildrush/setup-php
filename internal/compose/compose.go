@@ -66,19 +66,6 @@ func WriteIniFragment(confDir, extName string, lines []string) error {
 	return os.WriteFile(path, []byte(content), 0o600)
 }
 
-func WriteIniValues(confDir string, values []plan.IniValue) error {
-	if len(values) == 0 {
-		return nil
-	}
-	var lines []string
-	for _, v := range values {
-		lines = append(lines, fmt.Sprintf("%s=%s", v.Key, v.Value))
-	}
-	path := filepath.Join(confDir, "99-user.ini")
-	content := strings.Join(lines, "\n") + "\n"
-	return os.WriteFile(path, []byte(content), 0o600)
-}
-
 // WriteIniValuesWithDefaults writes compat default ini values first, then user
 // values on top — later writes win because PHP processes the file top-to-bottom.
 // Default keys are written in deterministic (sorted) order. User values are

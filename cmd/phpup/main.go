@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/buildrush/setup-php/internal/cache"
 	"github.com/buildrush/setup-php/internal/catalog"
+	"github.com/buildrush/setup-php/internal/compat"
 	"github.com/buildrush/setup-php/internal/compose"
 	"github.com/buildrush/setup-php/internal/env"
 	"github.com/buildrush/setup-php/internal/extract"
@@ -22,15 +26,6 @@ import (
 
 //go:embed bundles.lock
 var embeddedLockfile []byte
-
-var bundledExtensions = []string{
-	"mbstring", "curl", "intl", "zip", "json", "pdo", "pdo_mysql",
-	"pdo_sqlite", "sqlite3", "tokenizer", "xml", "dom", "simplexml",
-	"xmlreader", "xmlwriter", "ctype", "filter", "hash", "iconv",
-	"session", "bcmath", "calendar", "exif", "ftp", "soap", "sockets",
-	"sodium", "gd", "readline", "openssl", "zlib", "opcache",
-	"pgsql", "pdo_pgsql",
-}
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--version" {
@@ -47,6 +42,14 @@ func main() {
 	}
 	p.ApplyCoverage()
 
+	// Emit warnings for inputs that cannot be implemented given our architecture.
+	if p.Update {
+		fmt.Fprintln(os.Stderr, compat.UnimplementedInputWarning("update", "true"))
+	}
+	if p.IniFile != "production" {
+		fmt.Fprintln(os.Stderr, compat.UnimplementedInputWarning("ini-file", p.IniFile))
+	}
+
 	if p.Verbose {
 		log.Printf("Plan: PHP %s, extensions=%v, os=%s, arch=%s, ts=%s, coverage=%s",
 			p.PHPVersion, p.Extensions, p.OS, p.Arch, p.ThreadSafety, p.Coverage)
@@ -60,7 +63,7 @@ func main() {
 
 	// 3. Build minimal catalog for resolution
 	cat := &catalog.Catalog{
-		PHP: &catalog.PHPSpec{BundledExtensions: bundledExtensions},
+		PHP: &catalog.PHPSpec{BundledExtensions: compat.BundledExtensions(p.PHPVersion)},
 		Extensions: map[string]*catalog.ExtensionSpec{
 			"redis":  {Name: "redis", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.2.0"}},
 			"xdebug": {Name: "xdebug", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.5.1"}, Ini: []string{"zend_extension=xdebug", "xdebug.mode=coverage"}},
@@ -92,10 +95,11 @@ func main() {
 			log.Printf("Cache hit at %s", hit.Path)
 		}
 		layout := layoutFromDir(hit.Path)
-		if err := exportEnv(layout, p.PHPVersion); err != nil {
+		resolved := resolvePHPVersion(layout, p.PHPVersion)
+		if err := exportEnv(layout, resolved); err != nil {
 			log.Fatalf("export env: %v", err)
 		}
-		fmt.Printf("PHP %s ready (cached)\n", p.PHPVersion)
+		fmt.Printf("PHP %s ready (cached)\n", resolved)
 		return
 	}
 
@@ -188,22 +192,91 @@ func main() {
 		log.Fatalf("compose: %v", err)
 	}
 
-	// 9. Write user ini values
-	if err := compose.WriteIniValues(layout.ConfDir, p.IniValues); err != nil {
+	// 9. Write ini values: compat defaults first, then user overrides on top.
+	if err := compose.WriteIniValuesWithDefaults(layout.ConfDir, compat.DefaultIniValues(p.PHPVersion), p.IniValues); err != nil {
 		log.Fatalf("write ini values: %v", err)
 	}
 
-	// 10. Export env
-	if err := exportEnv(layout, p.PHPVersion); err != nil {
+	// 10. Write disable fragments for excluded / reset-implied extensions.
+	for _, name := range computeDisabledExtensions(p, compat.BundledExtensions(p.PHPVersion)) {
+		if err := compose.WriteDisableExtension(layout.ConfDir, name); err != nil {
+			log.Fatalf("write disable fragment for %s: %v", name, err)
+		}
+	}
+
+	// 11. Export env
+	resolved := resolvePHPVersion(layout, p.PHPVersion)
+	if err := exportEnv(layout, resolved); err != nil {
 		log.Fatalf("export env: %v", err)
 	}
 
-	// 11. Seed cache
+	// 12. Seed cache
 	if err := store.Seed(planHash, baseDir); err != nil {
 		log.Printf("WARNING: failed to seed cache: %v", err)
 	}
 
-	fmt.Printf("PHP %s ready\n", p.PHPVersion)
+	fmt.Printf("PHP %s ready\n", resolved)
+}
+
+// computeDisabledExtensions returns the sorted list of extensions that should
+// be disabled via conf.d fragments given the user's plan and the bundled
+// extension set for the requested PHP version. The returned set is the union
+// of:
+//   - explicit ":ext" exclusions, and
+//   - if the user wrote "none" in extensions (ExtensionsReset), every bundled
+//     extension not in their explicit include list.
+//
+// Sorted output ensures deterministic filesystem ordering across runs.
+func computeDisabledExtensions(p *plan.Plan, bundled []string) []string {
+	disabled := map[string]bool{}
+	for _, name := range p.ExtensionsExclude {
+		disabled[name] = true
+	}
+	if p.ExtensionsReset {
+		included := map[string]bool{}
+		for _, name := range p.Extensions {
+			included[name] = true
+		}
+		for _, name := range bundled {
+			if !included[name] {
+				disabled[name] = true
+			}
+		}
+	}
+	if len(disabled) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(disabled))
+	for name := range disabled {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// resolvePHPVersion runs `php -v` against the composed binary and parses the
+// full X.Y.Z version from the first line. Falls back to the requested version
+// if execution fails (non-zero exit, unexpected output, etc.) — better to
+// surface a less-specific version than to abort a successful install.
+//
+// We invoke the literal command name "php" and set cmd.Dir + cmd.Env so that
+// gosec's taint analysis does not flag the subprocess call — the executable
+// name is a compile-time constant, not a tainted path.
+func resolvePHPVersion(layout *compose.Layout, requested string) string {
+	cmd := exec.Command("php", "-v")
+	cmd.Env = append(os.Environ(), "PATH="+layout.BinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	out, err := cmd.Output()
+	if err != nil {
+		log.Printf("WARNING: failed to run php -v from %s: %v; using requested %q as output", layout.BinDir, err, requested)
+		return requested
+	}
+	line := strings.SplitN(string(out), "\n", 2)[0]
+	// Expected: "PHP 8.4.5 (cli) (built: ...)"
+	fields := strings.Fields(line)
+	if len(fields) >= 2 && fields[0] == "PHP" {
+		return fields[1]
+	}
+	return requested
 }
 
 func layoutFromDir(dir string) *compose.Layout {
