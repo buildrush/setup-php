@@ -33,7 +33,8 @@ $SUDO apt-get install -y -qq \
   libicu-dev libcurl4-openssl-dev libzip-dev libsqlite3-dev \
   libpq-dev libonig-dev libreadline-dev libsodium-dev \
   libfreetype6-dev libjpeg-dev libwebp-dev libxml2-dev \
-  zlib1g-dev libssl-dev gnupg2 xz-utils curl
+  zlib1g-dev libssl-dev gnupg2 xz-utils curl \
+  libffi-dev gettext
 echo "::endgroup::"
 
 # Download PHP source
@@ -73,6 +74,14 @@ cd /tmp/php-src
   --with-webp \
   --with-pdo-pgsql \
   --with-pgsql \
+  --with-ffi \
+  --with-gettext \
+  --enable-pcntl \
+  --enable-posix \
+  --enable-shmop \
+  --enable-sysvmsg \
+  --enable-sysvsem \
+  --enable-sysvshm \
   --disable-cgi \
   --enable-opcache
 echo "::endgroup::"
