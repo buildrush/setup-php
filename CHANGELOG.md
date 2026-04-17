@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/buildrush/setup-php/compare/v1.1.0...v1.1.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* build and upload release assets from release-please workflow ([#15](https://github.com/buildrush/setup-php/issues/15)) ([bd8a48c](https://github.com/buildrush/setup-php/commit/bd8a48cc507e7b20dc40a8b04c285b65f6416e74))
+
 ## [1.1.0](https://github.com/buildrush/setup-php/compare/v1.0.1...v1.1.0) (2026-04-17)
 
 
