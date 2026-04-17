@@ -20,6 +20,8 @@ type Plan struct {
 	OS           string
 	Arch         string
 	FailFast     bool
+	Update       bool
+	IniFile      string
 	Debug        bool
 	Verbose      bool
 }
@@ -45,6 +47,8 @@ func FromEnv() (*Plan, error) {
 		OS:           normalizeOS(os.Getenv("RUNNER_OS")),
 		Arch:         normalizeArch(os.Getenv("RUNNER_ARCH")),
 		FailFast:     os.Getenv("INPUT_FAIL-FAST") == "true",
+		Update:       os.Getenv("INPUT_UPDATE") == "true",
+		IniFile:      envOrDefault("INPUT_INI-FILE", "production"),
 		Debug:        os.Getenv("INPUT_DEBUG") == "true",
 		Verbose:      os.Getenv("INPUT_VERBOSE") == "true",
 	}
