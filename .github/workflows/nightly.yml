@@ -6,6 +6,11 @@ on:
 
 jobs:
   pipeline:
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
     uses: ./.github/workflows/plan-and-build.yml
     with:
       force: false
