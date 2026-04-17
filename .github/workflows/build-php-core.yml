@@ -14,6 +14,21 @@ on:
       ts:
         required: true
         type: string
+      spec_hash:
+        required: false
+        type: string
+        default: ''
+      push:
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      digest:
+        description: 'OCI digest of the pushed bundle (empty when push=false)'
+        value: ${{ jobs.build.outputs.digest }}
+      spec_hash:
+        description: 'Echoed spec_hash for lockfile update'
+        value: ${{ inputs.spec_hash }}
 
 jobs:
   build:
@@ -21,6 +36,8 @@ jobs:
     permissions:
       packages: write
       id-token: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@v6
 
@@ -37,6 +54,8 @@ jobs:
         run: ./builders/linux/build-php.sh
 
       - name: Push to GHCR
+        id: push
+        if: ${{ inputs.push }}
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -49,9 +68,12 @@ jobs:
             --artifact-type application/vnd.buildrush.php-core.v1 \
             /tmp/bundle.tar.zst:application/vnd.oci.image.layer.v1.tar+zstd \
             /tmp/meta.json:application/vnd.buildrush.meta.v1+json
+          echo "digest=sha256:$(echo -n "$DIGEST" | sed 's/^sha256://')" >> "$GITHUB_OUTPUT"
 
       - uses: sigstore/cosign-installer@v3
+        if: ${{ inputs.push }}
       - name: Sign bundle
+        if: ${{ inputs.push }}
         run: |
           DIGEST=$(cat /tmp/bundle.tar.zst.sha256 | sed 's/^sha256://')
           cosign sign --yes \
@@ -63,3 +85,13 @@ jobs:
           tar --zstd -xf /tmp/bundle.tar.zst -C /tmp/smoke
           /tmp/smoke/usr/local/bin/php -v
           /tmp/smoke/usr/local/bin/php -m
+
+      - name: Upload bundle artifact (PR)
+        if: ${{ !inputs.push }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: php-core-${{ inputs.version }}-${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.ts }}
+          path: |
+            /tmp/bundle.tar.zst
+            /tmp/meta.json
+          retention-days: 3
