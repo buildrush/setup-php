@@ -21,3 +21,22 @@ func UnimplementedInputWarning(inputName, value string) string {
 		inputName, value,
 	)
 }
+
+// DefaultIniValues returns the ini key/value pairs that shivammathur/setup-php@v2
+// sets on Linux runners by default, before any user-supplied ini-values. The
+// caller merges the user values over the top so users can still override.
+//
+// Only unconditional defaults are returned here. Version-conditional or
+// extension-tied defaults (e.g. xdebug.mode=coverage, opcache.*) are applied
+// at compose time by their respective handlers, not by this function.
+//
+// Data source: docs/compat-matrix.md §2.1; mirrored in testdata/default_ini_values.golden.
+func DefaultIniValues(phpVersion string) map[string]string {
+	// Version-independent today. If a version shift emerges, dispatch on
+	// phpVersion (e.g. switch major/minor).
+	_ = phpVersion
+	return map[string]string{
+		"date.timezone": "UTC",
+		"memory_limit":  "-1",
+	}
+}

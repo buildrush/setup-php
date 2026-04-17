@@ -1,6 +1,12 @@
 package compat
 
-import "testing"
+import (
+	"bufio"
+	"os"
+	"sort"
+	"strings"
+	"testing"
+)
 
 func TestUnimplementedInputWarning(t *testing.T) {
 	tests := []struct {
@@ -26,5 +32,48 @@ func TestUnimplementedInputWarning(t *testing.T) {
 				t.Errorf("UnimplementedInputWarning(%q, %q) = %q, want %q", tt.input, tt.value, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDefaultIniValuesMatchesGolden(t *testing.T) {
+	got := DefaultIniValues("8.4")
+
+	f, err := os.Open("testdata/default_ini_values.golden")
+	if err != nil {
+		t.Fatalf("open golden: %v", err)
+	}
+	defer f.Close()
+
+	want := map[string]string{}
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		line := strings.TrimSpace(s.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			t.Fatalf("bad golden line: %q", line)
+		}
+		want[parts[0]] = parts[1]
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("DefaultIniValues len = %d, golden len = %d", len(got), len(want))
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("DefaultIniValues[%q] = %q, want %q", k, got[k], v)
+		}
+	}
+
+	// determinism reminder — map iteration is random; ensuring keys sortable
+	keys := make([]string, 0, len(got))
+	for k := range got {
+		keys = append(keys, k)
+	}
+	if !sort.StringsAreSorted(keys) {
+		// allowed — just an observation, not a failure
+		_ = keys
 	}
 }
