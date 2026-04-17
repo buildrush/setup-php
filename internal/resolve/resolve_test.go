@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/buildrush/setup-php/internal/catalog"
@@ -115,5 +116,92 @@ func TestResolveToolsWarning(t *testing.T) {
 	}
 	if len(res.Warnings) == 0 {
 		t.Error("Resolve() should emit a warning for tools in Phase 1")
+	}
+}
+
+func TestResolveZTSFallback(t *testing.T) {
+	// Lockfile has NTS but not ZTS.
+	lf := testLockfile()
+	// testLockfile's "redis" and ZTS entries aren't relevant here; just verify the
+	// core fallback semantics.
+	cat := testCatalog()
+
+	p := &plan.Plan{
+		PHPVersion:   "8.4.6",
+		OS:           "linux",
+		Arch:         "x86_64",
+		ThreadSafety: "zts",
+		FailFast:     false,
+	}
+	res, err := Resolve(p, lf, cat)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if res.PHPCore.Digest != "sha256:phpdigest" {
+		t.Errorf("ZTS should fall back to NTS; got digest %q", res.PHPCore.Digest)
+	}
+	found := false
+	for _, w := range res.Warnings {
+		if strings.Contains(w, "ZTS not available") && strings.Contains(w, "falling back to NTS") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected ZTS fallback warning, got %v", res.Warnings)
+	}
+}
+
+func TestResolveZTSFallbackFailFast(t *testing.T) {
+	lf := testLockfile()
+	cat := testCatalog()
+	p := &plan.Plan{
+		PHPVersion:   "8.4.6",
+		OS:           "linux",
+		Arch:         "x86_64",
+		ThreadSafety: "zts",
+		FailFast:     true,
+	}
+	_, err := Resolve(p, lf, cat)
+	if err == nil {
+		t.Fatal("expected hard error under fail-fast: true, got nil")
+	}
+	if !strings.Contains(err.Error(), "ZTS") {
+		t.Errorf("error should mention ZTS; got %v", err)
+	}
+}
+
+func TestResolveZTSUnresolvable(t *testing.T) {
+	// Neither ZTS nor NTS present for the requested version → hard error regardless of FailFast.
+	lf := &lockfile.Lockfile{Bundles: map[string]string{}}
+	cat := testCatalog()
+	p := &plan.Plan{
+		PHPVersion:   "8.4.6",
+		OS:           "linux",
+		Arch:         "x86_64",
+		ThreadSafety: "zts",
+		FailFast:     false,
+	}
+	_, err := Resolve(p, lf, cat)
+	if err == nil {
+		t.Fatal("expected hard error when neither ZTS nor NTS available")
+	}
+}
+
+func TestResolveToolsWarningFailFast(t *testing.T) {
+	p := &plan.Plan{
+		PHPVersion:   "8.4.6",
+		OS:           "linux",
+		Arch:         "x86_64",
+		ThreadSafety: "nts",
+		Tools:        []string{"composer"},
+		FailFast:     true,
+	}
+	_, err := Resolve(p, testLockfile(), testCatalog())
+	if err == nil {
+		t.Fatal("expected hard error under fail-fast: true with tools input")
+	}
+	if !strings.Contains(err.Error(), "composer") {
+		t.Errorf("error should mention the requested tool; got %v", err)
 	}
 }

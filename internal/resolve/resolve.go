@@ -28,6 +28,20 @@ func Resolve(p *plan.Plan, lf *lockfile.Lockfile, cat *catalog.Catalog) (*Resolu
 
 	phpKey := lockfile.PHPBundleKey(p.PHPVersion, p.OS, p.Arch, p.ThreadSafety)
 	phpDigest, ok := lf.Lookup(phpKey)
+	if !ok && p.ThreadSafety == "zts" {
+		// Fall back to NTS.
+		ntsKey := lockfile.PHPBundleKey(p.PHPVersion, p.OS, p.Arch, "nts")
+		if ntsDigest, ok2 := lf.Lookup(ntsKey); ok2 {
+			if p.FailFast {
+				return nil, fmt.Errorf("PHP %s ZTS for %s/%s not in lockfile (fail-fast)", p.PHPVersion, p.OS, p.Arch)
+			}
+			phpKey = ntsKey
+			phpDigest = ntsDigest
+			ok = true
+			res.Warnings = append(res.Warnings,
+				fmt.Sprintf("::warning::PHP %s ZTS not available for %s/%s; falling back to NTS", p.PHPVersion, p.OS, p.Arch))
+		}
+	}
 	if !ok {
 		return nil, fmt.Errorf("PHP %s for %s/%s/%s not found in lockfile", p.PHPVersion, p.OS, p.Arch, p.ThreadSafety)
 	}
@@ -99,7 +113,11 @@ func Resolve(p *plan.Plan, lf *lockfile.Lockfile, cat *catalog.Catalog) (*Resolu
 	}
 
 	if len(p.Tools) > 0 {
-		res.Warnings = append(res.Warnings, "tools input is not yet supported in this version; tools will be ignored")
+		msg := fmt.Sprintf("tools input is not yet supported (requested: %s); will be ignored", strings.Join(p.Tools, ","))
+		if p.FailFast {
+			return nil, fmt.Errorf("%s", msg)
+		}
+		res.Warnings = append(res.Warnings, "::warning::"+msg)
 	}
 
 	return res, nil
