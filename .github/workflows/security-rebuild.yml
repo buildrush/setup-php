@@ -4,7 +4,9 @@ on:
     types: [security-rebuild]
 
 jobs:
-  rebuild:
-    uses: ./.github/workflows/plan.yml
+  pipeline:
+    uses: ./.github/workflows/plan-and-build.yml
     with:
       force: true
+      push: true
+    secrets: inherit
