@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0](https://github.com/buildrush/setup-php/compare/v1.2.0...v1.3.0) (2026-04-17)
+
+
+### Features
+
+* **workflows:** add plan-and-build reusable pipeline ([799a66c](https://github.com/buildrush/setup-php/commit/799a66c9eb9ee7af1f90fce53d99c35c43723a4c))
+* **workflows:** wire manual dispatch through plan-and-build ([5cd5775](https://github.com/buildrush/setup-php/commit/5cd5775843d27dd8082eedbf7a002310b1937090))
+* **workflows:** wire nightly schedule through plan-and-build ([cb22e5a](https://github.com/buildrush/setup-php/commit/cb22e5ad6570c01af3305ec8ac83f98877281646))
+* **workflows:** wire security-rebuild dispatch through plan-and-build ([3695d3a](https://github.com/buildrush/setup-php/commit/3695d3a6c062cbfd8b6dedb276dba831e53b0593))
+
+
+### Documentation
+
+* add plan-and-build reusable workflow design spec ([765aaf8](https://github.com/buildrush/setup-php/commit/765aaf8bd3d22a6df7ab559fee37c7bb86922d66))
+
 ## [1.2.0](https://github.com/buildrush/setup-php/compare/v1.1.2...v1.2.0) (2026-04-17)
 
 
