@@ -1,0 +1,84 @@
+name: check-release-pr
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  package-visibility:
+    if: startsWith(github.head_ref, 'release-please--')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Derive GHCR package names from bundles.lock
+        id: pkgs
+        run: |
+          set -euo pipefail
+          mapfile -t PACKAGES < <(jq -r '.bundles | keys[]' bundles.lock | awk -F: '
+            $1 == "php"  { print "php-core" }
+            $1 == "ext"  { print "php-ext-"  $2 }
+            $1 == "tool" { print "php-tool-" $2 }
+          ' | sort -u)
+          if [ "${#PACKAGES[@]}" -eq 0 ]; then
+            echo "::error::No packages derived from bundles.lock"
+            exit 1
+          fi
+          printf 'Derived packages: %s\n' "${PACKAGES[*]}"
+          {
+            echo 'list<<PKG_EOF'
+            printf '%s\n' "${PACKAGES[@]}"
+            echo 'PKG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check GHCR public visibility
+        env:
+          OWNER: ${{ github.repository_owner }}
+          PACKAGES: ${{ steps.pkgs.outputs.list }}
+        run: |
+          set -euo pipefail
+          private=()
+          public=()
+          other=()
+          while IFS= read -r pkg; do
+            [ -z "$pkg" ] && continue
+            url="https://ghcr.io/token?scope=repository:${OWNER}/${pkg}:pull&service=ghcr.io"
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "$url")
+            case "$code" in
+              200) public+=("$pkg") ;;
+              401|403) private+=("$pkg") ;;
+              *)   other+=("${pkg} (HTTP ${code})") ;;
+            esac
+          done <<< "$PACKAGES"
+
+          {
+            echo '## GHCR package visibility'
+            echo
+            if [ "${#public[@]}" -gt 0 ]; then
+              echo '### Public'
+              for p in "${public[@]}"; do printf -- '- `%s`\n' "$p"; done
+              echo
+            fi
+            if [ "${#private[@]}" -gt 0 ]; then
+              echo '### Not public — flip before merging'
+              for p in "${private[@]}"; do
+                printf -- '- `%s` → https://github.com/orgs/%s/packages/container/%s/settings\n' "$p" "$OWNER" "$p"
+              done
+              echo
+            fi
+            if [ "${#other[@]}" -gt 0 ]; then
+              echo '### Unexpected response'
+              for p in "${other[@]}"; do printf -- '- %s\n' "$p"; done
+              echo
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for p in "${private[@]}"; do
+            echo "::error title=Private GHCR package::${OWNER}/${p} is not publicly pullable. Flip visibility to Public before merging this release PR."
+          done
+
+          if [ "${#private[@]}" -gt 0 ] || [ "${#other[@]}" -gt 0 ]; then
+            exit 1
+          fi
