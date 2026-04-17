@@ -65,3 +65,22 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -f "$MAJOR" "$TAG"
           git push origin "$MAJOR" --force
+
+      # The floating major tag must be a git-ref only -- never a GitHub Release.
+      # A standalone vN release would hijack src/index.js:resolveReleaseTag and
+      # pin consumers to stale assets. Delete one if it somehow exists.
+      - name: Ensure no standalone major-tag release exists
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in
+            v*.*.*-*) exit 0 ;;
+          esac
+          MAJOR="${TAG%%.*}"
+          if gh release view "$MAJOR" --json tagName >/dev/null 2>&1; then
+            echo "::warning::Standalone $MAJOR release found; deleting (violates release-artifact contract)"
+            gh release delete "$MAJOR" --yes --cleanup-tag=false
+          fi

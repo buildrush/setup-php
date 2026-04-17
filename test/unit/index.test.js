@@ -139,11 +139,37 @@ test('resolveReleaseTag returns the ref when a release exists for it', async () 
   }
 });
 
-test('resolveReleaseTag falls back to latest for floating major tag', async () => {
+test('resolveReleaseTag resolves a floating major tag via /releases/latest without hitting /releases/tags', async () => {
+  const tagsCalls = [];
+  const { base, close } = await startServer((req, res) => {
+    if (req.url.startsWith('/repos/o/r/releases/tags/')) {
+      tagsCalls.push(req.url);
+      res.writeHead(500);
+      res.end('should not be called for floating major tag');
+      return;
+    }
+    if (req.url === '/repos/o/r/releases/latest') {
+      res.writeHead(200);
+      res.end(JSON.stringify({ tag_name: 'v1.4.2' }));
+      return;
+    }
+    res.writeHead(500);
+    res.end();
+  });
+  try {
+    const tag = await resolveReleaseTag('o/r', 'v1', { apiBase: base });
+    assert.equal(tag, 'v1.4.2');
+    assert.deepEqual(tagsCalls, []);
+  } finally {
+    await close();
+  }
+});
+
+test('resolveReleaseTag ignores a standalone floating-major release and uses latest', async () => {
   const { base, close } = await startServer((req, res) => {
     if (req.url === '/repos/o/r/releases/tags/v1') {
-      res.writeHead(404);
-      res.end('Not Found');
+      res.writeHead(200);
+      res.end(JSON.stringify({ tag_name: 'v1' }));
       return;
     }
     if (req.url === '/repos/o/r/releases/latest') {
@@ -164,11 +190,6 @@ test('resolveReleaseTag falls back to latest for floating major tag', async () =
 
 test('resolveReleaseTag rejects when major mismatches latest', async () => {
   const { base, close } = await startServer((req, res) => {
-    if (req.url === '/repos/o/r/releases/tags/v1') {
-      res.writeHead(404);
-      res.end();
-      return;
-    }
     if (req.url === '/repos/o/r/releases/latest') {
       res.writeHead(200);
       res.end(JSON.stringify({ tag_name: 'v2.0.0' }));
@@ -181,6 +202,31 @@ test('resolveReleaseTag rejects when major mismatches latest', async () => {
     await assert.rejects(
       () => resolveReleaseTag('o/r', 'v1', { apiBase: base }),
       /No release found for v1/,
+    );
+  } finally {
+    await close();
+  }
+});
+
+test('resolveReleaseTag rejects when a specific-version release is missing', async () => {
+  const { base, close } = await startServer((req, res) => {
+    if (req.url === '/repos/o/r/releases/tags/v1.0.1') {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    if (req.url === '/repos/o/r/releases/latest') {
+      res.writeHead(200);
+      res.end(JSON.stringify({ tag_name: 'v1.1.0' }));
+      return;
+    }
+    res.writeHead(500);
+    res.end();
+  });
+  try {
+    await assert.rejects(
+      () => resolveReleaseTag('o/r', 'v1.0.1', { apiBase: base }),
+      /No release found for pinned version v1\.0\.1/,
     );
   } finally {
     await close();
