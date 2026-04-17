@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -126,6 +127,25 @@ func TestBundledExtensionsAcceptsFullTriple(t *testing.T) {
 		if minor[i] != triple[i] {
 			t.Errorf("diff at [%d]: minor=%q, triple=%q", i, minor[i], triple[i])
 		}
+	}
+}
+
+func TestOurBuildBundledExtras(t *testing.T) {
+	// 8.4 must include the configure-flag extras so runtime resolution treats
+	// them as preloaded (until T12 aligns our build with v2's slim baseline).
+	got := OurBuildBundledExtras("8.4")
+	for _, want := range []string{"mbstring", "curl", "intl", "zip", "bcmath", "gd"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("OurBuildBundledExtras(8.4) missing %q; got %v", want, got)
+		}
+	}
+	// Unknown/untracked version returns nil.
+	if got := OurBuildBundledExtras("7.4"); got != nil {
+		t.Errorf("OurBuildBundledExtras(7.4) = %v, want nil", got)
+	}
+	// Full-triple input normalizes to minor.
+	if got := OurBuildBundledExtras("8.4.6"); !slices.Contains(got, "curl") {
+		t.Errorf("OurBuildBundledExtras(8.4.6) did not normalize to 8.4; got %v", got)
 	}
 }
 

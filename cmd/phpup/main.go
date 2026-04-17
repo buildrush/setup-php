@@ -63,11 +63,15 @@ func main() {
 
 	// 3. Build minimal catalog for resolution. The runtime keys the Versions
 	// map by the exact PHPVersion that resolve.Resolve will look up, so the
-	// per-version bundled list is always found for IsBundled.
+	// per-version bundled list is always found for IsBundled. The list is
+	// the UNION of v2's baseline (compat.BundledExtensions) and our bundle's
+	// extras (compat.OurBuildBundledExtras) — the latter reflects configure
+	// flags our current 8.4 core has beyond v2's slim set.
+	bundled := append(compat.BundledExtensions(p.PHPVersion), compat.OurBuildBundledExtras(p.PHPVersion)...)
 	cat := &catalog.Catalog{
 		PHP: &catalog.PHPSpec{
 			Versions: map[string]*catalog.PHPVersionSpec{
-				p.PHPVersion: {BundledExtensions: compat.BundledExtensions(p.PHPVersion)},
+				p.PHPVersion: {BundledExtensions: bundled},
 			},
 		},
 		Extensions: map[string]*catalog.ExtensionSpec{
@@ -204,7 +208,7 @@ func main() {
 	}
 
 	// 10. Write disable fragments for excluded / reset-implied extensions.
-	for _, name := range computeDisabledExtensions(p, compat.BundledExtensions(p.PHPVersion)) {
+	for _, name := range computeDisabledExtensions(p, bundled) {
 		if err := compose.WriteDisableExtension(layout.ConfDir, name); err != nil {
 			log.Fatalf("write disable fragment for %s: %v", name, err)
 		}
@@ -275,15 +279,15 @@ func computeDisabledExtensions(p *plan.Plan, bundled []string) []string {
 // if execution fails (non-zero exit, unexpected output, etc.) — better to
 // surface a less-specific version than to abort a successful install.
 //
-// We invoke the literal command name "php" and set cmd.Dir + cmd.Env so that
-// gosec's taint analysis does not flag the subprocess call — the executable
-// name is a compile-time constant, not a tainted path.
+// The absolute path is constructed from layout.BinDir (runtime-owned, not
+// user input). An earlier PATH-prepend attempt was dropped because duplicate
+// PATH entries in cmd.Env caused glibc to resolve "php" to the system binary
+// instead of the composed one.
 func resolvePHPVersion(layout *compose.Layout, requested string) string {
-	cmd := exec.Command("php", "-v")
-	cmd.Env = append(os.Environ(), "PATH="+layout.BinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	out, err := cmd.Output()
+	phpBin := filepath.Join(layout.BinDir, "php")
+	out, err := exec.Command(phpBin, "-v").Output() //nolint:gosec // G204 false positive: phpBin is filepath.Join(layout.BinDir, "php"); layout.BinDir is runtime-composed, not user input
 	if err != nil {
-		log.Printf("WARNING: failed to run php -v from %s: %v; using requested %q as output", layout.BinDir, err, requested)
+		log.Printf("WARNING: failed to run %s -v: %v; using requested %q as output", phpBin, err, requested)
 		return requested
 	}
 	line := strings.SplitN(string(out), "\n", 2)[0]

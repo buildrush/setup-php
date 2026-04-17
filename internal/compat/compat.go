@@ -115,6 +115,30 @@ func BundledExtensions(phpVersion string) []string {
 	return out
 }
 
+// OurBuildBundledExtras returns extensions our own PHP core bundle compiles
+// in beyond v2's baseline (BundledExtensions). Reflects the current builder's
+// ./configure flag set. Merge with BundledExtensions when the runtime needs
+// the full "preloaded by this bundle" list.
+//
+// See docs/superpowers/specs/2026-04-17-phase2-t12-handoff.md for the planned
+// builder alignment; this list is intentionally a superset of v2's baseline
+// until that work lands.
+func OurBuildBundledExtras(phpVersion string) []string {
+	switch minorOf(phpVersion) {
+	case "8.4":
+		// Matches the --enable-*/--with-* flags in builders/linux/build-php.sh
+		// minus anything already in v2's baseline.
+		return []string{
+			"mbstring", "curl", "intl", "zip",
+			"pdo_mysql", "pdo_sqlite", "sqlite3", "pdo_pgsql", "pgsql",
+			"bcmath", "soap", "gd",
+			"xml", "dom", "simplexml", "xmlreader", "xmlwriter",
+		}
+	default:
+		return nil
+	}
+}
+
 // Per-version bundled extension lists. Order matches the native `php -m`
 // output captured in the audit (see docs/compat-matrix.md §3.x and the
 // matching testdata/bundled_extensions_<ver>.golden file).
