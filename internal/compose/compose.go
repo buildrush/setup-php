@@ -111,13 +111,12 @@ func WriteIniValuesWithDefaults(confDir string, defaults map[string]string, user
 
 // WriteDisableExtension writes a conf.d fragment that documents and enforces
 // non-loading of the named extension. The "00-" filename prefix makes it sort
-// before typical extension-loading fragments (e.g. "20-ext.ini" or "ext.ini"),
-// so any later fragment that tries to `extension=<name>` is overridden by this
-// file's commented-out form.
+// before extension-loading fragments (this codebase writes them as plain
+// "<name>.ini"; see WriteIniFragment).
 //
 // Because our composed PHP only loads what conf.d explicitly declares, the
-// primary mechanism is simply the absence of the load directive; this file
-// provides a durable audit trail and defence-in-depth.
+// primary mechanism for disabling is simply the absence of the load directive;
+// this file provides a durable audit trail and defence-in-depth.
 func WriteDisableExtension(confDir, extName string) error {
 	path := filepath.Join(confDir, fmt.Sprintf("00-disable-%s.ini", extName))
 	content := fmt.Sprintf("; disabled by extensions: :%s\n; extension=%s\n", extName, extName)
