@@ -1,11 +1,13 @@
 name: nightly
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
-  reconcile:
-    uses: ./.github/workflows/plan.yml
+  pipeline:
+    uses: ./.github/workflows/plan-and-build.yml
     with:
       force: false
+      push: true
+    secrets: inherit
