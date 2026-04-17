@@ -1,8 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-04-16T23:20:40Z",
+  "generated_at": "2026-04-17T08:53:34Z",
   "bundles": {
-    "ext:redis:6.2.0:8.4:linux:x86_64:nts": "sha256:d33fac1a5e136aeabe96d6541154a6d141313e24fafa7f85eee834516563edff",
+    "ext:apcu:5.1.28:8.4:linux:x86_64:nts": "sha256:2adc00f9a4f6e6a8ba657223dc71d5b15542b1a3fdedaa30672beb802fb58358",
+    "ext:pcov:1.0.12:8.4:linux:x86_64:nts": "sha256:688a82461bd645ae7df5726a8acb99abfd04a59797a080ef4108275184451d76",
+    "ext:redis:6.2.0:8.4:linux:x86_64:nts": "sha256:db2717a783d26839c788a03e751c0d014275087f4b288663a658951fe0ec6c13",
+    "ext:xdebug:3.5.1:8.4:linux:x86_64:nts": "sha256:e47ad04eb5c44d50141d50c9ede57aac65024e908a87e003a3ba9eb021c9c353",
     "php:8.4:linux:x86_64:nts": "sha256:2202bafa08d8a5cf5a19d6d6fb3b1ea484cfbc68ed9c55f375ee970b3ed08079"
   }
 }
