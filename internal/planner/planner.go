@@ -34,15 +34,17 @@ type Result struct {
 	Tool Matrix
 }
 
-// ExpandPHPMatrix expands php.yaml's abi_matrix into concrete cells.
+// ExpandPHPMatrix expands php.yaml's per-version abi_matrix into concrete
+// build cells. Only versions with `sources:` set contribute cells — the rest
+// encode compat intent and are intentionally skipped here.
 func ExpandPHPMatrix(spec *catalog.PHPSpec) []MatrixCell {
-	cells := make([]MatrixCell, 0, len(spec.Versions)*len(spec.ABIMatrix.OS)*len(spec.ABIMatrix.Arch)*len(spec.ABIMatrix.TS))
-	for _, ver := range spec.Versions {
-		for _, osName := range spec.ABIMatrix.OS {
-			for _, arch := range spec.ABIMatrix.Arch {
-				for _, ts := range spec.ABIMatrix.TS {
+	var cells []MatrixCell
+	for _, target := range spec.BuildTargets() {
+		for _, osName := range target.Spec.ABIMatrix.OS {
+			for _, arch := range target.Spec.ABIMatrix.Arch {
+				for _, ts := range target.Spec.ABIMatrix.TS {
 					cells = append(cells, MatrixCell{
-						Version: ver,
+						Version: target.Version,
 						OS:      osName,
 						Arch:    arch,
 						TS:      ts,

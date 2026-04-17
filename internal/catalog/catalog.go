@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -18,14 +19,46 @@ const (
 	ExtensionKindGit     ExtensionKind = "git"
 )
 
+// PHPSpec describes the PHP catalog entry. It holds per-version metadata
+// under Versions; only versions with Sources set are built by the pipeline,
+// the rest encode compat intent (e.g. bundled extension lists) used for
+// cross-validation against internal/compat.
 type PHPSpec struct {
-	Name              string         `yaml:"name"`
-	Versions          []string       `yaml:"versions"`
-	Source            PHPSource      `yaml:"source"`
-	ABIMatrix         ABIMatrix      `yaml:"abi_matrix"`
-	ConfigureFlags    ConfigureFlags `yaml:"configure_flags"`
+	Name     string                     `yaml:"name"`
+	Versions map[string]*PHPVersionSpec `yaml:"versions"`
+	Smoke    []string                   `yaml:"smoke,omitempty"`
+}
+
+// PHPVersionSpec is the per-version subtree of PHPSpec. Sources, ABIMatrix,
+// and ConfigureFlags are only required for versions that should actually be
+// built by the pipeline; compat-only versions may omit them.
+type PHPVersionSpec struct {
 	BundledExtensions []string       `yaml:"bundled_extensions"`
-	Smoke             []string       `yaml:"smoke"`
+	Sources           *PHPSource     `yaml:"sources,omitempty"`
+	ABIMatrix         ABIMatrix      `yaml:"abi_matrix,omitempty"`
+	ConfigureFlags    ConfigureFlags `yaml:"configure_flags,omitempty"`
+	Smoke             []string       `yaml:"smoke,omitempty"`
+}
+
+// BuildTarget pairs a PHP version with its version-specific spec. Only
+// versions with Sources set produce BuildTargets.
+type BuildTarget struct {
+	Version string
+	Spec    *PHPVersionSpec
+}
+
+// BuildTargets returns the subset of Versions that have Sources set, sorted
+// by version string for deterministic ordering. Callers iterating the build
+// matrix should use this rather than Versions directly.
+func (s *PHPSpec) BuildTargets() []BuildTarget {
+	var out []BuildTarget
+	for v, vs := range s.Versions {
+		if vs != nil && vs.Sources != nil {
+			out = append(out, BuildTarget{Version: v, Spec: vs})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Version < out[j].Version })
+	return out
 }
 
 type PHPSource struct {
@@ -126,8 +159,20 @@ func LoadCatalog(dir string) (*Catalog, error) {
 	return &Catalog{PHP: php, Extensions: extensions}, nil
 }
 
-func (c *Catalog) IsBundled(extName string) bool {
-	return slices.Contains(c.PHP.BundledExtensions, extName)
+// IsBundled reports whether extName is bundled with the given PHP version in
+// this catalog. Returns false if the version is unknown or the catalog has no
+// entry for it. Matching is exact against the per-version
+// bundled_extensions list — callers should pass the normalized (lowercase)
+// identifier.
+func (c *Catalog) IsBundled(phpVersion, extName string) bool {
+	if c.PHP == nil {
+		return false
+	}
+	vs, ok := c.PHP.Versions[phpVersion]
+	if !ok || vs == nil {
+		return false
+	}
+	return slices.Contains(vs.BundledExtensions, extName)
 }
 
 func (c *Catalog) RequiresSeparateBundle(extName string) bool {
@@ -145,11 +190,26 @@ func (s *PHPSpec) Validate() error {
 	if len(s.Versions) == 0 {
 		return fmt.Errorf("PHP spec: at least one version is required")
 	}
-	if s.Source.URL == "" {
-		return fmt.Errorf("PHP spec: source.url is required")
+	hasBuild := false
+	for v, vs := range s.Versions {
+		if vs == nil {
+			return fmt.Errorf("PHP spec %s: version entry is nil", v)
+		}
+		if len(vs.BundledExtensions) == 0 {
+			return fmt.Errorf("PHP spec %s: bundled_extensions is required", v)
+		}
+		if vs.Sources != nil {
+			hasBuild = true
+			if vs.Sources.URL == "" {
+				return fmt.Errorf("PHP spec %s: sources.url is required when sources is set", v)
+			}
+			if len(vs.ABIMatrix.OS) == 0 || len(vs.ABIMatrix.Arch) == 0 || len(vs.ABIMatrix.TS) == 0 {
+				return fmt.Errorf("PHP spec %s: abi_matrix must have at least one value in each dimension", v)
+			}
+		}
 	}
-	if len(s.ABIMatrix.OS) == 0 || len(s.ABIMatrix.Arch) == 0 || len(s.ABIMatrix.TS) == 0 {
-		return fmt.Errorf("PHP spec: abi_matrix must have at least one value in each dimension")
+	if !hasBuild {
+		return fmt.Errorf("PHP spec: at least one version must have sources set for the builder to run")
 	}
 	return nil
 }
