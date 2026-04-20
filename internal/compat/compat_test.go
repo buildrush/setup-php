@@ -248,13 +248,17 @@ func TestDefaultIniValues_PHP8xOpcacheJIT(t *testing.T) {
 }
 
 func TestDefaultIniValues_NonPHP8(t *testing.T) {
-	got := DefaultIniValues("7.4")
-	want := map[string]string{
-		"date.timezone": "UTC",
-		"memory_limit":  "-1",
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("DefaultIniValues(7.4) = %v, want %v", got, want)
+	for _, php := range []string{"7.4", "9.0"} {
+		t.Run(php, func(t *testing.T) {
+			got := DefaultIniValues(php)
+			want := map[string]string{
+				"date.timezone": "UTC",
+				"memory_limit":  "-1",
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("DefaultIniValues(%q) = %v, want %v", php, got, want)
+			}
+		})
 	}
 }
 
