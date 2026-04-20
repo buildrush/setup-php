@@ -28,6 +28,13 @@ fixtures:
     ini-values: 'memory_limit=256M,date.timezone=UTC'
     coverage: 'xdebug'
 
+  - name: ini-file-development
+    php-version: '8.4'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+    ini-file: 'development'
+
   - name: multi-ext
     php-version: '8.4'
     extensions: 'redis, xdebug'
