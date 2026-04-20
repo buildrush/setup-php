@@ -85,19 +85,34 @@ func BaseIniFileName(iniFile string) (filename, warning string) {
 // sets on Linux runners by default, before any user-supplied ini-values. The
 // caller merges the user values over the top so users can still override.
 //
-// Only unconditional defaults are returned here. Version-conditional or
-// extension-tied defaults (e.g. xdebug.mode=coverage, opcache.*) are applied
-// at compose time by their respective handlers, not by this function.
+// Version-conditional defaults:
+//   - PHP 8.x (8.0–8.9): opcache.enable, opcache.jit, opcache.jit_buffer_size
+//     per compat-matrix.md §2.3 (jit_versions regex 8.[0-9]).
 //
-// Data source: docs/compat-matrix.md §2.1; mirrored in testdata/default_ini_values.golden.
+// Extension-tied defaults (e.g. xdebug.mode=coverage) are applied at compose
+// time by their respective handlers, not by this function.
+//
+// Data source: docs/compat-matrix.md §2.1 and §2.3; mirrored in testdata/default_ini_values.golden.
 func DefaultIniValues(phpVersion string) map[string]string {
-	// Version-independent today. If a version shift emerges, dispatch on
-	// phpVersion (e.g. switch major/minor).
-	_ = phpVersion
-	return map[string]string{
+	base := map[string]string{
 		"date.timezone": "UTC",
 		"memory_limit":  "-1",
 	}
+	if isPHP8x(minorOf(phpVersion)) {
+		base["opcache.enable"] = "1"
+		base["opcache.jit"] = "1235"
+		base["opcache.jit_buffer_size"] = "256M"
+	}
+	return base
+}
+
+func isPHP8x(minor string) bool {
+	// compat-matrix §2.3: jit_versions = 8.[0-9]
+	switch minor {
+	case "8.0", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8", "8.9":
+		return true
+	}
+	return false
 }
 
 // BundledExtensions returns the set of extensions compiled in to (or bundled
