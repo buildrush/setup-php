@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 )
 
 const (
@@ -20,6 +21,12 @@ type cliArgs struct {
 	fixture   string
 }
 
+var fixtureNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+
+func validFixtureName(name string) bool {
+	return fixtureNameRe.MatchString(name)
+}
+
 func parseFlags(args []string, stderr *os.File) (parsed cliArgs, exitCode int) {
 	fs := flag.NewFlagSet("compat-diff", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -33,6 +40,10 @@ func parseFlags(args []string, stderr *os.File) (parsed cliArgs, exitCode int) {
 	missing := parsed.ours == "" || parsed.theirs == "" || parsed.allowlist == "" || parsed.fixture == ""
 	if missing {
 		_, _ = fmt.Fprintln(stderr, "usage: compat-diff --ours <path> --theirs <path> --allowlist <path> --fixture <name>")
+		return parsed, exitMalformed
+	}
+	if !validFixtureName(parsed.fixture) {
+		_, _ = fmt.Fprintf(stderr, "compat-diff: invalid --fixture %q (must match [a-z0-9][a-z0-9_-]{0,63})\n", parsed.fixture)
 		return parsed, exitMalformed
 	}
 	return parsed, 0

@@ -305,3 +305,51 @@ func TestRunDiffAnnotationsToStderr(t *testing.T) {
 		t.Errorf("expected fixture name in stderr error annotation, got: %s", stderr)
 	}
 }
+
+func TestParseFlagsRejectsInvalidFixtureName(t *testing.T) {
+	cases := []struct {
+		name    string
+		fixture string
+	}{
+		{"space", "bad name"},
+		{"semicolon-inject", "x;rm"},
+		{"uppercase", "Bare"},
+		{"leading-dash", "-bare"},
+		{"too-long", strings.Repeat("a", 65)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			args := []string{
+				"--ours", "o.json",
+				"--theirs", "t.json",
+				"--allowlist", "a.md",
+				"--fixture", tc.fixture,
+			}
+			// parseFlags writes to stderr; discard by using /dev/null.
+			devnull, err := os.Open(os.DevNull)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer devnull.Close()
+			_, code := parseFlags(args, devnull)
+			if code != exitMalformed {
+				t.Errorf("fixture=%q: got code %d, want %d", tc.fixture, code, exitMalformed)
+			}
+		})
+	}
+}
+
+func TestParseFlagsAcceptsValidFixtureNames(t *testing.T) {
+	for _, name := range []string{"bare", "multi-ext", "none-reset", "ini-and-coverage", "a", "x_y", "a1"} {
+		args := []string{
+			"--ours", "o.json",
+			"--theirs", "t.json",
+			"--allowlist", "a.md",
+			"--fixture", name,
+		}
+		_, code := parseFlags(args, os.Stderr)
+		if code != 0 {
+			t.Errorf("fixture=%q: got code %d, want 0", name, code)
+		}
+	}
+}
