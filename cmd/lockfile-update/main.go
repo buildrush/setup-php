@@ -33,6 +33,7 @@ func main() {
 	catalogDir := flag.String("catalog", "./catalog", "path to catalog directory")
 	lockfilePath := flag.String("lockfile", "./bundles.lock", "path to bundles.lock")
 	registry := flag.String("registry", "ghcr.io/buildrush", "OCI registry prefix")
+	commit := flag.Bool("commit", false, "commit + push the updated lockfile to HEAD (CI use)")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -119,6 +120,35 @@ func main() {
 		log.Fatalf("write lockfile: %v", err)
 	}
 	fmt.Printf("wrote %s with %d entries\n", *lockfilePath, len(lf.Bundles))
+
+	if *commit {
+		branch := firstNonEmpty(os.Getenv("GITHUB_HEAD_REF"), os.Getenv("GITHUB_REF_NAME"))
+		if branch == "" {
+			log.Fatalf("--commit requires GITHUB_HEAD_REF or GITHUB_REF_NAME to be set")
+		}
+		runID := os.Getenv("GITHUB_RUN_ID")
+		if runID == "" {
+			runID = "manual"
+		}
+		if err := CommitLockfile(CommitOpts{
+			LockfilePath: *lockfilePath,
+			BranchRef:    branch,
+			Message:      fmt.Sprintf("chore(lock): update bundles.lock from pipeline %s", runID),
+			ActorName:    "github-actions[bot]",
+			ActorEmail:   "41898282+github-actions[bot]@users.noreply.github.com",
+		}); err != nil {
+			log.Fatalf("commit lockfile: %v", err)
+		}
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // buildLockfile turns a list of resolvedEntry into a canonical Lockfile.
