@@ -59,6 +59,18 @@ func FromEnv() (*Plan, error) {
 		Verbose:      os.Getenv("INPUT_VERBOSE") == "true",
 	}
 
+	switch p.Coverage {
+	case "", CoverageNone, CoverageXdebug, CoveragePCOV:
+		// valid; empty-default is normalized to CoverageNone below via the
+		// envOrDefault call on the line where Coverage is set. But if a caller
+		// passed empty explicitly, normalize to CoverageNone here for safety.
+		if p.Coverage == "" {
+			p.Coverage = CoverageNone
+		}
+	default:
+		return nil, fmt.Errorf("::error::input 'coverage=%s' is not a supported value; use xdebug, pcov, or none", p.Coverage)
+	}
+
 	if versionFile := os.Getenv("INPUT_PHP-VERSION-FILE"); versionFile != "" && p.PHPVersion == "8.4" {
 		if v, err := ParsePHPVersionFile(versionFile); err == nil {
 			p.PHPVersion = v
