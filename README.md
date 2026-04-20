@@ -76,6 +76,18 @@ extensions: none, redis, curl      # reset, then only redis + curl
 
 Details, deliberate deviations, and deferred behavioral quirks are catalogued in [docs/compat-matrix.md](docs/compat-matrix.md).
 
+## How we verify v2 compatibility
+
+Every pull request and push to `main` triggers the
+[`compat-harness` workflow](.github/workflows/compat-harness.yml), which runs
+a fixture matrix through both `buildrush/setup-php` and
+`shivammathur/setup-php@v2` (pinned by SHA in
+[`docs/compat-matrix.md`](docs/compat-matrix.md)) and diffs the resulting PHP
+environments. Any deviation that is not listed in the allowlist block of
+`docs/compat-matrix.md` fails the check. See the spec
+[`docs/superpowers/specs/2026-04-20-compat-harness-design.md`](docs/superpowers/specs/2026-04-20-compat-harness-design.md)
+for the full design.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
