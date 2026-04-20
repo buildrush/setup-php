@@ -46,10 +46,6 @@ func main() {
 	if p.Update {
 		fmt.Fprintln(os.Stderr, compat.UnimplementedInputWarning("update", "true"))
 	}
-	if p.IniFile != "production" {
-		fmt.Fprintln(os.Stderr, compat.UnimplementedInputWarning("ini-file", p.IniFile))
-	}
-
 	if p.Verbose {
 		log.Printf("Plan: PHP %s, extensions=%v, os=%s, arch=%s, ts=%s, coverage=%s",
 			p.PHPVersion, p.Extensions, p.OS, p.Arch, p.ThreadSafety, p.Coverage)
@@ -76,8 +72,8 @@ func main() {
 		},
 		Extensions: map[string]*catalog.ExtensionSpec{
 			"redis":  {Name: "redis", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.2.0"}},
-			"xdebug": {Name: "xdebug", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.5.1"}, Ini: []string{"zend_extension=xdebug", "xdebug.mode=coverage"}},
-			"pcov":   {Name: "pcov", Kind: catalog.ExtensionKindPECL, Versions: []string{"1.0.12"}, Ini: []string{"extension=pcov", "pcov.enabled=1"}},
+			"xdebug": {Name: "xdebug", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.5.1"}, Ini: []string{"zend_extension=xdebug"}},
+			"pcov":   {Name: "pcov", Kind: catalog.ExtensionKindPECL, Versions: []string{"1.0.12"}, Ini: []string{"extension=pcov"}},
 		},
 	}
 
@@ -202,8 +198,33 @@ func main() {
 		log.Fatalf("compose: %v", err)
 	}
 
-	// 9. Write ini values: compat defaults first, then user overrides on top.
-	if err := compose.WriteIniValuesWithDefaults(layout.ConfDir, compat.DefaultIniValues(p.PHPVersion), p.IniValues); err != nil {
+	// 9a. Select base ini file (production/development/none) from the bundle.
+	baseIni, baseWarn := compat.BaseIniFileName(p.IniFile)
+	if baseWarn != "" {
+		fmt.Fprintln(os.Stderr, baseWarn)
+	}
+	if err := os.MkdirAll(filepath.Dir(layout.IniFile), 0o750); err != nil {
+		log.Fatalf("create php.ini dir: %v", err)
+	}
+	if err := compose.SelectBaseIniFile(layout, baseIni); err != nil {
+		log.Fatalf("select base ini file: %v", err)
+	}
+
+	// 9b. Compose compat ini layers: defaults → xdebug fragment (if xdebug
+	// was actually resolved) → ExtraIni (e.g. pcov.enabled=1) → user ini-values.
+	xdebugFrag := map[string]string{}
+	for _, ext := range res.Extensions {
+		if ext.Name == "xdebug" {
+			xdebugFrag = compat.XdebugIniFragment(p.PHPVersion)
+			break
+		}
+	}
+	layered := compose.MergeCompatLayers(
+		compat.DefaultIniValues(p.PHPVersion),
+		xdebugFrag,
+		p.ExtraIni,
+	)
+	if err := compose.WriteIniValuesWithDefaults(layout.ConfDir, layered, p.IniValues); err != nil {
 		log.Fatalf("write ini values: %v", err)
 	}
 
@@ -300,20 +321,25 @@ func resolvePHPVersion(layout *compose.Layout, requested string) string {
 }
 
 func layoutFromDir(dir string) *compose.Layout {
+	core := filepath.Join(dir, "core")
 	return &compose.Layout{
-		RootDir:      dir,
-		BinDir:       filepath.Join(dir, "core", "usr", "local", "bin"),
-		ExtensionDir: filepath.Join(dir, "core", "usr", "local", "lib", "php", "extensions"),
-		ConfDir:      filepath.Join(dir, "core", "usr", "local", "etc", "php", "conf.d"),
+		RootDir:        dir,
+		BinDir:         filepath.Join(core, "usr", "local", "bin"),
+		ExtensionDir:   filepath.Join(core, "usr", "local", "lib", "php", "extensions"),
+		ConfDir:        filepath.Join(core, "usr", "local", "etc", "php", "conf.d"),
+		IniTemplateDir: filepath.Join(core, "usr", "local", "share", "php", "ini"),
+		IniFile:        filepath.Join(core, "usr", "local", "lib", "php.ini"),
 	}
 }
 
 func detectLayout(coreDir string) *compose.Layout {
 	return &compose.Layout{
-		RootDir:      filepath.Dir(coreDir),
-		BinDir:       filepath.Join(coreDir, "usr", "local", "bin"),
-		ExtensionDir: filepath.Join(coreDir, "usr", "local", "lib", "php", "extensions"),
-		ConfDir:      filepath.Join(coreDir, "usr", "local", "etc", "php", "conf.d"),
+		RootDir:        filepath.Dir(coreDir),
+		BinDir:         filepath.Join(coreDir, "usr", "local", "bin"),
+		ExtensionDir:   filepath.Join(coreDir, "usr", "local", "lib", "php", "extensions"),
+		ConfDir:        filepath.Join(coreDir, "usr", "local", "etc", "php", "conf.d"),
+		IniTemplateDir: filepath.Join(coreDir, "usr", "local", "share", "php", "ini"),
+		IniFile:        filepath.Join(coreDir, "usr", "local", "lib", "php.ini"),
 	}
 }
 
