@@ -131,3 +131,44 @@ jobs:
           name: probe-theirs-${{ matrix.name }}
           path: /tmp/theirs.json
           retention-days: 1
+
+  diff:
+    name: 'diff: ${{ matrix.name }}'
+    needs: [fixtures, ours, theirs]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.fixtures.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-ours-${{ matrix.name }}
+          path: probes/ours
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: probe-theirs-${{ matrix.name }}
+          path: probes/theirs
+
+      - name: Run compat-diff
+        run: |
+          go run ./cmd/compat-diff \
+            --ours probes/ours/ours.json \
+            --theirs probes/theirs/theirs.json \
+            --allowlist docs/compat-matrix.md \
+            --fixture '${{ matrix.name }}'
+
+  compat-gate:
+    name: compat-harness gate
+    if: always()
+    needs: [build, fixtures, ours, theirs, diff]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
