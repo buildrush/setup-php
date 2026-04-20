@@ -1,0 +1,33 @@
+{
+  "php_version": "8.4.5",
+  "sapi": "cli",
+  "zts": false,
+  "extensions": ["core", "ctype", "curl", "zend opcache"],
+  "ini": {
+    "date.timezone": "UTC",
+    "disable_functions": "",
+    "display_errors": "",
+    "error_reporting": "",
+    "expose_php": "",
+    "log_errors": "",
+    "max_execution_time": "",
+    "max_input_time": "",
+    "memory_limit": "128M",
+    "opcache.enable": "1",
+    "opcache.enable_cli": "",
+    "opcache.jit": "",
+    "opcache.jit_buffer_size": "",
+    "opcache.memory_consumption": "",
+    "opcache.revalidate_freq": "",
+    "opcache.validate_timestamps": "",
+    "post_max_size": "",
+    "session.gc_maxlifetime": "",
+    "session.save_handler": "",
+    "short_open_tag": "",
+    "upload_max_filesize": "",
+    "xdebug.mode": "",
+    "xdebug.start_with_request": ""
+  },
+  "env_delta": [],
+  "path_additions": []
+}
