@@ -16,17 +16,20 @@ type Plan struct {
 	ExtensionsExclude []string
 	ExtensionsReset   bool
 	IniValues         []IniValue
-	ExtraIni          map[string]string // populated by ApplyCoverage; merged into conf.d overlay after DefaultIniValues, before user IniValues
-	Coverage          CoverageDriver
-	Tools             []string
-	ThreadSafety      string
-	OS                string
-	Arch              string
-	FailFast          bool
-	Update            bool
-	IniFile           string
-	Debug             bool
-	Verbose           bool
+	// ExtraIni is populated by ApplyCoverage; designed to be merged into conf.d overlay
+	// after DefaultIniValues, before user IniValues (wired into compose in
+	// Task 7–8 of the compat-closeout slice).
+	ExtraIni     map[string]string
+	Coverage     CoverageDriver
+	Tools        []string
+	ThreadSafety string
+	OS           string
+	Arch         string
+	FailFast     bool
+	Update       bool
+	IniFile      string
+	Debug        bool
+	Verbose      bool
 }
 
 type IniValue struct {
@@ -197,6 +200,11 @@ func (p *Plan) ApplyCoverage() {
 }
 
 func (p *Plan) Hash() string {
+	// Note: ExtraIni is intentionally excluded from Hash(). It is derived from
+	// Coverage + Extensions (both already hashed), so including it would double-
+	// count those inputs. If a future change introduces an independent writer of
+	// ExtraIni (not just ApplyCoverage), this invariant no longer holds and Hash()
+	// must be updated.
 	h := sha256.New()
 	_, _ = fmt.Fprintf(h, "php:%s\n", p.PHPVersion)
 	_, _ = fmt.Fprintf(h, "os:%s\n", p.OS)

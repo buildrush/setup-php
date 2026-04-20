@@ -336,11 +336,11 @@ func TestApplyCoverage_NoneDisablesBoth(t *testing.T) {
 	}
 }
 
-func TestApplyCoverage_ExplicitIncludeWinsOverCoverageDisable(t *testing.T) {
-	// extensions: xdebug + coverage: pcov — pcov should be added, but we
-	// should NOT force-disable xdebug if the user explicitly listed it. v2
-	// runs disable_extension last, so the user's explicit include loses; we
-	// match that behavior.
+func TestApplyCoverage_CoverageDisableWinsOverExplicitInclude(t *testing.T) {
+	// extensions: xdebug + coverage: pcov — pcov should be added, and xdebug
+	// should be forced into ExtensionsExclude even though the user listed it
+	// explicitly. v2 runs disable_extension last, so the user's explicit
+	// include loses; we match that behavior.
 	p := &Plan{
 		Coverage:   CoveragePCOV,
 		Extensions: []string{"xdebug"},
