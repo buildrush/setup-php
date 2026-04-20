@@ -276,6 +276,39 @@ func TestFromEnvIniFileDevelopment(t *testing.T) {
 	}
 }
 
+func TestFromEnvCoverageValidation(t *testing.T) {
+	cases := []struct {
+		value   string
+		wantErr bool
+		wantVal CoverageDriver
+	}{
+		{"", false, CoverageNone},
+		{"none", false, CoverageNone},
+		{"xdebug", false, CoverageXdebug},
+		{"pcov", false, CoveragePCOV},
+		{"foo", true, ""},
+		{"XDEBUG", true, ""}, // v2 uses exact lowercase
+	}
+	for _, tc := range cases {
+		t.Run(tc.value, func(t *testing.T) {
+			t.Setenv("INPUT_COVERAGE", tc.value)
+			p, err := FromEnv()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for coverage=%q; got plan=%+v", tc.value, p)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error for coverage=%q: %v", tc.value, err)
+			}
+			if p.Coverage != tc.wantVal {
+				t.Errorf("Coverage = %q, want %q", p.Coverage, tc.wantVal)
+			}
+		})
+	}
+}
+
 func TestNormalizeArch(t *testing.T) {
 	tests := map[string]string{
 		"X64":     "x86_64",
