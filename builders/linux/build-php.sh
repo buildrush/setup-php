@@ -103,6 +103,14 @@ find "${OUTPUT_DIR}/usr/local/bin" -type f -exec strip {} \; 2>/dev/null || true
 # Create conf.d directory
 mkdir -p "${OUTPUT_DIR}/usr/local/etc/php/conf.d"
 
+# Ship PHP's upstream production/development ini templates in the bundle.
+# Runtime (internal/compose) selects one based on the `ini-file:` input.
+echo "::group::Stashing php.ini-{production,development}"
+mkdir -p "${OUTPUT_DIR}/usr/local/share/php/ini"
+cp /tmp/php-src/php.ini-production "${OUTPUT_DIR}/usr/local/share/php/ini/php.ini-production"
+cp /tmp/php-src/php.ini-development "${OUTPUT_DIR}/usr/local/share/php/ini/php.ini-development"
+echo "::endgroup::"
+
 # Verify
 "${OUTPUT_DIR}/usr/local/bin/php" -v
 echo "PHP ${PHP_VERSION} built successfully"
