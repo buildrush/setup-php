@@ -9,6 +9,7 @@ PHP_VERSION="${PHP_VERSION:?PHP_VERSION is required}"
 ARCH="${ARCH:-x86_64}"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp/out}"
 WORKSPACE="${WORKSPACE:-$(pwd)}"
+PHP_SRC_DIR="${PHP_SRC_DIR:-/tmp/php-src}"
 
 # Resolve minor version (e.g. "8.4") to latest patch version (e.g. "8.4.20")
 if [[ "$PHP_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
@@ -43,12 +44,12 @@ echo "Downloading ${PHP_URL}"
 curl -sSfL -o /tmp/php.tar.xz "$PHP_URL"
 
 # Extract source
-mkdir -p /tmp/php-src
-tar -xf /tmp/php.tar.xz -C /tmp/php-src --strip-components=1
+mkdir -p "$PHP_SRC_DIR"
+tar -xf /tmp/php.tar.xz -C "$PHP_SRC_DIR" --strip-components=1
 
 # Configure
 echo "::group::Configuring PHP ${PHP_VERSION}"
-cd /tmp/php-src
+cd "$PHP_SRC_DIR"
 ./configure \
   --prefix=/usr/local \
   --enable-mbstring \
@@ -105,10 +106,10 @@ mkdir -p "${OUTPUT_DIR}/usr/local/etc/php/conf.d"
 
 # Ship PHP's upstream production/development ini templates in the bundle.
 # Runtime (internal/compose) selects one based on the `ini-file:` input.
-echo "::group::Stashing php.ini-{production,development}"
+echo "::group::Stashing php.ini-production and php.ini-development"
 mkdir -p "${OUTPUT_DIR}/usr/local/share/php/ini"
-cp /tmp/php-src/php.ini-production "${OUTPUT_DIR}/usr/local/share/php/ini/php.ini-production"
-cp /tmp/php-src/php.ini-development "${OUTPUT_DIR}/usr/local/share/php/ini/php.ini-development"
+cp "${PHP_SRC_DIR}/php.ini-production" "${OUTPUT_DIR}/usr/local/share/php/ini/php.ini-production"
+cp "${PHP_SRC_DIR}/php.ini-development" "${OUTPUT_DIR}/usr/local/share/php/ini/php.ini-development"
 echo "::endgroup::"
 
 # Verify
