@@ -199,12 +199,15 @@ func main() {
 		log.Fatalf("compose: %v", err)
 	}
 
-	// 8b. Auto-load opcache when it's in the core's bundled set. `--enable-opcache`
-	// builds opcache as a shared module (.so in a PHP-API-dated subdir of
-	// extension_dir). We symlink it to the top of extension_dir and write a
-	// zend_extension loader so opcache.* ini keys become addressable — without
-	// this, ini_get("opcache.enable") et al. return empty.
-	if slices.Contains(bundled, "opcache") {
+	// 8b. Auto-load opcache when it's in the core's bundled set AND the user
+	// didn't exclude it. `--enable-opcache` builds opcache as a shared module
+	// (.so in a PHP-API-dated subdir of extension_dir). Without an explicit
+	// zend_extension directive, opcache.* ini keys are unaddressable.
+	// Respect :opcache exclusions and `none`-reset semantics by skipping the
+	// loader when the user disabled opcache.
+	opcacheExcluded := slices.Contains(p.ExtensionsExclude, "opcache") ||
+		(p.ExtensionsReset && !slices.Contains(p.Extensions, "opcache"))
+	if slices.Contains(bundled, "opcache") && !opcacheExcluded {
 		if opcacheSO := findSO(layout.ExtensionDir, "opcache"); opcacheSO != "" {
 			if err := compose.SymlinkExtension(opcacheSO, layout.ExtensionDir, "opcache"); err != nil {
 				log.Fatalf("symlink opcache: %v", err)
@@ -227,14 +230,13 @@ func main() {
 		log.Fatalf("select base ini file: %v", err)
 	}
 
-	// 9b. Compose compat ini layers: defaults → xdebug fragment (if xdebug
-	// was actually resolved) → ExtraIni (e.g. pcov.enabled=1) → user ini-values.
-	xdebugFrag := map[string]string{}
-	for _, ext := range res.Extensions {
-		if ext.Name == "xdebug" {
-			xdebugFrag = compat.XdebugIniFragment(p.PHPVersion)
-			break
-		}
+	// 9b. Compose compat ini layers: defaults → xdebug fragment (only when
+	// coverage: xdebug drives the install — matches v2, which applies
+	// xdebug.ini only in the coverage flow, NOT when xdebug is loaded via
+	// extensions:) → ExtraIni (e.g. pcov.enabled=1) → user ini-values.
+	var xdebugFrag map[string]string
+	if p.Coverage == plan.CoverageXdebug {
+		xdebugFrag = compat.XdebugIniFragment(p.PHPVersion)
 	}
 	layered := compose.MergeCompatLayers(
 		compat.DefaultIniValues(p.PHPVersion),
