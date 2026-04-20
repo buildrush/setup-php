@@ -1,26 +1,26 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-04-20T04:12:20.887075606Z",
+  "generated_at": "2026-04-20T13:14:32.599543305Z",
   "bundles": {
     "ext:apcu:5.1.28:8.4:linux:x86_64:nts": {
-      "digest": "sha256:79b98d08bb7784b7ff18133178e36398a6cb4839651d9bc4bab8b8ddceeee148",
+      "digest": "sha256:5f80650c5b71fbd354839d74f543808121c0d5822c2f8d256a184d3b98f0d3f2",
       "spec_hash": "sha256:2fe854503b7ef8d15d2bee69571b92aa1346b8bd41123a4dea5b636ff8d4aaf0"
     },
     "ext:pcov:1.0.12:8.4:linux:x86_64:nts": {
-      "digest": "sha256:64fb42d20ab5c0d9edca5dec95693bb12ccf5f348bbadd0151355cce66d2bd59",
+      "digest": "sha256:902f7412de492180bf3b3133fc839ecfead7a8184416d08a7d9298b22b16a6b7",
       "spec_hash": "sha256:20ad49afe23f3582a89e278b4459855dc62bd14ab82c801c3a988ad6b1c4052e"
     },
     "ext:redis:6.2.0:8.4:linux:x86_64:nts": {
-      "digest": "sha256:e0921b1e28147a38dc5963f433bc16e4892e9c09b8ef9aef395cae90860781dc",
+      "digest": "sha256:b340a6e7d6e390ca5df0a59783b44a7e7b6ceb8c8e3fedd2fc76a22ded34fb88",
       "spec_hash": "sha256:32330ebc5b6522350a725b72c5d2a6ac9f92b10937735511fbd42a7dcf9e2fc3"
     },
     "ext:xdebug:3.5.1:8.4:linux:x86_64:nts": {
-      "digest": "sha256:9772a42b1a8e99e8346f52746df2718c199ae17068ab4fc323cd2a7cf8138a12",
+      "digest": "sha256:cea8cde1f5e2eea0559e89a07392cfb1e74c9e1e727d7f010fce5d599a61b33d",
       "spec_hash": "sha256:a55aca0ae79b458073d0b9b5b19ae59267b2f7309f491f081352417b95488fe6"
     },
     "php:8.4:linux:x86_64:nts": {
-      "digest": "sha256:8c98530b8ef17642d37fdc9e1a530598c43c7cd22e272c68ab2981e76ff6672b",
-      "spec_hash": "sha256:82be8ba010cc1c75b3673e5ab5b2c05f24d35179c129cb5f0eb43f727d9644ce"
+      "digest": "sha256:aa580f45d8b52e846de96d937b2a8bfc47a408a7df378b82a3e9e9e88ecb758e",
+      "spec_hash": "sha256:33e4190327e5d2f2a8659819ab067cc66dc791051d8684fb31bace94435a4513"
     }
   }
 }
