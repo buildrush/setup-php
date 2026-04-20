@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -123,6 +124,8 @@ func main() {
 	}
 
 	lf := buildLockfile(resolved)
+	preserveGeneratedAtIfUnchanged(lf, *lockfilePath)
+
 	if err := lf.Write(*lockfilePath); err != nil {
 		log.Fatalf("write lockfile: %v", err)
 	}
@@ -171,6 +174,23 @@ func buildLockfile(entries []resolvedEntry) *lockfile.Lockfile {
 		lf.Bundles[e.Key] = lockfile.Entry{Digest: e.Digest, SpecHash: e.SpecHash}
 	}
 	return lf
+}
+
+// preserveGeneratedAtIfUnchanged reads the existing lockfile at path, and if
+// its bundle map equals lf's, sets lf.GeneratedAt to the existing timestamp.
+// Without this, every no-op planner run produces a timestamp-only byte diff
+// that the --commit mode dutifully commits and pushes — driving an endless
+// lockfile-update loop on bundle-affecting PRs once the first real rebuild
+// has landed. A missing or unreadable existing file is not an error here; we
+// simply keep the freshly-stamped GeneratedAt that buildLockfile produced.
+func preserveGeneratedAtIfUnchanged(lf *lockfile.Lockfile, path string) {
+	existing, err := lockfile.ParseFile(path)
+	if err != nil {
+		return
+	}
+	if maps.Equal(existing.Bundles, lf.Bundles) {
+		lf.GeneratedAt = existing.GeneratedAt
+	}
 }
 
 // splitAbi parses "8.4-nts" → ("8.4", "nts", true). Splits on the last hyphen
