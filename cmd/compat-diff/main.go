@@ -20,7 +20,7 @@ type cliArgs struct {
 	fixture   string
 }
 
-func parseFlags(args []string, stderr *os.File) (cliArgs, int) {
+func parseFlags(args []string, stderr *os.File) (parsed cliArgs, exitCode int) {
 	fs := flag.NewFlagSet("compat-diff", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var a cliArgs
@@ -33,7 +33,7 @@ func parseFlags(args []string, stderr *os.File) (cliArgs, int) {
 	}
 	missing := a.ours == "" || a.theirs == "" || a.allowlist == "" || a.fixture == ""
 	if missing {
-		fmt.Fprintln(stderr, "usage: compat-diff --ours <path> --theirs <path> --allowlist <path> --fixture <name>")
+		_, _ = fmt.Fprintln(stderr, "usage: compat-diff --ours <path> --theirs <path> --allowlist <path> --fixture <name>")
 		return a, exitMalformed
 	}
 	return a, 0
