@@ -447,3 +447,20 @@ Disposition key:
 - Launchpad PPA:
   https://launchpad.net/~ondrej/+archive/ubuntu/php
 - PPA `InRelease` date observed in this audit: `Sat, 11 Apr 2026 10:46:03 UTC`.
+
+## Deviations allowlist
+
+The compat harness (`.github/workflows/compat-harness.yml`) consults this block
+when diffing our setup-php against `shivammathur/setup-php@v2`. Each entry
+tolerates a specific JSON path deviation for the listed fixtures. Adding an
+entry requires a `reason` and is reviewable in the PR diff that introduces the
+deviation.
+
+- `kind: ignore` — the path is dropped from both probes before comparison.
+- `kind: allow` — both sides may hold different values, but both must be non-empty.
+
+<!-- compat-harness:deviations:start -->
+```yaml
+deviations: []
+```
+<!-- compat-harness:deviations:end -->
