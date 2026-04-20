@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.4.0](https://github.com/buildrush/setup-php/compare/v1.3.0...v1.4.0) (2026-04-20)
+
+
+### Features
+
+* **compat-diff:** diff flattened probes with allowlist kinds ([b0d3e4f](https://github.com/buildrush/setup-php/commit/b0d3e4f36a38b568e4a2f619e5a9c11ed9d7b7f6))
+* **compat-diff:** load deviations allowlist from compat-matrix.md ([2fa84f4](https://github.com/buildrush/setup-php/commit/2fa84f472bfd9cd2d27d83b38708dfe5800504be))
+* **compat-diff:** scaffold CLI with flag parsing ([e6badf9](https://github.com/buildrush/setup-php/commit/e6badf94a5c68de9eff2f902e31d23a4eca4fd9a))
+* **compat-diff:** validate --fixture name shape ([cce9471](https://github.com/buildrush/setup-php/commit/cce9471c8bc0c99303209641e7524ecaa907aa70))
+* **compat-diff:** wire end-to-end CLI with GitHub Actions annotations ([85f76a3](https://github.com/buildrush/setup-php/commit/85f76a3064d622e833f2940703247022edf2ac67))
+* **compat:** add 6-fixture compat harness manifest ([6ddffd3](https://github.com/buildrush/setup-php/commit/6ddffd3ac26f01fd4711d17c9dd3003de21977ea))
+* **compat:** curate ini keys recorded by probe ([94e3528](https://github.com/buildrush/setup-php/commit/94e35289202d02ed74673977209517b6196b96d1))
+* **compat:** probe computes env_delta and normalized path_additions ([71e6d9c](https://github.com/buildrush/setup-php/commit/71e6d9c4a2483fcc401534baab479303b72e11d2))
+* **compat:** probe script for php version/ext/ini fields ([9f87197](https://github.com/buildrush/setup-php/commit/9f8719729727fc0d0eea121774f48275f3cf0d68))
+* **workflows:** compat-harness 'ours' matrix job ([3d45da4](https://github.com/buildrush/setup-php/commit/3d45da465f6cae60a4f7207b9ec3481954ab9200))
+* **workflows:** compat-harness 'theirs' matrix job pinned to v2 SHA ([39cfae6](https://github.com/buildrush/setup-php/commit/39cfae687e5cb6eea55f0eac69ba40c7aa7372e9))
+* **workflows:** compat-harness diff job and compat-gate ([6db35a3](https://github.com/buildrush/setup-php/commit/6db35a39b4cb794fb72c58548b29d90e0f3b8604))
+* **workflows:** compat-harness skeleton (build + fixtures) ([57ccf03](https://github.com/buildrush/setup-php/commit/57ccf03ce1b74dfa9f98e2d87d778dcbe621ad52))
+
+
+### Bug Fixes
+
+* **compat-diff:** satisfy errcheck + gocritic lints ([da2001a](https://github.com/buildrush/setup-php/commit/da2001ab2c5c11aa3f2591f802f8017f8e0f392a))
+* **compat:** probe escapes newlines/tabs/CRs in ini values ([153a7db](https://github.com/buildrush/setup-php/commit/153a7dbd83339a2494b9b45c6e283f052159f138))
+* **workflows:** grant write permissions on pipeline job in each wrapper ([20b0786](https://github.com/buildrush/setup-php/commit/20b0786cf56c0739380dac7a712ede79ae7f0baa))
+* **workflows:** use yq+jq pipeline for fixture matrix generation ([f091dc2](https://github.com/buildrush/setup-php/commit/f091dc24758617afa6277a64c3f040266ad096f9))
+
+
+### Documentation
+
+* add compat-harness design spec ([a875d71](https://github.com/buildrush/setup-php/commit/a875d7105cc9122795d3612284f9e1dd1f1f4660))
+* **compat:** add deviations allowlist markers ([8ac97af](https://github.com/buildrush/setup-php/commit/8ac97af5b2315445e8a0e40e8dd752022e77738f))
+* **compat:** allowlist Phase-2-in-progress deviations ([b7cddd1](https://github.com/buildrush/setup-php/commit/b7cddd1587688adcd484462c89349653b45d2055))
+* **readme:** link to compat-harness workflow and allowlist ([1b93262](https://github.com/buildrush/setup-php/commit/1b93262a99767714c7f65e9561ac40ab9f0073e0))
+
 ## [1.3.0](https://github.com/buildrush/setup-php/compare/v1.2.0...v1.3.0) (2026-04-17)
 
 
