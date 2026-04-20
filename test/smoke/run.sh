@@ -14,6 +14,16 @@ case "$BUNDLE_NAME" in
     "${BUNDLE_DIR}/usr/local/bin/php" -v
     "${BUNDLE_DIR}/usr/local/bin/php" -m
     "${BUNDLE_DIR}/usr/local/bin/php" -r "echo PHP_VERSION . PHP_EOL;"
+    # Assert upstream ini templates were stashed by the builder.
+    if [ ! -s "${BUNDLE_DIR}/usr/local/share/php/ini/php.ini-production" ]; then
+      echo "smoke: missing php.ini-production in bundle" >&2
+      exit 1
+    fi
+    if [ ! -s "${BUNDLE_DIR}/usr/local/share/php/ini/php.ini-development" ]; then
+      echo "smoke: missing php.ini-development in bundle" >&2
+      exit 1
+    fi
+    echo "smoke: php.ini-production and php.ini-development present"
     echo "PHP core smoke tests passed"
     ;;
   redis)
