@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -198,6 +199,22 @@ func main() {
 		log.Fatalf("compose: %v", err)
 	}
 
+	// 8b. Auto-load opcache when it's in the core's bundled set. `--enable-opcache`
+	// builds opcache as a shared module (.so in a PHP-API-dated subdir of
+	// extension_dir). We symlink it to the top of extension_dir and write a
+	// zend_extension loader so opcache.* ini keys become addressable — without
+	// this, ini_get("opcache.enable") et al. return empty.
+	if slices.Contains(bundled, "opcache") {
+		if opcacheSO := findSO(layout.ExtensionDir, "opcache"); opcacheSO != "" {
+			if err := compose.SymlinkExtension(opcacheSO, layout.ExtensionDir, "opcache"); err != nil {
+				log.Fatalf("symlink opcache: %v", err)
+			}
+			if err := compose.WriteIniFragment(layout.ConfDir, "10-opcache", []string{"zend_extension=opcache.so"}); err != nil {
+				log.Fatalf("write opcache loader: %v", err)
+			}
+		}
+	}
+
 	// 9a. Select base ini file (production/development/none) from the bundle.
 	baseIni, baseWarn := compat.BaseIniFileName(p.IniFile)
 	if baseWarn != "" {
@@ -349,6 +366,13 @@ func exportEnv(layout *compose.Layout, phpVersion string) error {
 		return err
 	}
 	if err := exporter.AddPath(layout.BinDir); err != nil {
+		return err
+	}
+	// PHPRC tells PHP which base php.ini to load. Our PHP is built with
+	// --prefix=/usr/local, so its compiled-in search path points at the
+	// install prefix (not the bundle's extracted location). PHPRC redirects
+	// it at the file SelectBaseIniFile wrote.
+	if err := exporter.SetEnv("PHPRC", layout.IniFile); err != nil {
 		return err
 	}
 	if err := exporter.SetEnv("PHP_INI_SCAN_DIR", layout.ConfDir); err != nil {
