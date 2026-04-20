@@ -2,7 +2,9 @@ package oci
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -17,9 +19,29 @@ type Client struct {
 }
 
 type FetchResult struct {
-	Key    string
-	Digest string
-	Data   []byte
+	Key      string
+	Digest   string
+	Data     []byte
+	Metadata Metadata
+}
+
+// Metadata is the parsed OCI sidecar meta.json shipped alongside every
+// bundle. Missing schema_version is treated as 1 so pre-slice bundles
+// referenced by released lockfiles remain loadable.
+type Metadata struct {
+	SchemaVersion int    `json:"schema_version"`
+	Kind          string `json:"kind"`
+}
+
+func parseMetaJSON(data []byte) (Metadata, error) {
+	var m Metadata
+	if err := json.Unmarshal(data, &m); err != nil {
+		return Metadata{}, fmt.Errorf("parse meta.json: %w", err)
+	}
+	if m.SchemaVersion == 0 {
+		m.SchemaVersion = 1
+	}
+	return m, nil
 }
 
 type ResolvedBundle struct {
@@ -115,10 +137,32 @@ func (c *Client) Fetch(ctx context.Context, bundle *ResolvedBundle) (*FetchResul
 	// layer integrity is covered by the manifest's layer descriptors,
 	// which the library also validates. No extra hashing needed here.
 
+	// Second layer, if present, is the meta.json sidecar. Absence is
+	// tolerated for forward-compat with legacy bundles.
+	var meta Metadata
+	if len(layers) >= 2 {
+		mrc, err := layers[1].Compressed()
+		if err != nil {
+			return nil, fmt.Errorf("read meta layer %s: %w", bundle.Key, err)
+		}
+		mbuf, readErr := io.ReadAll(mrc)
+		_ = mrc.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("read meta bytes %s: %w", bundle.Key, readErr)
+		}
+		meta, err = parseMetaJSON(mbuf)
+		if err != nil {
+			return nil, fmt.Errorf("parse meta %s: %w", bundle.Key, err)
+		}
+	} else {
+		meta.SchemaVersion = 1 // legacy bundle; permissive default
+	}
+
 	return &FetchResult{
-		Key:    bundle.Key,
-		Digest: bundle.Digest,
-		Data:   data,
+		Key:      bundle.Key,
+		Digest:   bundle.Digest,
+		Data:     data,
+		Metadata: meta,
 	}, nil
 }
 

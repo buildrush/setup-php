@@ -45,23 +45,30 @@ func main() {
 
 	result := &planner.Result{}
 
-	// Expand PHP matrix
-	phpCells := planner.ExpandPHPMatrix(cat.PHP)
+	// Hash builder scripts and schema version file
 	builderHashPHP, err := planner.HashFile(filepath.Join("builders", "linux", "build-php.sh"))
 	if err != nil {
 		log.Fatalf("hash php builder: %v", err)
 	}
+	builderHashExt, err := planner.HashFile(filepath.Join("builders", "linux", "build-ext.sh"))
+	if err != nil {
+		log.Fatalf("hash ext builder: %v", err)
+	}
+	schemaEnvHash, err := planner.HashFile(filepath.Join("builders", "common", "bundle-schema-version.env"))
+	if err != nil {
+		log.Fatalf("hash schema env: %v", err)
+	}
+	builderHashPHP = builderHashPHP + ":" + schemaEnvHash
+	builderHashExt = builderHashExt + ":" + schemaEnvHash
+
+	// Expand PHP matrix
+	phpCells := planner.ExpandPHPMatrix(cat.PHP)
 	for i := range phpCells {
 		yamlBytes, err := planner.PerVersionYAML(cat.PHP, phpCells[i].Version)
 		if err != nil {
 			log.Fatalf("per-version yaml for %s: %v", phpCells[i].Version, err)
 		}
 		phpCells[i].SpecHash = planner.ComputeSpecHash(&phpCells[i], yamlBytes, builderHashPHP)
-	}
-
-	builderHashExt, err := planner.HashFile(filepath.Join("builders", "linux", "build-ext.sh"))
-	if err != nil {
-		log.Fatalf("hash ext builder: %v", err)
 	}
 
 	if !*force {

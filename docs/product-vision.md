@@ -172,6 +172,8 @@ Three bundle kinds:
 - **`php-ext`**: a single `.so` (Linux/macOS) or `.dll` (Windows), plus any statically-linked runtime libraries that could not be bundled into the binary itself. Typical size: 50 KB – 5 MB.
 - **`php-tool`**: a phar or native binary for composer, phpstan, psalm, phpunit, etc. Architecture-independent for phars; per-arch for native. Typical size: 100 KB – 10 MB.
 
+Each bundle ships with a `meta.json` sidecar (OCI media type `application/vnd.buildrush.meta.v1+json`) carrying two fields the runtime gates on: `schema_version` (integer, monotonically bumped when the bundle layout changes in a way the runtime asserts on) and `kind` (`php-core`, `php-ext`, or `php-tool`). A bundle whose `schema_version` is below the runtime's `internal/version.MinBundleSchema(kind)` produces a hard error with a pointer to `docs/bundle-schema-changelog.md`.
+
 ### 6.2 Bundle identity
 
 Every bundle is identified by a content-addressed SHA-256 digest, computed over:

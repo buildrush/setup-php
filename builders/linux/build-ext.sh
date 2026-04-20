@@ -70,4 +70,4 @@ fi
 echo "Extension ${EXT_NAME}.so built at ${SO_FILE}"
 
 # Pack the bundle
-"${WORKSPACE}/builders/common/pack-bundle.sh" "$OUTPUT_DIR" /tmp/bundle.tar.zst
+"${WORKSPACE}/builders/common/pack-bundle.sh" php-ext "$OUTPUT_DIR" /tmp/bundle.tar.zst
