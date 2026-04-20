@@ -461,6 +461,93 @@ deviation.
 
 <!-- compat-harness:deviations:start -->
 ```yaml
-deviations: []
+deviations:
+  # env_delta: v2 auto-installs composer on CI runners and sets COMPOSER_* env
+  # vars. We don't install composer in Phase 2. `allow` instead of `ignore` so
+  # we still catch the case where we fail to add ANY env vars.
+  - path: env_delta
+    kind: allow
+    reason: 'v2 auto-installs composer and sets COMPOSER_* env vars; tools parity is Phase 3 scope'
+    fixtures: ['*']
+
+  # extensions: v2 on Ondrej PPA ships ~80 extensions; we ship the Phase 1
+  # baseline of ~52 (core + 4 PECLs). `allow` so we still catch the case where
+  # our bundle fails to load any extensions.
+  - path: extensions
+    kind: allow
+    reason: 'bundled extension set expansion is Phase 2 follow-up slice #3 (top-50)'
+    fixtures: ['*']
+
+  # path_additions: both sides add a tool-chain directory to PATH, but the
+  # specific paths differ by architecture (our bundled install vs v2's
+  # hostedtoolcache + composer vendor/bin). `allow` requires both non-empty.
+  - path: path_additions
+    kind: allow
+    reason: 'both sides prepend a PHP install prefix; exact directory differs by design'
+    fixtures: ['*']
+
+  # Default ini-values that v2 applies on CI runners; our internal/compat
+  # DefaultIniValues does not yet cover them. Phase 2 compat slice #1
+  # (docs/superpowers/specs/2026-04-17-phase2-compat-slice-design.md §5.5) is
+  # the scope that closes these.
+  - path: ini.display_errors
+    kind: ignore
+    reason: 'v2 CI default; Phase 2 compat slice #1 (internal/compat.DefaultIniValues)'
+    fixtures: ['*']
+  - path: ini.log_errors
+    kind: ignore
+    reason: 'v2 CI default; Phase 2 compat slice #1 (internal/compat.DefaultIniValues)'
+    fixtures: ['*']
+  - path: ini.short_open_tag
+    kind: ignore
+    reason: 'v2 CI default; Phase 2 compat slice #1 (internal/compat.DefaultIniValues)'
+    fixtures: ['*']
+  - path: ini.error_reporting
+    kind: ignore
+    reason: 'v2 CI default (E_ALL-like mask 22527); Phase 2 compat slice #1'
+    fixtures: ['*']
+
+  # Opcache defaults: v2 enables opcache with specific tuning. Phase 2 compat
+  # slice #1 covers.
+  - path: ini.opcache.enable
+    kind: ignore
+    reason: 'v2 enables opcache by default; Phase 2 compat slice #1'
+    fixtures: ['*']
+  - path: ini.opcache.enable_cli
+    kind: ignore
+    reason: 'v2 opcache default; Phase 2 compat slice #1'
+    fixtures: ['*']
+  - path: ini.opcache.jit
+    kind: ignore
+    reason: 'v2 opcache default; Phase 2 compat slice #1'
+    fixtures: ['*']
+  - path: ini.opcache.jit_buffer_size
+    kind: ignore
+    reason: 'v2 opcache default; Phase 2 compat slice #1'
+    fixtures: ['*']
+  - path: ini.opcache.memory_consumption
+    kind: ignore
+    reason: 'v2 opcache default; Phase 2 compat slice #1'
+    fixtures: ['*']
+  - path: ini.opcache.revalidate_freq
+    kind: ignore
+    reason: 'v2 opcache default; Phase 2 compat slice #1'
+    fixtures: ['*']
+  - path: ini.opcache.validate_timestamps
+    kind: ignore
+    reason: 'v2 opcache default; Phase 2 compat slice #1'
+    fixtures: ['*']
+
+  # Xdebug defaults only surface when xdebug is loaded via extensions: (not via
+  # coverage:). We set xdebug.mode=coverage and start_with_request=default when
+  # it appears in extensions; v2 leaves them empty in that path.
+  - path: ini.xdebug.mode
+    kind: ignore
+    reason: 'when xdebug is loaded via extensions:, we set mode=coverage; v2 leaves empty. Phase 2 compat slice #1 aligns.'
+    fixtures: ['multi-ext']
+  - path: ini.xdebug.start_with_request
+    kind: ignore
+    reason: 'when xdebug is loaded via extensions:, we set start_with_request=default; v2 leaves empty. Phase 2 compat slice #1 aligns.'
+    fixtures: ['multi-ext']
 ```
 <!-- compat-harness:deviations:end -->
