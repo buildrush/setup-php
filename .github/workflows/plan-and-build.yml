@@ -72,23 +72,41 @@ jobs:
     permissions:
       contents: write
       packages: read
-      pull-requests: write
     steps:
+      - name: Refuse fork PRs
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::warning::Fork PRs cannot auto-publish bundles. Ask a maintainer to label the PR 'safe-to-build' and re-run after review."
+          exit 1
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
           go-version: '1.26'
-      - name: Update lockfile
+      - name: Update and commit lockfile
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: go run ./cmd/lockfile-update -catalog ./catalog -lockfile ./bundles.lock -registry ghcr.io/${{ github.repository_owner }}
-      - uses: peter-evans/create-pull-request@v8
-        with:
-          commit-message: 'chore: update bundles.lock'
-          title: 'chore: update bundles.lock'
-          branch: bot/lockfile-update
-          delete-branch: true
-          body: |
-            Automated lockfile update from build pipeline.
+        run: |
+          go run ./cmd/lockfile-update \
+            -catalog ./catalog \
+            -lockfile ./bundles.lock \
+            -registry ghcr.io/${{ github.repository_owner }} \
+            -commit
 
-            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  compat-harness:
+    needs: update-lock
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/compat-harness.yml
+    secrets: inherit
+
+  integration-test:
+    needs: update-lock
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/integration-test.yml
+    secrets: inherit

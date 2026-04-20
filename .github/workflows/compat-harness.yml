@@ -2,8 +2,12 @@ name: compat-harness
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'catalog/**'
+      - 'builders/**'
   push:
     branches: [main]
+  workflow_call:
   workflow_dispatch:
 
 permissions:

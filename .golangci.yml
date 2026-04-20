@@ -50,6 +50,15 @@ linters:
       # File operations on paths constructed internally (extract, env append)
       - linters: [gosec]
         text: "G304"
+      # Subprocess calls in lockfile-update execute git with internally-constructed args only;
+      # no untrusted input touches the command vector
+      - linters: [gosec]
+        text: "G204"
+        path: cmd/lockfile-update/
+      # CommitOpts (96 bytes) parameter passing cost is negligible vs. git subprocess invocation cost
+      - linters: [gocritic]
+        text: "hugeParam"
+        path: cmd/lockfile-update/commit.go
     paths:
       - third_party$
       - builtin$
