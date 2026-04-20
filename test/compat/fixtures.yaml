@@ -5,37 +5,37 @@
 
 fixtures:
   - name: bare
-    php-version: "8.4"
-    extensions: ""
-    ini-values: ""
-    coverage: "none"
+    php-version: '8.4'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
 
   - name: exclusion
-    php-version: "8.4"
-    extensions: ":opcache"
-    ini-values: ""
-    coverage: "none"
+    php-version: '8.4'
+    extensions: ':opcache'
+    ini-values: ''
+    coverage: 'none'
 
   - name: ini-and-coverage
-    php-version: "8.4"
-    extensions: ""
-    ini-values: "memory_limit=256M,date.timezone=UTC"
-    coverage: "xdebug"
+    php-version: '8.4'
+    extensions: ''
+    ini-values: 'memory_limit=256M,date.timezone=UTC'
+    coverage: 'xdebug'
 
   - name: multi-ext
-    php-version: "8.4"
-    extensions: "redis, xdebug"
-    ini-values: ""
-    coverage: "none"
+    php-version: '8.4'
+    extensions: 'redis, xdebug'
+    ini-values: ''
+    coverage: 'none'
 
   - name: none-reset
-    php-version: "8.4"
-    extensions: "none, redis"
-    ini-values: ""
-    coverage: "none"
+    php-version: '8.4'
+    extensions: 'none, redis'
+    ini-values: ''
+    coverage: 'none'
 
   - name: single-ext
-    php-version: "8.4"
-    extensions: "redis"
-    ini-values: ""
-    coverage: "none"
+    php-version: '8.4'
+    extensions: 'redis'
+    ini-values: ''
+    coverage: 'none'
