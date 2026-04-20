@@ -21,6 +21,7 @@ node_modules/
 *.swp
 *.swo
 docs/superpowers/plans
+.worktrees/
 
 # OS
 .DS_Store
