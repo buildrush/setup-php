@@ -117,6 +117,26 @@ func SelectBaseIniFile(layout *Layout, filename string) error {
 	return os.WriteFile(layout.IniFile, data, 0o600)
 }
 
+// MergeCompatLayers returns a single ini-key map composed of (lower-precedence
+// first): defaults → xdebug fragment → extra. Callers pass the result as the
+// `defaults` argument to WriteIniValuesWithDefaults, which then layers user
+// ini-values over the top. Any of the inputs may be nil.
+//
+// The returned map is always non-nil (may be empty).
+func MergeCompatLayers(defaults, xdebugFragment, extra map[string]string) map[string]string {
+	merged := make(map[string]string, len(defaults)+len(xdebugFragment)+len(extra))
+	for k, v := range defaults {
+		merged[k] = v
+	}
+	for k, v := range xdebugFragment {
+		merged[k] = v
+	}
+	for k, v := range extra {
+		merged[k] = v
+	}
+	return merged
+}
+
 // WriteDisableExtension writes a conf.d fragment that documents and enforces
 // non-loading of the named extension. The "00-" filename prefix makes it sort
 // before extension-loading fragments (this codebase writes them as plain
