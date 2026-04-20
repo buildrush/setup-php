@@ -78,6 +78,7 @@ jobs:
           extensions: ${{ matrix.extensions }}
           ini-values: ${{ matrix.ini-values }}
           coverage: ${{ matrix.coverage }}
+          ini-file: ${{ matrix['ini-file'] }}
 
       - name: Probe
         run: |
@@ -116,6 +117,7 @@ jobs:
           extensions: ${{ matrix.extensions }}
           ini-values: ${{ matrix.ini-values }}
           coverage: ${{ matrix.coverage }}
+          ini-file: ${{ matrix['ini-file'] }}
 
       - name: Probe
         run: |
