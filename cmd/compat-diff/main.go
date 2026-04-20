@@ -41,17 +41,17 @@ func parseFlags(args []string, stderr *os.File) (parsed cliArgs, exitCode int) {
 func run(args cliArgs, stdout, stderr *os.File) int {
 	ours, err := readProbe(args.ours)
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "::error::%v\n", err)
+		_, _ = fmt.Fprintf(stderr, "::error::fixture=%s %v\n", args.fixture, err)
 		return exitMalformed
 	}
 	theirs, err := readProbe(args.theirs)
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "::error::%v\n", err)
+		_, _ = fmt.Fprintf(stderr, "::error::fixture=%s %v\n", args.fixture, err)
 		return exitMalformed
 	}
 	al, err := loadAllowlist(args.allowlist)
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "::error::%v\n", err)
+		_, _ = fmt.Fprintf(stderr, "::error::fixture=%s %v\n", args.fixture, err)
 		return exitMalformed
 	}
 	diffs := diffProbes(&ours, &theirs, al, args.fixture)
@@ -61,7 +61,7 @@ func run(args cliArgs, stdout, stderr *os.File) int {
 	}
 	_, _ = fmt.Fprintf(stdout, "compat-diff: fixture=%s FAIL (%d unexplained deviation(s))\n", args.fixture, len(diffs))
 	for _, d := range diffs {
-		_, _ = fmt.Fprintf(stdout, "::error::fixture=%s path=%s ours=%s theirs=%s\n",
+		_, _ = fmt.Fprintf(stderr, "::error::fixture=%s path=%s ours=%s theirs=%s\n",
 			args.fixture, d.Path, d.Ours, d.Theirs)
 	}
 	return exitDiff

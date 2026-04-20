@@ -250,3 +250,58 @@ func TestRunDiffUnit(t *testing.T) {
 		t.Fatalf("run code = %d, want %d", code, exitDiff)
 	}
 }
+
+func TestRunDiffAnnotationsToStderr(t *testing.T) {
+	tdata, err := filepath.Abs("testdata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpdir := t.TempDir()
+	stdoutFile, err := os.Create(filepath.Join(tmpdir, "stdout"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdoutFile.Close()
+	stderrFile, err := os.Create(filepath.Join(tmpdir, "stderr"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stderrFile.Close()
+
+	args := cliArgs{
+		ours:      filepath.Join(tdata, "probe-bare.json"),
+		theirs:    filepath.Join(tdata, "probe-bare-ini-shift.json"),
+		allowlist: filepath.Join(tdata, "compat-matrix-empty.md"),
+		fixture:   "bare",
+	}
+	code := run(args, stdoutFile, stderrFile)
+	if code != exitDiff {
+		t.Fatalf("run code = %d, want %d", code, exitDiff)
+	}
+
+	// Read back the files
+	stdoutBytes, err := os.ReadFile(stdoutFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderrBytes, err := os.ReadFile(stderrFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stdout := string(stdoutBytes)
+	stderr := string(stderrBytes)
+
+	if !strings.Contains(stderr, "::error::") {
+		t.Errorf("expected ::error:: annotation in stderr, got: %s", stderr)
+	}
+	if strings.Contains(stdout, "::error::") {
+		t.Errorf("unexpected ::error:: annotation in stdout, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "compat-diff: fixture=bare FAIL") {
+		t.Errorf("expected summary line in stdout, got: %s", stdout)
+	}
+	if !strings.Contains(stderr, "fixture=bare") {
+		t.Errorf("expected fixture name in stderr error annotation, got: %s", stderr)
+	}
+}
