@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v6
       - id: load
         run: |
-          matrix=$(yq -o=json '{include: .fixtures}' test/compat/fixtures.yaml)
+          matrix=$(yq -o=json '.fixtures' test/compat/fixtures.yaml | jq -c '{include: .}')
           {
             echo "matrix<<EOF"
             echo "$matrix"
