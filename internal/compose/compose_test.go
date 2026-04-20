@@ -145,6 +145,80 @@ func TestWriteDisableExtension(t *testing.T) {
 	}
 }
 
+func TestSelectBaseIniFile_Production(t *testing.T) {
+	root := t.TempDir()
+	tmpl := filepath.Join(root, "share", "php", "ini")
+	lib := filepath.Join(root, "lib")
+	if err := os.MkdirAll(tmpl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(lib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpl, "php.ini-production"), []byte("; production\ndisplay_errors=Off\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	layout := &Layout{
+		IniTemplateDir: tmpl,
+		IniFile:        filepath.Join(lib, "php.ini"),
+	}
+	if err := SelectBaseIniFile(layout, "php.ini-production"); err != nil {
+		t.Fatalf("SelectBaseIniFile: %v", err)
+	}
+	got, err := os.ReadFile(layout.IniFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "; production\ndisplay_errors=Off\n" {
+		t.Errorf("effective php.ini = %q", string(got))
+	}
+}
+
+func TestSelectBaseIniFile_None(t *testing.T) {
+	root := t.TempDir()
+	lib := filepath.Join(root, "lib")
+	if err := os.MkdirAll(lib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	layout := &Layout{
+		IniTemplateDir: filepath.Join(root, "share", "php", "ini"), // does not exist; must not matter
+		IniFile:        filepath.Join(lib, "php.ini"),
+	}
+	if err := SelectBaseIniFile(layout, ""); err != nil {
+		t.Fatalf("SelectBaseIniFile(\"\"): %v", err)
+	}
+	info, err := os.Stat(layout.IniFile)
+	if err != nil {
+		t.Fatalf("effective php.ini missing after `none`: %v", err)
+	}
+	if info.Size() != 0 {
+		t.Errorf("effective php.ini not empty: size=%d", info.Size())
+	}
+}
+
+func TestSelectBaseIniFile_MissingSourceFails(t *testing.T) {
+	root := t.TempDir()
+	tmpl := filepath.Join(root, "share", "php", "ini")
+	lib := filepath.Join(root, "lib")
+	if err := os.MkdirAll(tmpl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(lib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	layout := &Layout{
+		IniTemplateDir: tmpl,
+		IniFile:        filepath.Join(lib, "php.ini"),
+	}
+	err := SelectBaseIniFile(layout, "php.ini-production")
+	if err == nil {
+		t.Fatal("expected error for missing source, got nil")
+	}
+	if !strings.Contains(err.Error(), "php.ini-production") {
+		t.Errorf("error does not mention filename: %v", err)
+	}
+}
+
 func TestCompose(t *testing.T) {
 	dir := t.TempDir()
 	extDir := filepath.Join(dir, "ext")

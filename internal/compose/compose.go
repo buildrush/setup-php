@@ -11,11 +11,13 @@ import (
 )
 
 type Layout struct {
-	RootDir      string
-	BinDir       string
-	ExtensionDir string
-	ConfDir      string
-	IncludeDir   string
+	RootDir        string
+	BinDir         string
+	ExtensionDir   string
+	ConfDir        string
+	IncludeDir     string
+	IniTemplateDir string // <bundle>/usr/local/share/php/ini
+	IniFile        string // <bundle>/usr/local/lib/php.ini (written by SelectBaseIniFile)
 }
 
 type ExtensionComposition struct {
@@ -94,6 +96,25 @@ func WriteIniValuesWithDefaults(confDir string, defaults map[string]string, user
 
 	path := filepath.Join(confDir, "99-user.ini")
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
+}
+
+// SelectBaseIniFile copies the bundle's upstream php.ini-{production,development}
+// template to the effective php.ini location named by layout.IniFile. An empty
+// filename means `ini-file: none` — the target is written empty.
+//
+// Returns an error if the named source file is not found in layout.IniTemplateDir
+// (which would indicate a builder regression since Task 5 guarantees both files
+// are present in every bundle).
+func SelectBaseIniFile(layout *Layout, filename string) error {
+	if filename == "" {
+		return os.WriteFile(layout.IniFile, nil, 0o600)
+	}
+	src := filepath.Join(layout.IniTemplateDir, filename)
+	data, err := os.ReadFile(src) //nolint:gosec // src is composed from layout.IniTemplateDir (runtime-owned, not user input) + a value from compat.BaseIniFileName (closed set)
+	if err != nil {
+		return fmt.Errorf("read base ini template %s: %w", filename, err)
+	}
+	return os.WriteFile(layout.IniFile, data, 0o600)
 }
 
 // WriteDisableExtension writes a conf.d fragment that documents and enforces
