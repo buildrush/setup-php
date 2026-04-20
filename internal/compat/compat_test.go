@@ -172,6 +172,36 @@ func TestBundledExtensionsUnknownVersion(t *testing.T) {
 	}
 }
 
+func TestBaseIniFileName(t *testing.T) {
+	cases := []struct {
+		input    string
+		want     string
+		wantWarn bool
+	}{
+		{"production", "php.ini-production", false},
+		{"development", "php.ini-development", false},
+		{"none", "", false},
+		{"php.ini-production", "php.ini-production", false},
+		{"php.ini-development", "php.ini-development", false},
+		{"", "php.ini-production", false},       // default
+		{"garbage", "php.ini-production", true}, // fallback with warning
+	}
+	for _, tc := range cases {
+		t.Run(tc.input, func(t *testing.T) {
+			got, warn := BaseIniFileName(tc.input)
+			if got != tc.want {
+				t.Errorf("BaseIniFileName(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+			if (warn != "") != tc.wantWarn {
+				t.Errorf("BaseIniFileName(%q) warn = %q, wantWarn=%v", tc.input, warn, tc.wantWarn)
+			}
+			if tc.wantWarn && !strings.HasPrefix(warn, "::warning::") {
+				t.Errorf("BaseIniFileName(%q) warn missing ::warning:: prefix: %q", tc.input, warn)
+			}
+		})
+	}
+}
+
 // readGoldenLines reads testdata/<name>, strips blank lines and # comments,
 // returns the remaining non-empty lines in file order.
 func readGoldenLines(t *testing.T, name string) []string {

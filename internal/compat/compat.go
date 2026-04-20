@@ -58,6 +58,29 @@ func UnimplementedInputWarning(inputName, value string) string {
 	)
 }
 
+// BaseIniFileName maps the user-facing `ini-file` input to the upstream PHP
+// source file name stored under share/php/ini/ in the core bundle. Returns
+// ("", "") for "none" (effective php.ini is written empty). Any value that
+// isn't one of the five v2 aliases falls back to production and returns a
+// ::warning:: line.
+//
+// Data source: docs/compat-matrix.md §1.1 note on parseIniFile (src/utils.ts L88-97).
+func BaseIniFileName(iniFile string) (filename, warning string) {
+	switch iniFile {
+	case "", "production", "php.ini-production":
+		return "php.ini-production", ""
+	case "development", "php.ini-development":
+		return "php.ini-development", ""
+	case "none":
+		return "", ""
+	default:
+		return "php.ini-production", fmt.Sprintf(
+			"::warning::input 'ini-file=%s' is not a recognized value; falling back to production",
+			iniFile,
+		)
+	}
+}
+
 // DefaultIniValues returns the ini key/value pairs that shivammathur/setup-php@v2
 // sets on Linux runners by default, before any user-supplied ini-values. The
 // caller merges the user values over the top so users can still override.
