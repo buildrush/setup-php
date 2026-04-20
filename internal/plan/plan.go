@@ -16,6 +16,7 @@ type Plan struct {
 	ExtensionsExclude []string
 	ExtensionsReset   bool
 	IniValues         []IniValue
+	ExtraIni          map[string]string // populated by ApplyCoverage; merged into conf.d overlay after DefaultIniValues, before user IniValues
 	Coverage          CoverageDriver
 	Tools             []string
 	ThreadSafety      string
@@ -156,24 +157,43 @@ func ParsePHPVersionFile(path string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-// ApplyCoverage adds the requested coverage driver (xdebug or pcov) to the
-// extensions list so it is resolved, fetched, and composed like any other
-// extension. "none" is a no-op.
+// ApplyCoverage applies v2's `coverage:` input side-effects (compat-matrix §5.6–5.8):
+//   - coverage: xdebug → add xdebug, exclude pcov
+//   - coverage: pcov   → add pcov,   exclude xdebug, set pcov.enabled=1 in ExtraIni
+//   - coverage: none   → exclude both xdebug and pcov (no-op if neither was requested)
+//
+// Exclusion is additive: a user's explicit `extensions: xdebug` followed by
+// `coverage: pcov` will disable xdebug (matches v2, whose disable_extension
+// runs last). Idempotent — calling twice is safe.
 func (p *Plan) ApplyCoverage() {
-	var driver string
+	add := func(name string) {
+		if !slices.Contains(p.Extensions, name) {
+			p.Extensions = append(p.Extensions, name)
+			sort.Strings(p.Extensions)
+		}
+	}
+	excludeDriver := func(name string) {
+		if !slices.Contains(p.ExtensionsExclude, name) {
+			p.ExtensionsExclude = append(p.ExtensionsExclude, name)
+			sort.Strings(p.ExtensionsExclude)
+		}
+	}
+
 	switch p.Coverage {
 	case CoverageXdebug:
-		driver = "xdebug"
+		add("xdebug")
+		excludeDriver("pcov")
 	case CoveragePCOV:
-		driver = "pcov"
-	default:
-		return
+		add("pcov")
+		excludeDriver("xdebug")
+		if p.ExtraIni == nil {
+			p.ExtraIni = map[string]string{}
+		}
+		p.ExtraIni["pcov.enabled"] = "1"
+	case CoverageNone:
+		excludeDriver("xdebug")
+		excludeDriver("pcov")
 	}
-	if slices.Contains(p.Extensions, driver) {
-		return
-	}
-	p.Extensions = append(p.Extensions, driver)
-	sort.Strings(p.Extensions)
 }
 
 func (p *Plan) Hash() string {
