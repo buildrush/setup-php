@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -197,6 +198,31 @@ func TestBaseIniFileName(t *testing.T) {
 			}
 			if tc.wantWarn && !strings.HasPrefix(warn, "::warning::") {
 				t.Errorf("BaseIniFileName(%q) warn missing ::warning:: prefix: %q", tc.input, warn)
+			}
+		})
+	}
+}
+
+func TestXdebugIniFragment(t *testing.T) {
+	cases := []struct {
+		php  string
+		want map[string]string
+	}{
+		{"8.4", map[string]string{"xdebug.mode": "coverage"}},
+		{"8.4.5", map[string]string{"xdebug.mode": "coverage"}},
+		{"8.0", map[string]string{"xdebug.mode": "coverage"}},
+		{"8.9.99", map[string]string{"xdebug.mode": "coverage"}},
+		{"7.4", map[string]string{"xdebug.mode": "coverage"}},
+		{"7.2", map[string]string{"xdebug.mode": "coverage"}},
+		{"7.1", nil}, // outside xdebug3_versions
+		{"9.0", nil}, // outside xdebug3_versions
+		{"", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.php, func(t *testing.T) {
+			got := XdebugIniFragment(tc.php)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("XdebugIniFragment(%q) = %v, want %v", tc.php, got, tc.want)
 			}
 		})
 	}

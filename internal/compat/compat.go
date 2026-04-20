@@ -162,6 +162,33 @@ func OurBuildBundledExtras(phpVersion string) []string {
 	}
 }
 
+// XdebugIniFragment returns the ini key/value pairs from v2's xdebug.ini when
+// xdebug3 is active for the requested PHP version (matches regex 7.[2-4]|8.[0-9]
+// per docs/compat-matrix.md §2.2). Returns nil for any other version.
+//
+// v2 writes this fragment even when xdebug is not installed; PHP ignores ini
+// keys for unloaded extensions, so it's a no-op in that case. We only layer it
+// when xdebug is actually in the resolved extension set (checked by the
+// caller), which matches the end-state ini values v2 produces.
+func XdebugIniFragment(phpVersion string) map[string]string {
+	m := minorOf(phpVersion)
+	if !xdebug3Supported(m) {
+		return nil
+	}
+	return map[string]string{"xdebug.mode": "coverage"}
+}
+
+func xdebug3Supported(minor string) bool {
+	// Matches 7.[2-4] | 8.[0-9]
+	switch minor {
+	case "7.2", "7.3", "7.4":
+		return true
+	case "8.0", "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8", "8.9":
+		return true
+	}
+	return false
+}
+
 // Per-version bundled extension lists. Order matches the native `php -m`
 // output captured in the audit (see docs/compat-matrix.md §3.x and the
 // matching testdata/bundled_extensions_<ver>.golden file).
