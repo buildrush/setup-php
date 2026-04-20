@@ -506,5 +506,30 @@ deviations:
     kind: ignore
     reason: 'php.ini-production default; pending post-merge harness confirmation'
     fixtures: ['*']
+
+  # xdebug.mode / start_with_request on multi-ext: v2's apt xdebug install is
+  # not reliably loaded on ubuntu-24.04 runners, so theirs often reports empty
+  # for both keys. Our xdebug 3.5.1 loads cleanly from the PECL bundle; when
+  # loaded without coverage: driving the install, xdebug sets start_with_request
+  # to its compile-time default ("default"). This divergence is inherent to
+  # v2's best-effort extension install — not fixable on our side.
+  - path: ini.xdebug.mode
+    kind: ignore
+    reason: 'v2 apt xdebug install unreliable on ubuntu-24.04; theirs often unloaded'
+    fixtures: ['multi-ext']
+  - path: ini.xdebug.start_with_request
+    kind: ignore
+    reason: 'xdebug version-default drift (v2 apt unreliable; ours = xdebug 3.5.1 default)'
+    fixtures: ['multi-ext']
+
+  # disable_functions: Ondrej's php8.4-cli Debian package patches
+  # php.ini-development to blacklist all pcntl_* functions (CI hardening).
+  # Our source-built PHP uses the stock upstream php.ini-development which
+  # has disable_functions= empty. Replicating Ondrej's patch set is out of
+  # scope.
+  - path: ini.disable_functions
+    kind: ignore
+    reason: 'Ondrej Debian patch on php.ini-development adds pcntl_* blacklist; stock upstream does not'
+    fixtures: ['ini-file-development']
 ```
 <!-- compat-harness:deviations:end -->
