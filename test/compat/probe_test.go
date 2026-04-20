@@ -21,8 +21,6 @@ func TestProbeBasic(t *testing.T) {
 	}
 	probe := filepath.Join(repoRoot, "test", "compat", "probe.sh")
 	stubSrc := filepath.Join(repoRoot, "test", "compat", "testdata", "probe", "stub-php.sh")
-	envBefore := filepath.Join(repoRoot, "test", "compat", "testdata", "probe", "env-before")
-	pathBefore := filepath.Join(repoRoot, "test", "compat", "testdata", "probe", "path-before")
 	iniKeys := filepath.Join(repoRoot, "test", "compat", "ini-keys.txt")
 	goldenPath := filepath.Join(repoRoot, "test", "compat", "testdata", "probe", "golden-basic.json")
 
@@ -35,9 +33,22 @@ func TestProbeBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	envBefore := filepath.Join(tmp, "env-before")
+	pathBefore := filepath.Join(tmp, "path-before")
+	if err := os.WriteFile(envBefore, []byte("HOME=/home/runner\nEXISTING_VAR=one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(pathBefore, []byte(binDir+":/usr/bin:/bin"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	outPath := filepath.Join(tmp, "out.json")
 	cmd := exec.Command("bash", probe, outPath, envBefore, pathBefore, iniKeys)
-	cmd.Env = append(os.Environ(), "PATH="+binDir+":/usr/bin:/bin")
+	cmd.Env = []string{
+		"PATH=" + binDir + ":/usr/bin:/bin",
+		"HOME=/home/runner",
+		"EXISTING_VAR=one",
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("probe: %v\n%s", err, out)
@@ -115,5 +126,64 @@ func TestProbeEscapesControlChars(t *testing.T) {
 	want := "eval\nexec"
 	if disabled != want {
 		t.Fatalf("disable_functions: got %q, want %q", disabled, want)
+	}
+}
+
+func TestProbeEnvAndPathDeltas(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("probe.sh is bash-only")
+	}
+	tmp := t.TempDir()
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := filepath.Join(repoRoot, "test", "compat", "probe.sh")
+	stubSrc := filepath.Join(repoRoot, "test", "compat", "testdata", "probe", "stub-php.sh")
+	iniKeys := filepath.Join(repoRoot, "test", "compat", "ini-keys.txt")
+
+	binDir := filepath.Join(tmp, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	phpBin := filepath.Join(binDir, "php")
+	if err := copyFile(stubSrc, phpBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Synthesize "before" snapshots where the probe's current env/PATH differs.
+	envBefore := filepath.Join(tmp, "env-before")
+	pathBefore := filepath.Join(tmp, "path-before")
+	// binDir must be in the "before" PATH, so it is NOT counted as an addition.
+	if err := os.WriteFile(pathBefore, []byte(binDir+":/usr/bin:/bin"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(envBefore, []byte("HOME=/x\nEXISTING_VAR=one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outPath := filepath.Join(tmp, "out.json")
+	cmd := exec.Command("bash", probe, outPath, envBefore, pathBefore, iniKeys)
+	cmd.Env = []string{
+		"PATH=" + binDir + ":/opt/hostedtoolcache/PHP/8.4.5/x64:/usr/bin:/bin",
+		"HOME=/x",
+		"EXISTING_VAR=one",
+		"PHP_INI_SCAN_DIR=/etc/php/conf.d",
+		"SETUP_PHP_TOOL_CACHE_DIR=/tmp",
+	}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("probe: %v\n%s", err, out)
+	}
+	got := readJSON(t, outPath)
+
+	wantEnvDelta := []any{"PHP_INI_SCAN_DIR", "SETUP_PHP_TOOL_CACHE_DIR"}
+	if !reflect.DeepEqual(got["env_delta"], wantEnvDelta) {
+		t.Errorf("env_delta: got %v, want %v", got["env_delta"], wantEnvDelta)
+	}
+
+	wantPathAdditions := []any{"<PHP_ROOT>/x64"}
+	if !reflect.DeepEqual(got["path_additions"], wantPathAdditions) {
+		t.Errorf("path_additions: got %v, want %v", got["path_additions"], wantPathAdditions)
 	}
 }

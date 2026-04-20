@@ -49,9 +49,37 @@ while IFS= read -r key; do
   ini_pairs+="\"${key}\":\"${esc}\""
 done < <(LC_ALL=C sort -u "$ini_keys_file")
 
-# env_delta and path_additions: not wired in this task — empty arrays.
-env_delta_csv=""
-path_additions_csv=""
+# env_delta: names only. Compare current env names against the env-before snapshot,
+# filtering out bash-internal/auto-set vars so the delta reflects what setup-php
+# added, not noise from the shell.
+bash_internal_vars='^(PATH|PWD|OLDPWD|SHLVL|IFS|PS1|PS2|PS4|OPTIND|BASH|BASH_VERSION|BASH_VERSINFO|BASH_ENV|BASHOPTS|SHELLOPTS|HOSTNAME|HOSTTYPE|OSTYPE|MACHTYPE|UID|EUID|PPID|LINENO|RANDOM|SECONDS|_)$'
+
+current_env_names="$(env | awk -F= '{print $1}' | LC_ALL=C sort -u | grep -vE "$bash_internal_vars" || true)"
+before_env_names="$(awk -F= '{print $1}' "$env_before" | LC_ALL=C sort -u)"
+env_added="$(comm -23 <(printf "%s\n" "$current_env_names") <(printf "%s\n" "$before_env_names"))"
+env_delta_csv="$(
+  printf "%s" "$env_added" \
+    | awk 'BEGIN { first=1 } NF { if (first) { printf "\"%s\"", $1; first=0 } else { printf ",\"%s\"", $1 } }'
+)"
+
+# path_additions: diff current PATH entries vs path-before, normalize PHP tool-cache paths.
+normalize_path_entry() {
+  # Replace .../PHP/X.Y(.Z)?/<suffix> with <PHP_ROOT>/<suffix>
+  echo "$1" | sed -E 's#^.*/PHP/[0-9]+\.[0-9]+(\.[0-9]+)?/#<PHP_ROOT>/#'
+}
+
+before_entries="$(tr ':' '\n' < "$path_before" | LC_ALL=C sort -u)"
+current_entries="$(printf "%s" "$PATH" | tr ':' '\n' | LC_ALL=C sort -u)"
+path_added="$(comm -23 <(printf "%s\n" "$current_entries") <(printf "%s\n" "$before_entries"))"
+
+path_additions_csv="$(
+  while IFS= read -r entry; do
+    [[ -z "$entry" ]] && continue
+    normalize_path_entry "$entry"
+  done <<<"$path_added" \
+  | LC_ALL=C sort -u \
+  | awk 'BEGIN { first=1 } NF { if (first) { printf "\"%s\"", $1; first=0 } else { printf ",\"%s\"", $1 } }'
+)"
 
 cat >"$out" <<JSON
 {
@@ -64,6 +92,3 @@ cat >"$out" <<JSON
   "path_additions": [${path_additions_csv}]
 }
 JSON
-
-# Silence unused-for-now inputs.
-: "${env_before}" "${path_before}"
