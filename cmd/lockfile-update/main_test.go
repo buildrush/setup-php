@@ -1,7 +1,9 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/buildrush/setup-php/internal/lockfile"
 )
@@ -58,5 +60,80 @@ func TestSplitAbi(t *testing.T) {
 			t.Errorf("splitAbi(%q) = (%q, %q, %v), want (%q, %q, %v)",
 				tt.in, m, ts, ok, tt.wantMinor, tt.wantTS, tt.wantOK)
 		}
+	}
+}
+
+func TestPreserveGeneratedAtIfUnchanged_SameBundles(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bundles.lock")
+
+	old := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	existing := &lockfile.Lockfile{
+		SchemaVersion: 2,
+		GeneratedAt:   old,
+		Bundles: map[lockfile.BundleKey]lockfile.Entry{
+			"php:8.4:linux:x86_64:nts": {Digest: "sha256:aaa", SpecHash: "sha256:hhh"},
+		},
+	}
+	if err := existing.Write(path); err != nil {
+		t.Fatalf("write existing: %v", err)
+	}
+
+	newer := &lockfile.Lockfile{
+		SchemaVersion: 2,
+		GeneratedAt:   time.Now().UTC(),
+		Bundles: map[lockfile.BundleKey]lockfile.Entry{
+			"php:8.4:linux:x86_64:nts": {Digest: "sha256:aaa", SpecHash: "sha256:hhh"},
+		},
+	}
+	preserveGeneratedAtIfUnchanged(newer, path)
+	if !newer.GeneratedAt.Equal(old) {
+		t.Errorf("GeneratedAt = %v, want preserved %v", newer.GeneratedAt, old)
+	}
+}
+
+func TestPreserveGeneratedAtIfUnchanged_DifferentBundles(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bundles.lock")
+
+	old := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	existing := &lockfile.Lockfile{
+		SchemaVersion: 2,
+		GeneratedAt:   old,
+		Bundles: map[lockfile.BundleKey]lockfile.Entry{
+			"php:8.4:linux:x86_64:nts": {Digest: "sha256:aaa", SpecHash: "sha256:hhh"},
+		},
+	}
+	if err := existing.Write(path); err != nil {
+		t.Fatalf("write existing: %v", err)
+	}
+
+	fresh := time.Now().UTC()
+	newer := &lockfile.Lockfile{
+		SchemaVersion: 2,
+		GeneratedAt:   fresh,
+		Bundles: map[lockfile.BundleKey]lockfile.Entry{
+			"php:8.4:linux:x86_64:nts": {Digest: "sha256:NEW", SpecHash: "sha256:hhh"},
+		},
+	}
+	preserveGeneratedAtIfUnchanged(newer, path)
+	if !newer.GeneratedAt.Equal(fresh) {
+		t.Errorf("GeneratedAt = %v, want fresh %v (bundles differ, must re-stamp)", newer.GeneratedAt, fresh)
+	}
+}
+
+func TestPreserveGeneratedAtIfUnchanged_MissingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "does-not-exist.lock")
+
+	fresh := time.Now().UTC()
+	newer := &lockfile.Lockfile{
+		SchemaVersion: 2,
+		GeneratedAt:   fresh,
+		Bundles:       map[lockfile.BundleKey]lockfile.Entry{},
+	}
+	preserveGeneratedAtIfUnchanged(newer, path)
+	if !newer.GeneratedAt.Equal(fresh) {
+		t.Errorf("GeneratedAt = %v, want fresh %v (no existing file, keep what we built)", newer.GeneratedAt, fresh)
 	}
 }
