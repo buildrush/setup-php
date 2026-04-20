@@ -229,6 +229,35 @@ func TestXdebugIniFragment(t *testing.T) {
 	}
 }
 
+func TestDefaultIniValues_PHP8xOpcacheJIT(t *testing.T) {
+	for _, php := range []string{"8.0", "8.1", "8.2", "8.3", "8.4", "8.5", "8.4.5", "8.9"} {
+		t.Run(php, func(t *testing.T) {
+			got := DefaultIniValues(php)
+			want := map[string]string{
+				"date.timezone":           "UTC",
+				"memory_limit":            "-1",
+				"opcache.enable":          "1",
+				"opcache.jit":             "1235",
+				"opcache.jit_buffer_size": "256M",
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("DefaultIniValues(%q) = %v, want %v", php, got, want)
+			}
+		})
+	}
+}
+
+func TestDefaultIniValues_NonPHP8(t *testing.T) {
+	got := DefaultIniValues("7.4")
+	want := map[string]string{
+		"date.timezone": "UTC",
+		"memory_limit":  "-1",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("DefaultIniValues(7.4) = %v, want %v", got, want)
+	}
+}
+
 // readGoldenLines reads testdata/<name>, strips blank lines and # comments,
 // returns the remaining non-empty lines in file order.
 func readGoldenLines(t *testing.T, name string) []string {
