@@ -2,6 +2,7 @@ package compose
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -125,15 +126,9 @@ func SelectBaseIniFile(layout *Layout, filename string) error {
 // The returned map is always non-nil (may be empty).
 func MergeCompatLayers(defaults, xdebugFragment, extra map[string]string) map[string]string {
 	merged := make(map[string]string, len(defaults)+len(xdebugFragment)+len(extra))
-	for k, v := range defaults {
-		merged[k] = v
-	}
-	for k, v := range xdebugFragment {
-		merged[k] = v
-	}
-	for k, v := range extra {
-		merged[k] = v
-	}
+	maps.Copy(merged, defaults)
+	maps.Copy(merged, xdebugFragment)
+	maps.Copy(merged, extra)
 	return merged
 }
 
