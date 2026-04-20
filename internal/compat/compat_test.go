@@ -199,6 +199,15 @@ func TestBaseIniFileName(t *testing.T) {
 			if tc.wantWarn && !strings.HasPrefix(warn, "::warning::") {
 				t.Errorf("BaseIniFileName(%q) warn missing ::warning:: prefix: %q", tc.input, warn)
 			}
+			// Full warning-text assertion for the garbage case — locks the format so
+			// future changes to BaseIniFileName's warning phrasing force a deliberate
+			// test update.
+			if tc.input == "garbage" {
+				wantWarn := "::warning::input 'ini-file=garbage' is not a recognized value; falling back to production"
+				if warn != wantWarn {
+					t.Errorf("BaseIniFileName(garbage) warn = %q, want %q", warn, wantWarn)
+				}
+			}
 		})
 	}
 }
