@@ -142,6 +142,17 @@ func main() {
 		log.Fatalf("fetch bundles: %v", err)
 	}
 
+	// Assert each bundle's sidecar schema_version meets the runtime's
+	// per-kind minimum. Fails fast with a clear diagnostic before any
+	// extract/compose work starts.
+	for i := range results {
+		kind := results[i].Metadata.Kind
+		actual := results[i].Metadata.SchemaVersion
+		if err := compose.AssertBundleSchema(kind, actual); err != nil {
+			log.Fatalf("bundle %s: %v", results[i].Key, err)
+		}
+	}
+
 	// 7. Extract
 	baseDir := "/opt/buildrush"
 	if dir := os.Getenv("BUILDRUSH_DIR"); dir != "" {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/buildrush/setup-php/internal/plan"
+	"github.com/buildrush/setup-php/internal/version"
 )
 
 type Layout struct {
@@ -144,4 +145,21 @@ func WriteDisableExtension(confDir, extName string) error {
 	path := filepath.Join(confDir, fmt.Sprintf("00-disable-%s.ini", extName))
 	content := fmt.Sprintf("; disabled by extensions: :%s\n; extension=%s\n", extName, extName)
 	return os.WriteFile(path, []byte(content), 0o600)
+}
+
+// AssertBundleSchema ensures the bundle's sidecar schema_version meets
+// the runtime's minimum for this kind. A mismatch indicates the bundle
+// was built before a runtime feature that now asserts on its contents
+// (e.g. the php-core share/php/ini/ requirement introduced in the
+// Phase-2 compat closeout, PR #28). Returns a clear error identifying
+// both the kind and the required/actual versions so CI and local
+// diagnostics are unambiguous. Unknown kinds have minimum 0 and always
+// pass.
+func AssertBundleSchema(kind string, actual int) error {
+	minReq := version.MinBundleSchema(kind)
+	if actual >= minReq {
+		return nil
+	}
+	return fmt.Errorf("bundle %s has schema_version=%d; runtime requires >= %d (see docs/bundle-schema-changelog.md)",
+		kind, actual, minReq)
 }

@@ -6,8 +6,24 @@ set -euo pipefail
 
 BUNDLE_NAME="${1:?Usage: run.sh <bundle-name> [<bundle-dir>]}"
 BUNDLE_DIR="${2:-/tmp/smoke}"
+META_PATH="${META_PATH:-/tmp/meta.json}"
 
 echo "Running smoke tests for ${BUNDLE_NAME}"
+
+# Assert the sidecar carries the new schema_version + kind fields. The
+# builder's pack-bundle.sh always emits them; missing fields mean a stale
+# or hand-crafted bundle.
+if [ -f "${META_PATH}" ]; then
+  if ! grep -q '"schema_version"' "${META_PATH}"; then
+    echo "smoke: meta.json missing schema_version" >&2
+    exit 1
+  fi
+  if ! grep -q '"kind"' "${META_PATH}"; then
+    echo "smoke: meta.json missing kind" >&2
+    exit 1
+  fi
+  echo "smoke: sidecar schema_version and kind present"
+fi
 
 case "$BUNDLE_NAME" in
   php)

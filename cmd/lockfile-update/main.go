@@ -52,6 +52,7 @@ func main() {
 		log.Fatalf("create OCI client: %v", err)
 	}
 
+	// Hash builder scripts and schema version file
 	builderHashPHP, err := planner.HashFile(filepath.Join("builders", "linux", "build-php.sh"))
 	if err != nil {
 		log.Fatalf("hash php builder: %v", err)
@@ -60,6 +61,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("hash ext builder: %v", err)
 	}
+	schemaEnvHash, err := planner.HashFile(filepath.Join("builders", "common", "bundle-schema-version.env"))
+	if err != nil {
+		log.Fatalf("hash schema env: %v", err)
+	}
+	builderHashPHP = builderHashPHP + ":" + schemaEnvHash
+	builderHashExt = builderHashExt + ":" + schemaEnvHash
 
 	var resolved []resolvedEntry
 

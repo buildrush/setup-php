@@ -117,4 +117,4 @@ echo "::endgroup::"
 echo "PHP ${PHP_VERSION} built successfully"
 
 # Pack the bundle
-"${WORKSPACE}/builders/common/pack-bundle.sh" "$OUTPUT_DIR" /tmp/bundle.tar.zst
+"${WORKSPACE}/builders/common/pack-bundle.sh" php-core "$OUTPUT_DIR" /tmp/bundle.tar.zst

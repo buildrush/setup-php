@@ -313,3 +313,33 @@ func TestCompose(t *testing.T) {
 		t.Error("redis.ini should exist")
 	}
 }
+
+func TestAssertBundleSchema_BlocksBelowMinimum(t *testing.T) {
+	err := AssertBundleSchema("php-core", 0) // synthetic bundle below min
+	if err == nil {
+		t.Fatal("expected error when schema below minimum, got nil")
+	}
+	if !strings.Contains(err.Error(), "schema_version") {
+		t.Errorf("error must mention schema_version, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "php-core") {
+		t.Errorf("error must mention the kind (php-core), got: %v", err)
+	}
+}
+
+func TestAssertBundleSchema_AllowsAtOrAboveMinimum(t *testing.T) {
+	if err := AssertBundleSchema("php-core", 2); err != nil {
+		t.Errorf("expected nil at exact min, got %v", err)
+	}
+	if err := AssertBundleSchema("php-core", 99); err != nil {
+		t.Errorf("expected nil above min, got %v", err)
+	}
+}
+
+func TestAssertBundleSchema_UnknownKind_Allows(t *testing.T) {
+	// Unknown kind → min is 0 → any schema passes. The caller is expected
+	// to have validated the kind elsewhere.
+	if err := AssertBundleSchema("php-tool", 7); err != nil {
+		t.Errorf("unknown kind must not error, got %v", err)
+	}
+}
