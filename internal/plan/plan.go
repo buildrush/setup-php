@@ -210,6 +210,7 @@ func (p *Plan) Hash() string {
 	_, _ = fmt.Fprintf(h, "os:%s\n", p.OS)
 	_, _ = fmt.Fprintf(h, "arch:%s\n", p.Arch)
 	_, _ = fmt.Fprintf(h, "ts:%s\n", p.ThreadSafety)
+	_, _ = fmt.Fprintf(h, "inifile:%s\n", p.IniFile)
 	_, _ = fmt.Fprintf(h, "exts:%s\n", strings.Join(p.Extensions, ","))
 	_, _ = fmt.Fprintf(h, "excl:%s\n", strings.Join(p.ExtensionsExclude, ","))
 	_, _ = fmt.Fprintf(h, "reset:%t\n", p.ExtensionsReset)

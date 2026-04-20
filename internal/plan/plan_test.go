@@ -354,6 +354,14 @@ func TestApplyCoverage_CoverageDisableWinsOverExplicitInclude(t *testing.T) {
 	}
 }
 
+func TestHashIncludesIniFile(t *testing.T) {
+	p1 := &Plan{PHPVersion: "8.4", IniFile: "production"}
+	p2 := &Plan{PHPVersion: "8.4", IniFile: "development"}
+	if p1.Hash() == p2.Hash() {
+		t.Errorf("Hash() must differ for different IniFile values; got equal: %q", p1.Hash())
+	}
+}
+
 func TestApplyCoverage_IdempotentOnRepeatedCalls(t *testing.T) {
 	p := &Plan{Coverage: CoveragePCOV}
 	p.ApplyCoverage()
