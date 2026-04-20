@@ -85,3 +85,15 @@ func TestDiffFixtureGlobFilter(t *testing.T) {
 		t.Fatalf("expected fixture filter to block deviation, got %d diffs", len(res))
 	}
 }
+
+func TestDiffAllowKindBothEmptyEqual(t *testing.T) {
+	a := loadProbe(t, "probe-bare-ext-empty.json")
+	b := loadProbe(t, "probe-bare-ext-empty.json")
+	al := allowlist{Deviations: []deviation{
+		{Path: "extensions", Kind: "allow", Reason: "x", Fixtures: []string{"*"}},
+	}}
+	res := diffProbes(a, b, al, "bare")
+	if len(res) != 0 {
+		t.Fatalf("expected 0 diffs when both sides are equally empty, got %+v", res)
+	}
+}
