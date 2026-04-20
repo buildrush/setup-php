@@ -22,6 +22,8 @@ jobs:
       tool_matrix: ${{ steps.plan.outputs.tool_matrix }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-go@v6
         with:
           go-version: '1.26'
