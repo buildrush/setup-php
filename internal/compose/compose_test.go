@@ -3,6 +3,7 @@ package compose
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -216,6 +217,36 @@ func TestSelectBaseIniFile_MissingSourceFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "php.ini-production") {
 		t.Errorf("error does not mention filename: %v", err)
+	}
+}
+
+func TestMergeCompatLayers_OrderAndPrecedence(t *testing.T) {
+	defaults := map[string]string{"memory_limit": "-1", "opcache.enable": "1"}
+	xdebug := map[string]string{"xdebug.mode": "coverage"}
+	extra := map[string]string{"pcov.enabled": "1"}
+
+	// extra beats xdebug beats defaults, so test a conflict:
+	conflicting := map[string]string{"memory_limit": "512M"} // would overwrite default
+	got := MergeCompatLayers(defaults, nil, conflicting)
+	if got["memory_limit"] != "512M" {
+		t.Errorf("extra should override defaults: got %q", got["memory_limit"])
+	}
+
+	got = MergeCompatLayers(defaults, xdebug, extra)
+	want := map[string]string{
+		"memory_limit":   "-1",
+		"opcache.enable": "1",
+		"xdebug.mode":    "coverage",
+		"pcov.enabled":   "1",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("MergeCompatLayers = %v, want %v", got, want)
+	}
+
+	// nil layers treated as empty
+	got = MergeCompatLayers(defaults, nil, nil)
+	if !reflect.DeepEqual(got, defaults) {
+		t.Errorf("with nil layers should equal defaults: got %v", got)
 	}
 }
 
