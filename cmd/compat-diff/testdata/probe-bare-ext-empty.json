@@ -1,0 +1,12 @@
+{
+  "php_version": "8.4.5",
+  "sapi": "cli",
+  "zts": false,
+  "extensions": [],
+  "ini": {
+    "memory_limit": "128M",
+    "date.timezone": "UTC"
+  },
+  "env_delta": ["PHP_INI_SCAN_DIR"],
+  "path_additions": ["<PHP_ROOT>/bin"]
+}
