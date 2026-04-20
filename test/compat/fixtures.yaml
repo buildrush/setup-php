@@ -16,6 +16,12 @@ fixtures:
     ini-values: ''
     coverage: 'none'
 
+  - name: coverage-pcov
+    php-version: '8.4'
+    extensions: ''
+    ini-values: ''
+    coverage: 'pcov'
+
   - name: ini-and-coverage
     php-version: '8.4'
     extensions: ''
