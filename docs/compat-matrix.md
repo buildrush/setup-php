@@ -486,68 +486,25 @@ deviations:
     reason: 'both sides prepend a PHP install prefix; exact directory differs by design'
     fixtures: ['*']
 
-  # Default ini-values that v2 applies on CI runners; our internal/compat
-  # DefaultIniValues does not yet cover them. Phase 2 compat slice #1
-  # (docs/superpowers/specs/2026-04-17-phase2-compat-slice-design.md §5.5) is
-  # the scope that closes these.
-  - path: ini.display_errors
-    kind: ignore
-    reason: 'v2 CI default; Phase 2 compat slice #1 (internal/compat.DefaultIniValues)'
-    fixtures: ['*']
-  - path: ini.log_errors
-    kind: ignore
-    reason: 'v2 CI default; Phase 2 compat slice #1 (internal/compat.DefaultIniValues)'
-    fixtures: ['*']
-  - path: ini.short_open_tag
-    kind: ignore
-    reason: 'v2 CI default; Phase 2 compat slice #1 (internal/compat.DefaultIniValues)'
-    fixtures: ['*']
-  - path: ini.error_reporting
-    kind: ignore
-    reason: 'v2 CI default (E_ALL-like mask 22527); Phase 2 compat slice #1'
-    fixtures: ['*']
-
-  # Opcache defaults: v2 enables opcache with specific tuning. Phase 2 compat
-  # slice #1 covers.
-  - path: ini.opcache.enable
-    kind: ignore
-    reason: 'v2 enables opcache by default; Phase 2 compat slice #1'
-    fixtures: ['*']
+  # Opcache defaults from php.ini-production: v2 ships php.ini-production; our
+  # builder now does too (T5). These four keys come from the production preset
+  # and should match once the 8.4 core is rebuilt. Pending post-merge CI
+  # confirmation before removing.
   - path: ini.opcache.enable_cli
     kind: ignore
-    reason: 'v2 opcache default; Phase 2 compat slice #1'
-    fixtures: ['*']
-  - path: ini.opcache.jit
-    kind: ignore
-    reason: 'v2 opcache default; Phase 2 compat slice #1'
-    fixtures: ['*']
-  - path: ini.opcache.jit_buffer_size
-    kind: ignore
-    reason: 'v2 opcache default; Phase 2 compat slice #1'
+    reason: 'php.ini-production default; pending post-merge harness confirmation'
     fixtures: ['*']
   - path: ini.opcache.memory_consumption
     kind: ignore
-    reason: 'v2 opcache default; Phase 2 compat slice #1'
+    reason: 'php.ini-production default; pending post-merge harness confirmation'
     fixtures: ['*']
   - path: ini.opcache.revalidate_freq
     kind: ignore
-    reason: 'v2 opcache default; Phase 2 compat slice #1'
+    reason: 'php.ini-production default; pending post-merge harness confirmation'
     fixtures: ['*']
   - path: ini.opcache.validate_timestamps
     kind: ignore
-    reason: 'v2 opcache default; Phase 2 compat slice #1'
+    reason: 'php.ini-production default; pending post-merge harness confirmation'
     fixtures: ['*']
-
-  # Xdebug defaults only surface when xdebug is loaded via extensions: (not via
-  # coverage:). We set xdebug.mode=coverage and start_with_request=default when
-  # it appears in extensions; v2 leaves them empty in that path.
-  - path: ini.xdebug.mode
-    kind: ignore
-    reason: 'when xdebug is loaded via extensions:, we set mode=coverage; v2 leaves empty. Phase 2 compat slice #1 aligns.'
-    fixtures: ['multi-ext']
-  - path: ini.xdebug.start_with_request
-    kind: ignore
-    reason: 'when xdebug is loaded via extensions:, we set start_with_request=default; v2 leaves empty. Phase 2 compat slice #1 aligns.'
-    fixtures: ['multi-ext']
 ```
 <!-- compat-harness:deviations:end -->
