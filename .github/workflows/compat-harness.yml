@@ -45,3 +45,51 @@ jobs:
             echo "$matrix"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+  ours:
+    name: 'ours: ${{ matrix.name }}'
+    needs: [build, fixtures]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.fixtures.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: phpup
+
+      - name: Place binary in tool cache
+        run: |
+          mkdir -p "$RUNNER_TOOL_CACHE/buildrush-bin"
+          cp phpup "$RUNNER_TOOL_CACHE/buildrush-bin/phpup"
+          chmod +x "$RUNNER_TOOL_CACHE/buildrush-bin/phpup"
+
+      - name: Snapshot env + PATH before setup-php
+        run: |
+          env > /tmp/env-before
+          echo -n "$PATH" > /tmp/path-before
+
+      - name: Setup PHP (ours)
+        uses: ./
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: ${{ matrix.extensions }}
+          ini-values: ${{ matrix.ini-values }}
+          coverage: ${{ matrix.coverage }}
+
+      - name: Probe
+        run: |
+          chmod +x test/compat/probe.sh
+          bash test/compat/probe.sh \
+            /tmp/ours.json \
+            /tmp/env-before \
+            /tmp/path-before \
+            test/compat/ini-keys.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: probe-ours-${{ matrix.name }}
+          path: /tmp/ours.json
+          retention-days: 1
