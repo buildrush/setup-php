@@ -166,10 +166,13 @@ func OurBuildBundledExtras(phpVersion string) []string {
 // xdebug3 is active for the requested PHP version (matches regex 7.[2-4]|8.[0-9]
 // per docs/compat-matrix.md §2.2). Returns nil for any other version.
 //
-// v2 writes this fragment even when xdebug is not installed; PHP ignores ini
-// keys for unloaded extensions, so it's a no-op in that case. We only layer it
-// when xdebug is actually in the resolved extension set (checked by the
-// caller), which matches the end-state ini values v2 produces.
+// Deliberate divergence from v2's mechanism: v2 unconditionally writes this
+// fragment for every matching PHP version, even when xdebug is not installed
+// (PHP silently ignores ini keys for unloaded extensions). We take the
+// stricter approach and have the caller apply this map only when xdebug is
+// present in the resolved extension set. The observable end-state — the
+// effective ini value when xdebug *is* loaded — is identical; only the file
+// on disk differs.
 func XdebugIniFragment(phpVersion string) map[string]string {
 	m := minorOf(phpVersion)
 	if !xdebug3Supported(m) {
@@ -179,7 +182,7 @@ func XdebugIniFragment(phpVersion string) map[string]string {
 }
 
 func xdebug3Supported(minor string) bool {
-	// Matches 7.[2-4] | 8.[0-9]
+	// compat-matrix §2.2: xdebug3_versions = 7.[2-4]|8.[0-9]
 	switch minor {
 	case "7.2", "7.3", "7.4":
 		return true

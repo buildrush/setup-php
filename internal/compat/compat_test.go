@@ -213,6 +213,7 @@ func TestXdebugIniFragment(t *testing.T) {
 		{"8.0", map[string]string{"xdebug.mode": "coverage"}},
 		{"8.9.99", map[string]string{"xdebug.mode": "coverage"}},
 		{"7.4", map[string]string{"xdebug.mode": "coverage"}},
+		{"7.3", map[string]string{"xdebug.mode": "coverage"}},
 		{"7.2", map[string]string{"xdebug.mode": "coverage"}},
 		{"7.1", nil}, // outside xdebug3_versions
 		{"9.0", nil}, // outside xdebug3_versions
