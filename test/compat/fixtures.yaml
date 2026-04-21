@@ -251,3 +251,33 @@ fixtures:
     extensions: 'redis'
     ini-values: ''
     coverage: 'none'
+
+  - name: multi-ext-top10-81
+    php-version: '8.1'
+    extensions: 'igbinary, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-top10-82
+    php-version: '8.2'
+    extensions: 'igbinary, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-top10-83
+    php-version: '8.3'
+    extensions: 'igbinary, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-top10-84
+    php-version: '8.4'
+    extensions: 'igbinary, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-top10-85
+    php-version: '8.5'
+    extensions: 'igbinary, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
+    ini-values: ''
+    coverage: 'none'
