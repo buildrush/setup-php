@@ -13,7 +13,7 @@ This spec covers the next slice: extending the built matrix from `{8.4}` to `{8.
 
 The slice ships as **four sequential PRs, one per new PHP minor, in order 8.5 → 8.3 → 8.2 → 8.1**. Each PR is self-contained per the PR-self-publish invariant from the bundle-rollout design: it flips on `sources:` for its version, rebuilds the 4 existing PECL extensions against that ABI, adds 6 compat-harness fixtures, and self-publishes the resulting 5 bundles to GHCR with the lockfile committed back to the PR head.
 
-After all four PRs land, `bundles.lock` holds 25 entries (5 cores + 20 extension bundles = 4 PECL extensions × 5 PHP versions) and the compat harness runs 30 fixture pairs against a pinned `shivammathur/setup-php@v2` SHA.
+After all four PRs land, `bundles.lock` holds 25 entries (5 cores + 20 extension bundles = 4 PECL extensions × 5 PHP versions) and the compat harness runs 40 fixture pairs (8 fixtures × 5 PHP versions) against a pinned `shivammathur/setup-php@v2` SHA.
 
 ## 2. Goals & non-goals
 
@@ -21,7 +21,7 @@ After all four PRs land, `bundles.lock` holds 25 entries (5 cores + 20 extension
 - `bundles.lock` contains `php:{8.1,8.2,8.3,8.5}:linux:x86_64:nts` plus `ext:{redis,xdebug,pcov,apcu}:{pinned-version}:{8.1,8.2,8.3,8.5}:linux:x86_64:nts` entries, all self-published by the PR that introduces them per the bundle-rollout invariant.
 - `catalog/php.yaml` has a self-contained build block (`sources`, `abi_matrix`, `configure_flags.common`, `configure_flags.linux`) for each of 8.1 / 8.2 / 8.3 / 8.5, with the flag set audited against that version's `bundled_extensions` catalog entry and against `internal/compat.BundledExtensions`.
 - `internal/compat.DefaultIniValues`, `XdebugIniFragment`, and `BundledExtensions` are golden-file-tested for every cataloged PHP version (all five), not just 8.4.
-- `test/compat/fixtures.yaml` holds 30 fixtures (6 × 5). The compat-harness workflow goes green across all pairs with no new allowlist entries beyond the existing `env_delta` / `extensions` / `path_additions` bands (which are Phase 3 scope).
+- `test/compat/fixtures.yaml` holds 40 fixtures (8 × 5). The compat-harness workflow goes green across all pairs with no new allowlist entries beyond the existing `env_delta` / `extensions` / `path_additions` bands (which are Phase 3 scope).
 - The `sources:`-gated planner behavior is preserved: adding a `sources:` block triggers builds for that version; removing it (e.g. for a rollback) stops future builds without invalidating already-published digests referenced by a pinned action release.
 
 ### Non-goals
@@ -64,9 +64,9 @@ The slice is data + builder-exercise only. **No runtime-code changes.**
 | `builders/linux/build-php.sh` | No structural change. The script reads `configure_flags` from the active version block; the tarball URL template (`{version}`) already parameterises across versions. Behaviour-verify on each version during PR-N. |
 | `builders/linux/build-ext.sh` | No structural change. Matrix expansion is automatic once `abi_matrix` grows. |
 | `internal/compat/compat.go` | **No code change.** `DefaultIniValues` branches on `isPHP8x(minorOf(phpVersion))` which already includes 8.1–8.5; `XdebugIniFragment` gate `xdebug3Supported` already switches on every 8.x minor (per compat-matrix §2.2); `BundledExtensions` is already version-indexed per slice #1. |
-| `internal/compat/compat_test.go` | New golden-file cases for `DefaultIniValues` and `XdebugIniFragment` at 8.1 / 8.2 / 8.3 / 8.5. Existing 7.3, 8.4, and 9.0-boundary cases stay. |
+| `internal/compat/compat_test.go` | **No code change required.** `TestDefaultIniValues_PHP8xOpcacheJIT` already asserts 8.0–8.9 (line 242), `TestXdebugIniFragment` already covers 8.0 and 8.9.99 (bracketing every 8.x minor), and `TestBundledExtensionsMatchGolden` already iterates `{8.1, 8.2, 8.3, 8.4, 8.5}` with matching golden files present. The test surface for per-version compat data is already complete from slice #1 and the closeout slice. |
 | `internal/catalog/catalog_compat_test.go` | Already iterates every version in `catalog/php.yaml` and cross-checks `bundled_extensions` against `compat.BundledExtensions`. The set of versions validated grows automatically as each PR flips on `sources:`. No test code change. |
-| `test/compat/fixtures.yaml` | 6 new fixtures per PR — a copy of the existing 8.4 set with `php-version:` swapped and the `name:` suffixed (`-81`, `-82`, `-83`, `-85`). |
+| `test/compat/fixtures.yaml` | 8 new fixtures per PR — a copy of the existing 8.4 set with `php-version:` swapped and the `name:` suffixed (`-81`, `-82`, `-83`, `-85`). |
 | `.github/workflows/compat-harness.yml` | No workflow change. Matrix is generated from `fixtures.yaml` (harness design §5.6). |
 | `.github/workflows/plan.yml`, `build-php-core.yml`, `build-extension.yml`, `on-push.yml` | No change. PR-self-publish flow (bundle-rollout PR-α / β.1 / β.2) handles new matrix cells automatically. |
 | `cmd/phpup/main.go`, `internal/plan`, `internal/resolve`, `internal/compose`, `internal/oci`, `internal/extract`, `internal/cache`, `internal/env`, `cmd/planner`, `cmd/compat-diff`, `cmd/lockfile-update` | **Unchanged.** |
@@ -135,10 +135,11 @@ Each PR depends only on the catalog/compat/bundle infrastructure that already ex
 
 ### 5.1 Unit tests (per PR)
 
-- **`internal/compat`** — new golden-file cases:
-  - `DefaultIniValues("8.1")` / `("8.2")` / `("8.3")` / `("8.5")` — assert the 8.x opcache/JIT block is present for all five; existing non-8.x boundary test stays.
-  - `XdebugIniFragment` at each added version — assert `{"xdebug.mode": "coverage"}`; existing 7.3 and out-of-range cases stay.
-  - `BundledExtensions` tests — already present per slice #1; no change.
+- **`internal/compat`** — no new tests required. The existing suite already covers the target versions:
+  - `TestDefaultIniValues_PHP8xOpcacheJIT` asserts the opcache/JIT block at 8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.4.5, and 8.9.
+  - `TestXdebugIniFragment` asserts `{"xdebug.mode": "coverage"}` at 8.0, 8.4.5, and 8.9.99 — bracketing every 8.x minor — with 7.1, 9.0, and empty as out-of-range negatives.
+  - `TestBundledExtensionsMatchGolden` iterates `{8.1, 8.2, 8.3, 8.4, 8.5}` and cross-checks each against its `testdata/bundled_extensions_<v>.golden` (all five files present).
+  - If a PR's audit surfaces a per-minor drift the existing tests miss, add a targeted case in that PR.
 - **`internal/catalog`** — `catalog_compat_test.go` iterates every version in `catalog/php.yaml` and cross-checks `bundled_extensions` against `compat.BundledExtensions`. The set of validated versions grows automatically as each PR flips on `sources:`.
 
 ### 5.2 Smoke tests (per PR)
@@ -149,7 +150,7 @@ Each PR depends only on the catalog/compat/bundle infrastructure that already ex
 
 ### 5.3 Compat harness (per PR)
 
-6 new fixtures per PR, each a copy of the existing 8.4 set with `php-version` swapped and the `name:` suffixed (`bare-85`, `coverage-xdebug-85`, `coverage-pcov-85`, `ini-file-development-85`, etc.). The matrix grows by 6 pairs per PR; no workflow change.
+8 new fixtures per PR, each a copy of the existing 8.4 set with `php-version` swapped and the `name:` suffixed (the 8.4 set is: `bare`, `coverage-pcov`, `exclusion`, `ini-and-coverage`, `ini-file-development`, `multi-ext`, `none-reset`, `single-ext`). The matrix grows by 8 pairs per PR; no workflow change.
 
 **Gate:** the harness must go green on the new pairs with zero new allowlist entries beyond the existing `env_delta` / `extensions` / `path_additions` bands. Any other deviation is a bug in this slice, not an allowlist growth target.
 
@@ -187,7 +188,7 @@ Left for in-PR resolution; the design does not need to answer them upfront:
 1. **PHP source signature verification.** `php.net` rotates release-manager GPG keys per major branch. `builders/linux/build-php.sh` today verifies against the 8.4 manager's key; older versions have different managers. The fix is a keyring refresh in the builder; whether to add every manager's key to a bundled keyring or fetch per-version at build time is a PR-N decision and surfaces in whichever PR first builds under a different manager.
 2. **Ubuntu 24.04 build-dep drift on older PHP.** `libzip-dev`, `libssl-dev`, `libonig-dev` on noble may be newer than what PHP 8.1 upstream regression-tests against. If `./configure` or `make` fails on 8.1 against noble's deps, the fix is either (a) pinning a build-time apt snapshot or (b) using a narrower base image for the older cell (which overlaps with slice D). Decide in PR-4 if it actually breaks — not speculatively.
 3. **xdebug 3.5.1 vs PHP 8.5.** Xdebug 3.5.x targets 8.0–8.5; confirm during PR-1 audit. If a newer 3.5.x / 3.6.x is out that officially lists 8.5 compatibility, a version bump is its own single-purpose slice per §2 non-goals — a broken pair in PR-1 becomes an `exclude:` and a follow-up.
-4. **Harness CI cost.** 30 fixture pairs × 2 runs (theirs + ours) ≈ 60 jobs. If GHA concurrency limits bite on `pull_request`, `max-parallel` throttle on the harness workflow matrix is the knob (orthogonal to this slice's deliverables).
+4. **Harness CI cost.** 40 fixture pairs × 2 runs (theirs + ours) ≈ 80 jobs. If GHA concurrency limits bite on `pull_request`, `max-parallel` throttle on the harness workflow matrix is the knob (orthogonal to this slice's deliverables).
 5. **`docs/compat-matrix.md` per-minor drift.** Slice #1 pinned ini-defaults "per 8.x"; if v2 has per-minor drift the slice-#1 audit did not catch (e.g. 8.1 jit defaults differ from 8.5), the harness detects it and forces an audit addendum. No speculative doc edit in this slice.
 
 ## 8. References
