@@ -315,3 +315,38 @@ fixtures:
     extensions: 'imagick, mongodb, swoole, grpc'
     ini-values: ''
     coverage: 'none'
+
+  - name: bare-arm64-81
+    php-version: '8.1'
+    arch: 'aarch64'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: bare-arm64-82
+    php-version: '8.2'
+    arch: 'aarch64'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: bare-arm64-83
+    php-version: '8.3'
+    arch: 'aarch64'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: bare-arm64-84
+    php-version: '8.4'
+    arch: 'aarch64'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: bare-arm64-85
+    php-version: '8.5'
+    arch: 'aarch64'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
