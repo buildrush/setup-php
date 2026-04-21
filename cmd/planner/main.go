@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/buildrush/setup-php/internal/catalog"
 	"github.com/buildrush/setup-php/internal/lockfile"
@@ -115,7 +116,17 @@ func filterExisting(ctx context.Context, cells []planner.MatrixCell, lf *lockfil
 
 		var key string
 		if cell.Extension != "" {
-			key = lockfile.ExtBundleKey(cell.Extension, cell.ExtVer, cell.PHPAbi, cell.OS, cell.Arch, cell.TS)
+			// Lockfile stores php minor (e.g. "8.4") — not the combined ABI
+			// string "8.4-nts". lockfile-update already splits on the last
+			// hyphen to produce the same key format; mirror that here so
+			// LookupEntry can find the entry. (Previously masked by a
+			// digest-HEAD existence check that always failed for ext
+			// artifacts, so the !ok branch was never reached.)
+			phpMinor := cell.PHPAbi
+			if idx := strings.LastIndex(cell.PHPAbi, "-"); idx > 0 {
+				phpMinor = cell.PHPAbi[:idx]
+			}
+			key = lockfile.ExtBundleKey(cell.Extension, cell.ExtVer, phpMinor, cell.OS, cell.Arch, cell.TS)
 		} else {
 			key = lockfile.PHPBundleKey(cell.Version, cell.OS, cell.Arch, cell.TS)
 		}
