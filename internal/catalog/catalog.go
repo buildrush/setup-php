@@ -89,6 +89,7 @@ type ExtensionSpec struct {
 	Versions    []string            `yaml:"versions,omitempty"`
 	ABIMatrix   ABIMatrix           `yaml:"abi_matrix,omitempty"`
 	Exclude     []ExcludeRule       `yaml:"exclude,omitempty"`
+	BuildDeps   map[string][]string `yaml:"build_deps,omitempty"`
 	RuntimeDeps map[string][]string `yaml:"runtime_deps,omitempty"`
 	Ini         []string            `yaml:"ini,omitempty"`
 	Smoke       []string            `yaml:"smoke,omitempty"`
