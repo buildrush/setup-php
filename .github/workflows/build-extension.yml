@@ -35,6 +35,7 @@ on:
 
 jobs:
   build:
+    name: 'ext ${{ inputs.extension }} ${{ inputs.ext_version }} @ PHP ${{ inputs.php_abi }}'
     runs-on: ubuntu-24.04
     permissions:
       packages: write
