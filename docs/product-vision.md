@@ -197,6 +197,8 @@ ghcr.io/buildrush/php-tool-phpstan:1.11.0
 
 Tags are convenience pointers; digests are canonical. Consumers always resolve to a digest before pulling.
 
+The `bundles.lock` digest is sufficient to identify a bundle *uniquely on the wire*, but the runtime also consults the sidecar's `schema_version` (see §6.1) before composing — a bundle whose sidecar declares a lower `schema_version` than the runtime's `internal/version.MinBundleSchema(kind)` is rejected with a pointer to `docs/bundle-schema-changelog.md`. Schema version is therefore the *shape* contract on top of the digest's *bit-level* identity.
+
 ### 6.3 Why GHCR
 
 - **No anonymous pull rate limit** for public packages.
@@ -469,6 +471,12 @@ A flat JSON file, auto-generated and PR-merged, mapping canonical spec keys to O
 - **Deduplication**: an upstream mirror pull (e.g. PECL) that produces byte-identical output does not republish.
 - **Audit**: every published bundle has exactly one provenance — the build job whose output hashed to that digest.
 - **Rollback**: reverting the lockfile PR is a full rollback, because the old digests still exist on GHCR (they are never deleted by promotion).
+
+### 11.4 Lockfile updates and PR commit-back
+
+Bundle-affecting PRs (changes under `catalog/**` or `builders/**`) self-publish: the build pipeline pushes new bundles to GHCR and `cmd/lockfile-update --commit` commits the refreshed `bundles.lock` **back to the PR head ref** before the compat harness and integration tests run. This means the PR carries its own lockfile update — no separate bot PR against `main`, no "flag day" where a runtime assertion references a bundle shape that no published bundle satisfies.
+
+Each lockfile entry also carries a `spec_hash` alongside the `digest`. The planner uses `spec_hash` to detect whether a cell's inputs (catalog YAML, builder script, `builders/common/bundle-schema-version.env`) have drifted since the last build; if the spec-hash matches and the tag still resolves to the recorded digest, the planner skips the rebuild. See `docs/superpowers/specs/2026-04-20-bundle-schema-and-rollout-design.md` for the full rollout design and `cmd/gc-bundles` for how unreferenced digests are reaped.
 
 ---
 
