@@ -46,16 +46,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - id: load
-        # Filter fixtures by PHP versions present in bundles.lock so a fixture
-        # referencing a not-yet-built PHP version doesn't fail fast against an
-        # unresolvable lockfile entry. Plan-and-build's harness call (after
-        # update-lock) reads the freshly-committed lockfile and picks up the
-        # full set; the standalone harness invocation here only runs fixtures
-        # whose PHP version is already buildable on the current ref.
+        # Filter fixtures by (PHP version, arch) pairs present in bundles.lock
+        # so a fixture referencing a not-yet-built combination (new PHP version
+        # OR new arch) doesn't fail fast against an unresolvable lockfile entry.
+        # Plan-and-build's harness call (after update-lock) reads the
+        # freshly-committed lockfile and picks up the full set; the standalone
+        # harness here only runs fixtures whose (version, arch) is already
+        # buildable on the current ref.
+        #
+        # Fixtures default arch to 'x86_64' when the field is absent so existing
+        # 50 x86_64 fixtures stay covered without schema churn.
         run: |
-          versions_json=$(jq -c '[.bundles | keys[] | select(startswith("php:")) | split(":")[1]] | unique' bundles.lock)
+          pairs_json=$(jq -c '[.bundles | keys[] | select(startswith("php:")) | capture("^php:(?<v>[^:]+):linux:(?<a>[^:]+):") | .v + "/" + .a] | unique' bundles.lock)
           matrix=$(yq -o=json '.fixtures' test/compat/fixtures.yaml \
-            | jq --argjson v "$versions_json" -c '{include: [.[] | select(.["php-version"] as $pv | $v | index($pv))]}')
+            | jq --argjson p "$pairs_json" -c '{include: [.[] | select((.["php-version"] + "/" + (.arch // "x86_64")) as $pa | $p | index($pa))]}')
           {
             echo "matrix<<EOF"
             echo "$matrix"
