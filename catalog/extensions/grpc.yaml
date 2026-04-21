@@ -1,0 +1,19 @@
+name: grpc
+kind: pecl
+source:
+  pecl_package: grpc
+versions:
+  - '1.80.0'
+abi_matrix:
+  php: ['8.1', '8.2', '8.3', '8.4', '8.5']
+  os: ['linux']
+  arch: ['x86_64']
+  ts: ['nts']
+build_deps:
+  linux: ['zlib1g-dev', 'libssl-dev']
+runtime_deps:
+  linux: ['libssl3t64']
+ini:
+  - 'extension=grpc'
+smoke:
+  - 'php -r "assert(extension_loaded(\"grpc\"));"'
