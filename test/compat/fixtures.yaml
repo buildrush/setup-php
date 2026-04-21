@@ -350,3 +350,40 @@ fixtures:
     extensions: ''
     ini-values: ''
     coverage: 'none'
+
+  # 8.1 omits protobuf (PECL metadata min PHP 8.2).
+  - name: multi-ext-top14-arm64-81
+    php-version: '8.1'
+    arch: 'aarch64'
+    extensions: 'redis, xdebug, pcov, apcu, igbinary, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-top14-arm64-82
+    php-version: '8.2'
+    arch: 'aarch64'
+    extensions: 'redis, xdebug, pcov, apcu, igbinary, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-top14-arm64-83
+    php-version: '8.3'
+    arch: 'aarch64'
+    extensions: 'redis, xdebug, pcov, apcu, igbinary, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-top14-arm64-84
+    php-version: '8.4'
+    arch: 'aarch64'
+    extensions: 'redis, xdebug, pcov, apcu, igbinary, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
+    ini-values: ''
+    coverage: 'none'
+
+  # 8.5 omits redis + igbinary (php_smart_string.h upstream issue; see #38, #43).
+  - name: multi-ext-top14-arm64-85
+    php-version: '8.5'
+    arch: 'aarch64'
+    extensions: 'xdebug, pcov, apcu, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
+    ini-values: ''
+    coverage: 'none'
