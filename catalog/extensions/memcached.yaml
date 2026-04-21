@@ -1,0 +1,19 @@
+name: memcached
+kind: pecl
+source:
+  pecl_package: memcached
+versions:
+  - '3.4.0'
+abi_matrix:
+  php: ['8.1', '8.2', '8.3', '8.4', '8.5']
+  os: ['linux']
+  arch: ['x86_64']
+  ts: ['nts']
+build_deps:
+  linux: ['libmemcached-dev', 'libsasl2-dev', 'zlib1g-dev']
+runtime_deps:
+  linux: ['libmemcached11', 'libsasl2-2']
+ini:
+  - 'extension=memcached'
+smoke:
+  - 'php -r "assert(extension_loaded(\"memcached\"));"'
