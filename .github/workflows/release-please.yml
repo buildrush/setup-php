@@ -84,3 +84,9 @@ jobs:
             echo "::warning::Standalone $MAJOR release found; deleting (violates release-artifact contract)"
             gh release delete "$MAJOR" --yes --cleanup-tag=false
           fi
+
+      - name: Run released-lockfile invariant
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: go test -tags invariants ./test/invariants/... -v

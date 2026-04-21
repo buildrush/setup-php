@@ -1,5 +1,5 @@
 .PHONY: check fmt fmt-check vet lint tidy tidy-check test test-node build clean \
-        build-linux-amd64 build-linux-arm64 bundle-php bundle-ext
+        build-linux-amd64 build-linux-arm64 bundle-php bundle-ext gc-bundles-dry-run
 
 # Ensure the embedded lockfile is available for go vet/test/build
 cmd/phpup/bundles.lock: bundles.lock
@@ -84,3 +84,7 @@ bundle-ext:
 # Clean build artifacts
 clean:
 	rm -rf bin/ dist/
+
+# Dry-run the GC tool locally (requires gh auth login + network access).
+gc-bundles-dry-run:
+	go run ./cmd/gc-bundles --org buildrush --min-age-days 30
