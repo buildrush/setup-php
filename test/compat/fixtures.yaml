@@ -276,8 +276,10 @@ fixtures:
     ini-values: ''
     coverage: 'none'
 
+  # 8.5 omits igbinary (see catalog/extensions/igbinary.yaml exclude —
+  # upstream ref to removed php_smart_string.h, pending 3.2.17 stable).
   - name: multi-ext-top10-85
     php-version: '8.5'
-    extensions: 'igbinary, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
+    extensions: 'msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
     ini-values: ''
     coverage: 'none'
