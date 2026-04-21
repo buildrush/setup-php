@@ -10,6 +10,7 @@ EXT_VERSION="${EXT_VERSION:?EXT_VERSION is required}"
 PHP_ABI="${PHP_ABI:?PHP_ABI is required}"
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp/ext-out}"
 WORKSPACE="${WORKSPACE:-$(pwd)}"
+ARCH="${ARCH:-x86_64}"
 
 echo "Building extension ${EXT_NAME} ${EXT_VERSION} for PHP ${PHP_ABI}"
 
@@ -34,7 +35,7 @@ fi
 PHP_TS=$(echo "$PHP_ABI" | rev | cut -d- -f1 | rev)
 PHP_VER=$(echo "$PHP_ABI" | rev | cut -d- -f2- | rev)
 echo "Fetching PHP core for ABI ${PHP_ABI}"
-"${WORKSPACE}/builders/common/fetch-core.sh" "$PHP_ABI" linux x86_64
+"${WORKSPACE}/builders/common/fetch-core.sh" "$PHP_ABI" linux "$ARCH"
 
 # Symlink so that phpize/php-config resolve their compiled prefix correctly.
 # PHP was built with --prefix=/usr/local but extracted to /opt/buildrush/core/usr/local.
