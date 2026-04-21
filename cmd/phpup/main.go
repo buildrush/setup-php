@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -91,6 +92,11 @@ func main() {
 
 	if p.Verbose {
 		log.Printf("Resolved: core=%s, %d extensions", res.PHPCore.Digest, len(res.Extensions))
+	}
+
+	// 4b. Install runtime_deps for PECL bundles (v2 parity on Linux).
+	if err := installRuntimeDeps(runtime.GOOS, res.Extensions, cat, aptInstaller); err != nil {
+		log.Fatalf("install runtime deps: %v", err)
 	}
 
 	// 5. Check cache
@@ -414,4 +420,55 @@ func findSO(dir, name string) string {
 		log.Printf("WARNING: walk %s: %v", filepath.Clean(dir), err)
 	}
 	return result
+}
+
+// installRuntimeDeps installs the union of runtime_deps.linux apt packages
+// declared by the resolved extensions. Linux-only; non-linux is a no-op.
+// Packages are deduplicated across extensions and sorted for deterministic
+// invocation (makes the apt-get command line stable for logging and tests).
+// An empty package set is a no-op (no apt-get call).
+func installRuntimeDeps(goos string, resolved []resolve.ResolvedBundle, cat *catalog.Catalog, installer func([]string) error) error {
+	if goos != "linux" {
+		return nil
+	}
+	set := map[string]struct{}{}
+	for _, r := range resolved {
+		spec, ok := cat.Extensions[r.Name]
+		if !ok {
+			continue
+		}
+		for _, pkg := range spec.RuntimeDeps["linux"] {
+			set[pkg] = struct{}{}
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	pkgs := make([]string, 0, len(set))
+	for pkg := range set {
+		pkgs = append(pkgs, pkg)
+	}
+	sort.Strings(pkgs)
+	return installer(pkgs)
+}
+
+// aptInstaller is the production installer used when not testing.
+// Runs `sudo apt-get update -qq` then `sudo apt-get install -y -qq --no-install-recommends <pkgs...>`.
+// Update failure is a ::warning:: (transient mirror issues); install failure is a hard error.
+func aptInstaller(pkgs []string) error {
+	log.Printf("installRuntimeDeps: apt-get install %s", strings.Join(pkgs, " "))
+	upd := exec.Command("sudo", "apt-get", "update", "-qq")
+	upd.Stdout = os.Stdout
+	upd.Stderr = os.Stderr
+	if err := upd.Run(); err != nil {
+		log.Printf("::warning::apt-get update failed (%v); proceeding to install", err)
+	}
+	args := append([]string{"apt-get", "install", "-y", "-qq", "--no-install-recommends"}, pkgs...)
+	inst := exec.Command("sudo", args...) //nolint:gosec // G204: args built from catalog-provided package names (compile-time constant, non-user-controlled)
+	inst.Stdout = os.Stdout
+	inst.Stderr = os.Stderr
+	if err := inst.Run(); err != nil {
+		return fmt.Errorf("apt-get install runtime_deps %v: %w", pkgs, err)
+	}
+	return nil
 }

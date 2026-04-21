@@ -1,9 +1,14 @@
 package main
 
 import (
+	"errors"
+	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/buildrush/setup-php/internal/catalog"
 	"github.com/buildrush/setup-php/internal/plan"
+	"github.com/buildrush/setup-php/internal/resolve"
 )
 
 func TestComputeDisabledExtensions(t *testing.T) {
@@ -62,5 +67,68 @@ func TestComputeDisabledExtensions(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestInstallRuntimeDeps(t *testing.T) {
+	ext := func(name string, deps []string) *catalog.ExtensionSpec {
+		return &catalog.ExtensionSpec{
+			Name:        name,
+			Kind:        catalog.ExtensionKindPECL,
+			RuntimeDeps: map[string][]string{"linux": deps},
+		}
+	}
+	cat := &catalog.Catalog{
+		Extensions: map[string]*catalog.ExtensionSpec{
+			"a": ext("a", []string{"libfoo1", "libbar1"}),
+			"b": ext("b", []string{"libbar1", "libbaz1"}),
+			"c": ext("c", nil),
+		},
+	}
+	tests := []struct {
+		name     string
+		os       string
+		resolved []string
+		want     []string
+	}{
+		{"empty resolved list is no-op", "linux", nil, nil},
+		{"single extension with deps", "linux", []string{"a"}, []string{"libbar1", "libfoo1"}},
+		{"dedupes across extensions", "linux", []string{"a", "b"}, []string{"libbar1", "libbaz1", "libfoo1"}},
+		{"extension without deps contributes nothing", "linux", []string{"c"}, nil},
+		{"non-linux os skips", "darwin", []string{"a", "b"}, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			installer := func(pkgs []string) error {
+				got = pkgs
+				return nil
+			}
+			var resolved []resolve.ResolvedBundle
+			for _, n := range tc.resolved {
+				resolved = append(resolved, resolve.ResolvedBundle{Name: n})
+			}
+			if err := installRuntimeDeps(tc.os, resolved, cat, installer); err != nil {
+				t.Fatalf("installRuntimeDeps: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("installer called with %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestInstallRuntimeDeps_PropagatesError(t *testing.T) {
+	cat := &catalog.Catalog{
+		Extensions: map[string]*catalog.ExtensionSpec{
+			"a": {Name: "a", Kind: catalog.ExtensionKindPECL, RuntimeDeps: map[string][]string{"linux": {"libfoo1"}}},
+		},
+	}
+	installer := func(_ []string) error {
+		return errors.New("apt failed")
+	}
+	err := installRuntimeDeps("linux", []resolve.ResolvedBundle{{Name: "a"}}, cat, installer)
+	if err == nil || !strings.Contains(err.Error(), "apt failed") {
+		t.Errorf("expected apt failed error, got %v", err)
 	}
 }
