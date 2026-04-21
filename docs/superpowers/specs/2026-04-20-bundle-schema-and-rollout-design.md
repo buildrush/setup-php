@@ -370,13 +370,6 @@ If Tβ-2 is omitted, the env-file bump alone does not change the spec-hash and n
 - Post-PR-β, the core bundle digest has changed. All extension bundles rebuild implicitly because their spec-hash includes the core's digest per product-vision §6.2. The lockfile update lands in PR-β's own branch via the new flow — proving end-to-end.
 - `README.md` "Compatibility / CI flow" paragraph references this spec.
 
-### 7.1 Release
-
-- Conventional commits (`feat(workflows): …`, `feat(builders): …`, `feat(gc): …`, `feat(compose): schema assertion`, etc.).
-- `release-please` auto-cuts `v0.2.0-alpha.3` on merge.
-- Bundle digest for the 8.4 core changes again (new sidecar field). Extension bundles get rebuilt too (sidecar change → spec-hash change). Lockfile update lands in the slice's own PR via the new flow — dogfoods the fix.
-- `README.md` — add a one-paragraph "How PR CI handles bundle changes" section linking to this spec.
-
 ## 8. Open questions
 
 - **Fork-PR trusted-contributor workflow.** This spec fails-fast on fork PRs. A follow-up (Phase 7) should add `safe-to-build`-labelled `pull_request_target` pipeline with hardened permissions. The contract with this spec: fork PRs are visibly blocked, never silently broken.

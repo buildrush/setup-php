@@ -92,6 +92,10 @@ for the full design.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
+### How PR CI handles bundle changes
+
+When a PR modifies `catalog/**` or `builders/**`, the build pipeline self-publishes: new bundles are pushed to GHCR and `bundles.lock` is committed **directly to the PR branch** under the `github-actions[bot]` identity. This lets the compat harness run against the bundles the PR actually needs. Practical implications (force-push etiquette, fork-PR handling, orphan GC) live in [CONTRIBUTING.md](CONTRIBUTING.md#ci-writes-to-your-pr-branch). Full design: [`docs/superpowers/specs/2026-04-20-bundle-schema-and-rollout-design.md`](docs/superpowers/specs/2026-04-20-bundle-schema-and-rollout-design.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
