@@ -1,34 +1,54 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-04-21T12:47:58.865851119Z",
+  "generated_at": "2026-04-21T13:18:04.047830109Z",
   "bundles": {
+    "ext:apcu:5.1.28:8.3:linux:x86_64:nts": {
+      "digest": "sha256:daae7e2baffa2a28c6f06aa5aa11d247bcb23d048c7b2c0f1fd10ccc1b33b104",
+      "spec_hash": "sha256:9db2f0ee68e45fe0b699d87a9c990f75200411077dc2ba440a29f53bfdc47c4f"
+    },
     "ext:apcu:5.1.28:8.4:linux:x86_64:nts": {
-      "digest": "sha256:886dec98c6e464e1c8e1a483793053fc43fc4a8341ca5be4f52792458f327ae0",
-      "spec_hash": "sha256:d2a77d17e7d3f12185be1023373634e8bb4c79aee3f673cbebe4a2ee284c9e6e"
+      "digest": "sha256:2db11f2e0c15293263ce04cdfaea83858c9ab56f4ffccac8dfd283a4ae7ecea6",
+      "spec_hash": "sha256:a56672436a38a66b678f87b4515a0ba4dd3cecaa6f9d08ecc5bd0cde1aae09fb"
     },
     "ext:apcu:5.1.28:8.5:linux:x86_64:nts": {
-      "digest": "sha256:ed41df8e28cf07d32c03be29bf9b61bf82076a0968f8d407bb6d5bbc8e0dd22f",
-      "spec_hash": "sha256:dbfafcf364380e781417ef9b948308bfa78847a45c76352b92b52ad9d716bf3c"
+      "digest": "sha256:3d30ff11e4735b4f699290838455c1f310fb592cfe3adc4f7135f8f8c00c4a84",
+      "spec_hash": "sha256:c50241f797be328ceb306dd11b0532b6ae9292a6bea875607c772582c3fbe30f"
+    },
+    "ext:pcov:1.0.12:8.3:linux:x86_64:nts": {
+      "digest": "sha256:0cf3756264ee046256f3960c905172d511152507d3d3f4147e97a02b5f5ca982",
+      "spec_hash": "sha256:0139d346f80bdd50fc856c5c70f9da208e9be9c35dca571790fe397ac79528ac"
     },
     "ext:pcov:1.0.12:8.4:linux:x86_64:nts": {
-      "digest": "sha256:55cf1b90782d252ba32c94aedba6a869df45ab9c3c3091b066e92efe73e8a330",
-      "spec_hash": "sha256:e5ac7dc8c1ca08624b89217c585f1020cefd992fafef7296e96468c6b1f974f4"
+      "digest": "sha256:a9b8123041833085a007c36a5f9cd6f822da43dad4b9e234bb7be84d3c4cd9a5",
+      "spec_hash": "sha256:88bf4921e31c27c8f01606cea0a4d227b1d7168fc102c89103dc6b9d716a8ae2"
     },
     "ext:pcov:1.0.12:8.5:linux:x86_64:nts": {
-      "digest": "sha256:cb672fe7d540927dca35208a77753a99f9ea66f6070b6b5461d5477a8e995644",
-      "spec_hash": "sha256:e2ca096604e859fca9c8565955d52e5405804612f3cfb142f84ddb5dfb0d8ffc"
+      "digest": "sha256:f4158e765d47b7f5aa24cd9f05b3931212d5bffe4ce80b3c03ab97cf9e516743",
+      "spec_hash": "sha256:64451121cd7cfd189a8ef977aa3e5b22d8a1cec6f209706a7c86bfa2fbf40d0d"
+    },
+    "ext:redis:6.2.0:8.3:linux:x86_64:nts": {
+      "digest": "sha256:74a09faabf40546dcc6cf00b663204a9243b9f02803e8d70c8b22779ff2a599d",
+      "spec_hash": "sha256:e1a198c29bb4888710776b4a794f52464741b1d48534f7956391f71a064e0a02"
     },
     "ext:redis:6.2.0:8.4:linux:x86_64:nts": {
-      "digest": "sha256:7fc363f8e09589af6967eafdda0938554f5fac4483138dd4ae4ebc12b4693695",
-      "spec_hash": "sha256:b12d7950cd5000a28449c89d48dcc522772ac02e251a6251c7af38c76c9dc212"
+      "digest": "sha256:f6f9c505107f04c59e6ab2693be56a7b02eb9dcae7ea7946720f4d2308ec5575",
+      "spec_hash": "sha256:cec230943f1785678a83ea25f3079f429328a34b5afd41c64b6c5333f8be472c"
+    },
+    "ext:xdebug:3.5.1:8.3:linux:x86_64:nts": {
+      "digest": "sha256:7084e84d62c73a3db6afbfb7a307c3862f18e8d804f613869568fef83fdebfdd",
+      "spec_hash": "sha256:ffbbcab75e3bc74274c3c45eef5aef57d46e5809be1647b1e3d67f9a6000eb33"
     },
     "ext:xdebug:3.5.1:8.4:linux:x86_64:nts": {
-      "digest": "sha256:2ef5e2f7cfd19504ea7242f1cc997d57487c796b25e4edbff6b63dbdcf7ebee5",
-      "spec_hash": "sha256:37a2896dffad31bd2780f5736e836396c843be868d3d8bb33177da76fd008fcc"
+      "digest": "sha256:816df23201508c4c1f04b3c8abd500879b445a6e2a625838c7b9647a02c6293a",
+      "spec_hash": "sha256:7c5e21e6648e697421c356c64f9240dc92a0eac4088002cda1decd4fccb4be66"
     },
     "ext:xdebug:3.5.1:8.5:linux:x86_64:nts": {
-      "digest": "sha256:9f83c173d863c1b15310ed9ba13159c1d6be5cd038b65fcb0d1de92f45739ba8",
-      "spec_hash": "sha256:c71f538daddb457e8608f7c2da934f00e60ba585d4673ca2bac52a136a29cea4"
+      "digest": "sha256:78a3ddbbb95127240984520dc5312ad492f26f6c6028f6d61ac2fa8a526ed7a0",
+      "spec_hash": "sha256:194ce22d0728195968061234acc8612abd5a0680289d259d0fd5fa0a0b513a70"
+    },
+    "php:8.3:linux:x86_64:nts": {
+      "digest": "sha256:3d2bc0d3c1b0cf2a0796d63650f6ea01fe8aff8a138e1d7bdaa99ec91ab03e59",
+      "spec_hash": "sha256:aa1ab983f6d0b4cf2dfd703aa224d800a2917a83f091c5c60f7f3d0ab5028a40"
     },
     "php:8.4:linux:x86_64:nts": {
       "digest": "sha256:9b1e47ff354c8a03e71a9223d0c5005d9bc83bd4ba17c2055e7c1ce54ecf108a",
