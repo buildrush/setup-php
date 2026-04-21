@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.6.0](https://github.com/buildrush/setup-php/compare/v1.5.0...v1.6.0) (2026-04-21)
+
+
+### Features
+
+* **builders/linux:** install build_deps from catalog via workflow ([ca9f41e](https://github.com/buildrush/setup-php/commit/ca9f41e44dffe9f0b88931c1450f9fb1e04318f6))
+* **catalog:** add build_deps field to ExtensionSpec ([fff6a3a](https://github.com/buildrush/setup-php/commit/fff6a3a63e64a49056bafdf37e3994b177fd9346))
+* **catalog:** add hard-tier PECL extensions (phase 2 B2) ([035fb11](https://github.com/buildrush/setup-php/commit/035fb11b2aae06eaaaa9c500dc5a96cc2f28585f))
+* **catalog:** add top-10 PECL extensions (phase 2 B1) ([e7bf8b4](https://github.com/buildrush/setup-php/commit/e7bf8b4702e3b6fba07ad84a8df555dacae89d30))
+* **catalog:** enable PHP 8.1 core build (linux/x86_64/nts) ([8ec7c18](https://github.com/buildrush/setup-php/commit/8ec7c1882377b19595871be4054d2d322362b788))
+* **catalog:** enable PHP 8.2 core build (linux/x86_64/nts) ([849724e](https://github.com/buildrush/setup-php/commit/849724e10f2111bc4f09706c78731a8415490e30))
+* **catalog:** enable PHP 8.3 core build (linux/x86_64/nts) ([2b87c9c](https://github.com/buildrush/setup-php/commit/2b87c9c8ff13c4ee7b6679ad6b188ab400e831a5))
+* **catalog:** extend PECL extensions to PHP 8.1 ABI ([38f2a01](https://github.com/buildrush/setup-php/commit/38f2a01b852cad2562937b0b43785e1a76b42eea))
+* **catalog:** extend PECL extensions to PHP 8.2 ABI ([54037ff](https://github.com/buildrush/setup-php/commit/54037ff979507aa690a80531a9a84f77c8e109c0))
+* **catalog:** extend PECL extensions to PHP 8.3 ABI ([08ac39e](https://github.com/buildrush/setup-php/commit/08ac39e4d3405e6104d7edf6fa406e522b863282))
+* enable PHP 8.5 core + PECL rebuild (phase 2) ([#37](https://github.com/buildrush/setup-php/issues/37)) ([71589ef](https://github.com/buildrush/setup-php/commit/71589ef6a432f31eee8ef06b92b6fbea8cfeeeba))
+* **phpup:** extend runtime catalog with hard-tier PECL extensions ([6bfbb30](https://github.com/buildrush/setup-php/commit/6bfbb304a32d9d344deeef76b19e95d9b6957486))
+* **phpup:** extend runtime catalog with top-10 PECL extensions ([0f3cf55](https://github.com/buildrush/setup-php/commit/0f3cf55b0f29184ba87821b2eede1599fec46ba7))
+* **phpup:** install runtime_deps.linux for PECL bundles ([e844105](https://github.com/buildrush/setup-php/commit/e844105ceb43f1fb961953d138caf310396f6b2b))
+* **workflows:** descriptive job names for build-extension / build-php-core ([#45](https://github.com/buildrush/setup-php/issues/45)) ([ea659f0](https://github.com/buildrush/setup-php/commit/ea659f05816ab7f17634777e247407cbf4334054))
+
+
+### Bug Fixes
+
+* **catalog:** exclude igbinary on 8.5; swap affected fixture ([2656f27](https://github.com/buildrush/setup-php/commit/2656f2731121846443e335a84cfa89c016441a7c))
+* **catalog:** imagick runtime_deps package names on ubuntu-24.04 ([8fac81b](https://github.com/buildrush/setup-php/commit/8fac81bfb5e37608c380d90a1020cfeec9bf2443))
+
+
+### Documentation
+
+* add Phase 2 aarch64 C1 design (infrastructure + cores) ([66a0604](https://github.com/buildrush/setup-php/commit/66a0604f0c38ce7f2cddd99f437806b4fc297fc3))
+* add Phase 2 hard-tier PECL extension design (slice B2) ([1be8736](https://github.com/buildrush/setup-php/commit/1be87366df631835bb1cc8538a978f36c0bd125c))
+* add Phase 2 top-10 PECL extension expansion design (slice B1) ([da4f6f9](https://github.com/buildrush/setup-php/commit/da4f6f9b11a87fab854245f876d42d2b3b0ace68))
+* add Phase 2 version-expansion design ([5779ca3](https://github.com/buildrush/setup-php/commit/5779ca3f119f964a720e157586a80f4ee0074420))
+* amend phase2-version-expansion — real fixture count (8), existing compat tests ([d823a5a](https://github.com/buildrush/setup-php/commit/d823a5a58e742eb0b37252c5a4dc1cd3fb26cb8a))
+* **readme:** list PHP 8.1–8.5 as supported after phase 2 version expansion ([69af03f](https://github.com/buildrush/setup-php/commit/69af03f216493bb7727a32fafe40fd7a50a465bd))
+
 ## [1.5.0](https://github.com/buildrush/setup-php/compare/v1.4.0...v1.5.0) (2026-04-21)
 
 
