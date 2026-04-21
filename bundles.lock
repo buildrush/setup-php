@@ -1,26 +1,26 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-04-20T13:36:15.763420987Z",
+  "generated_at": "2026-04-21T09:19:23.251904138Z",
   "bundles": {
     "ext:apcu:5.1.28:8.4:linux:x86_64:nts": {
-      "digest": "sha256:65654a51fefca248d690fa52edffc831c584e9a283905a6b2c598f906358440a",
-      "spec_hash": "sha256:2fe854503b7ef8d15d2bee69571b92aa1346b8bd41123a4dea5b636ff8d4aaf0"
+      "digest": "sha256:b59849d63e6069cc0fc3d7e662419de9542a816dd379f666761bfc71c78211ac",
+      "spec_hash": "sha256:953544a10ba7aa615bf06f36f21617420aba5300dd2c3853b425fdbe14a66c44"
     },
     "ext:pcov:1.0.12:8.4:linux:x86_64:nts": {
-      "digest": "sha256:b2243cc8d71c906b2ec5250be44d64d4eaafc232f7793af63d23ddca59c3c909",
-      "spec_hash": "sha256:20ad49afe23f3582a89e278b4459855dc62bd14ab82c801c3a988ad6b1c4052e"
+      "digest": "sha256:6740f550dfee77f29b1d01fe234a6eaf45ef970c3fdfd26745c65c208d4fac63",
+      "spec_hash": "sha256:e34862339407c92e247301b55ccbd06011fac3ff17f4d9b04c7aed6a53a161d7"
     },
     "ext:redis:6.2.0:8.4:linux:x86_64:nts": {
-      "digest": "sha256:a9ae0134a9d5198956d622f51140a946e8d59019ca671ab351edfea1760d8efe",
-      "spec_hash": "sha256:32330ebc5b6522350a725b72c5d2a6ac9f92b10937735511fbd42a7dcf9e2fc3"
+      "digest": "sha256:ac33ac604bc08ac7760e7f97eee8c14b6a9826d62a705aa6441e1d480f8b7e9a",
+      "spec_hash": "sha256:c8309cc6fe56fc125a80126459d48f3da11928661f7eb80bc90bae6eae49c9f4"
     },
     "ext:xdebug:3.5.1:8.4:linux:x86_64:nts": {
-      "digest": "sha256:9c9dd38cdf5f145f9aca221cb071f53ef852ed24b5647060a0ef621cd0a98bd2",
-      "spec_hash": "sha256:a55aca0ae79b458073d0b9b5b19ae59267b2f7309f491f081352417b95488fe6"
+      "digest": "sha256:e2199d5b9e1c2435f18a926e35ad8660780ede77b56f38f8cb7707a2aef7e1d3",
+      "spec_hash": "sha256:976d4afe384f4a83b172aada160332c008a09e7a933e20daecb6e313337eafa7"
     },
     "php:8.4:linux:x86_64:nts": {
-      "digest": "sha256:aa580f45d8b52e846de96d937b2a8bfc47a408a7df378b82a3e9e9e88ecb758e",
-      "spec_hash": "sha256:33e4190327e5d2f2a8659819ab067cc66dc791051d8684fb31bace94435a4513"
+      "digest": "sha256:9b1e47ff354c8a03e71a9223d0c5005d9bc83bd4ba17c2055e7c1ce54ecf108a",
+      "spec_hash": "sha256:f8fc1e3cb7ff8248b4c88c8eb6a767e845d6ac6166f51033c528a7f9aa272e3a"
     }
   }
 }
