@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.5.0](https://github.com/buildrush/setup-php/compare/v1.4.0...v1.5.0) (2026-04-21)
+
+
+### Features
+
+* **builders/linux:** stash php.ini-{production,development} into bundle ([e3b3289](https://github.com/buildrush/setup-php/commit/e3b328924de502d4f5dc7b8d64704e5a5501b0e6))
+* bundle rollout PR-α — commit-back lockfile flow ([935bc93](https://github.com/buildrush/setup-php/commit/935bc936f3090d531af13f946343bbf99a4da3bf))
+* bundle rollout PR-β.1 — sidecar schema_version + runtime enforcement ([eb8d6e1](https://github.com/buildrush/setup-php/commit/eb8d6e1a3b841ff797402de19d7ced62eb417b30))
+* bundle rollout PR-β.2 — GC + release-lockfile invariant ([c212a86](https://github.com/buildrush/setup-php/commit/c212a8668a2e88e7eca0c77a1448cfee4341f65b))
+* **compat:** add BaseIniFileName for ini-file input ([ee3e604](https://github.com/buildrush/setup-php/commit/ee3e604b1391f52a3a42593b5d80653d112418cb))
+* **compat:** add PHP 8.x opcache/JIT defaults per v2 jit.ini ([c13504a](https://github.com/buildrush/setup-php/commit/c13504a4b109d7e17b6557aa4c0949139d9b5636))
+* **compat:** add XdebugIniFragment matching v2's xdebug.ini ([cfe5e60](https://github.com/buildrush/setup-php/commit/cfe5e60e27d470a25f0cbcd502f8b002148873ea))
+* **compose:** MergeCompatLayers helper for ini precedence ([2304ecd](https://github.com/buildrush/setup-php/commit/2304ecd7517fabcbac50bb696107bbcc41d67587))
+* **compose:** SelectBaseIniFile — copy production/development or empty ([1c15f05](https://github.com/buildrush/setup-php/commit/1c15f05401bd43a34383ea68a8b37af530dfa505))
+* **phpup:** wire ini-file selection + XdebugIniFragment + ExtraIni ([988456a](https://github.com/buildrush/setup-php/commit/988456ab5cac9ad170b28b2b7a6aa092a34ddb9e))
+* **plan:** coverage side-effects — disable unused driver, pcov.enabled=1 ([5ae90d0](https://github.com/buildrush/setup-php/commit/5ae90d0e1ce22ceb0da6bb059f0b8601d5183a2e))
+
+
+### Bug Fixes
+
+* **cmd/lockfile-update:** preserve generated_at on no-op bundle updates ([c8151c9](https://github.com/buildrush/setup-php/commit/c8151c90d7d48a3a932db6e280a5b8bc7a9ebf4a))
+* **phpup,compat:** honor opcache exclusion; narrow xdebug fragment; allowlist residual drift ([93d30cd](https://github.com/buildrush/setup-php/commit/93d30cd1f434e6dabb935f10c56efb89cf3624ec))
+* **phpup:** set PHPRC and auto-load opcache ([41f7dc5](https://github.com/buildrush/setup-php/commit/41f7dc53ad533249a3d62ccb3f84fc053a96b404))
+* **plan:** include IniFile in Hash() to prevent cache contamination ([800a234](https://github.com/buildrush/setup-php/commit/800a23402d4b9965b496e2acd49f8e011116799b))
+* **planner:** use phpMinor (not PHPAbi) for ext lockfile key lookup ([c8a1903](https://github.com/buildrush/setup-php/commit/c8a19031a0c1a48167ff82ce4e296a3245dc5305))
+* **planner:** use tag-resolve instead of digest-HEAD for skip check ([10097f3](https://github.com/buildrush/setup-php/commit/10097f356ae58afe28c78cc0603e007cbf4e4be4))
+* **plan:** validate coverage input; reject invalid values with ::error:: ([b7b7901](https://github.com/buildrush/setup-php/commit/b7b790147288229383c4bb79b4ff549d4fe7727d))
+* **workflows:** plan.yml checks out PR head, not merge commit ([888ece2](https://github.com/buildrush/setup-php/commit/888ece25e211a25067f3ea4add7a2f8854c7223b))
+
+
+### Documentation
+
+* add Phase 2 compat closeout design ([0be4974](https://github.com/buildrush/setup-php/commit/0be49744117e66bd25aef74e5c0357aa41a0c094))
+* close bundle-rollout spec Tβ-9 doc gaps ([09957be](https://github.com/buildrush/setup-php/commit/09957bef556164dd311956331cfb65bdb4cc7ab6))
+* **compat:** clarify XdebugIniFragment divergence + add 7.3 test ([00add22](https://github.com/buildrush/setup-php/commit/00add22a9225ba76e5e61eda52e0ed59607da3a6))
+* **compat:** mark coverage+ini-file quirks as implemented ([9e59f50](https://github.com/buildrush/setup-php/commit/9e59f507a08d1021bb8b7bd4190b5bd7a3150f60))
+* **compat:** shrink deviations allowlist for closeout slice ([7394aa1](https://github.com/buildrush/setup-php/commit/7394aa14c524341ea3ebe46078ac685ee5eadc92))
+
 ## [1.4.0](https://github.com/buildrush/setup-php/compare/v1.3.0...v1.4.0) (2026-04-20)
 
 
