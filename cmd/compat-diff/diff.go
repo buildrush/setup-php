@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 )
 
 type probe struct {
@@ -62,10 +63,16 @@ func joinSorted(xs []string) string {
 	return string(b)
 }
 
-// fixtureMatches returns true if fixtures contains "*" or the exact fixture name.
+// fixtureMatches returns true if fixtures contains "*", the exact fixture
+// name, or a trailing-wildcard pattern (e.g. "multi-ext*" matches both
+// "multi-ext" and "multi-ext-85"). Trailing wildcard is the only glob
+// supported; anything else is an exact match.
 func fixtureMatches(fixtures []string, fixture string) bool {
 	for _, f := range fixtures {
 		if f == "*" || f == fixture {
+			return true
+		}
+		if strings.HasSuffix(f, "*") && strings.HasPrefix(fixture, strings.TrimSuffix(f, "*")) {
 			return true
 		}
 	}

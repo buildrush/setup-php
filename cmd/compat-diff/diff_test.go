@@ -86,6 +86,29 @@ func TestDiffFixtureGlobFilter(t *testing.T) {
 	}
 }
 
+func TestDiffFixtureTrailingWildcard(t *testing.T) {
+	a := loadProbe(t, "probe-bare.json")
+	b := loadProbe(t, "probe-bare-ini-shift.json")
+	// "bare*" should match both "bare" and "bare-85" — the version-expansion
+	// allowlist relies on this to avoid listing every version suffix.
+	al := allowlist{Deviations: []deviation{
+		{Path: "ini.memory_limit", Kind: "ignore", Reason: "x", Fixtures: []string{"bare*"}},
+	}}
+	for _, fixture := range []string{"bare", "bare-85", "bare-81"} {
+		t.Run(fixture, func(t *testing.T) {
+			res := diffProbes(a, b, al, fixture)
+			if len(res) != 0 {
+				t.Fatalf("expected wildcard to match fixture %q, got %d diffs", fixture, len(res))
+			}
+		})
+	}
+	// A non-matching fixture must NOT be swallowed by the wildcard.
+	res := diffProbes(a, b, al, "exclusion")
+	if len(res) != 1 {
+		t.Fatalf("expected wildcard to NOT match non-prefixed fixture, got %d diffs", len(res))
+	}
+}
+
 func TestDiffAllowKindBothEmptyEqual(t *testing.T) {
 	a := loadProbe(t, "probe-bare-ext-empty.json")
 	b := loadProbe(t, "probe-bare-ext-empty.json")

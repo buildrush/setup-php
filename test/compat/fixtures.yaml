@@ -52,3 +52,55 @@ fixtures:
     extensions: 'redis'
     ini-values: ''
     coverage: 'none'
+
+  - name: bare-85
+    php-version: '8.5'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: coverage-pcov-85
+    php-version: '8.5'
+    extensions: ''
+    ini-values: ''
+    coverage: 'pcov'
+
+  - name: exclusion-85
+    php-version: '8.5'
+    extensions: ':opcache'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: ini-and-coverage-85
+    php-version: '8.5'
+    extensions: ''
+    ini-values: 'memory_limit=256M,date.timezone=UTC'
+    coverage: 'xdebug'
+
+  - name: ini-file-development-85
+    php-version: '8.5'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+    ini-file: 'development'
+
+  # redis is excluded on 8.5 (see catalog/extensions/redis.yaml); these three
+  # fixtures substitute apcu to cover the same input-shape axes (multi-ext,
+  # none-reset, single-ext) against an extension that does build on 8.5.
+  - name: multi-ext-85
+    php-version: '8.5'
+    extensions: 'apcu, xdebug'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: none-reset-85
+    php-version: '8.5'
+    extensions: 'none, apcu'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: single-ext-85
+    php-version: '8.5'
+    extensions: 'apcu'
+    ini-values: ''
+    coverage: 'none'

@@ -75,6 +75,7 @@ func main() {
 			"redis":  {Name: "redis", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.2.0"}},
 			"xdebug": {Name: "xdebug", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.5.1"}, Ini: []string{"zend_extension=xdebug"}},
 			"pcov":   {Name: "pcov", Kind: catalog.ExtensionKindPECL, Versions: []string{"1.0.12"}, Ini: []string{"extension=pcov"}},
+			"apcu":   {Name: "apcu", Kind: catalog.ExtensionKindPECL, Versions: []string{"5.1.28"}},
 		},
 	}
 

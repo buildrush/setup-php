@@ -1,26 +1,42 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-04-21T09:19:23.251904138Z",
+  "generated_at": "2026-04-21T12:47:58.865851119Z",
   "bundles": {
     "ext:apcu:5.1.28:8.4:linux:x86_64:nts": {
-      "digest": "sha256:b59849d63e6069cc0fc3d7e662419de9542a816dd379f666761bfc71c78211ac",
-      "spec_hash": "sha256:953544a10ba7aa615bf06f36f21617420aba5300dd2c3853b425fdbe14a66c44"
+      "digest": "sha256:886dec98c6e464e1c8e1a483793053fc43fc4a8341ca5be4f52792458f327ae0",
+      "spec_hash": "sha256:d2a77d17e7d3f12185be1023373634e8bb4c79aee3f673cbebe4a2ee284c9e6e"
+    },
+    "ext:apcu:5.1.28:8.5:linux:x86_64:nts": {
+      "digest": "sha256:ed41df8e28cf07d32c03be29bf9b61bf82076a0968f8d407bb6d5bbc8e0dd22f",
+      "spec_hash": "sha256:dbfafcf364380e781417ef9b948308bfa78847a45c76352b92b52ad9d716bf3c"
     },
     "ext:pcov:1.0.12:8.4:linux:x86_64:nts": {
-      "digest": "sha256:6740f550dfee77f29b1d01fe234a6eaf45ef970c3fdfd26745c65c208d4fac63",
-      "spec_hash": "sha256:e34862339407c92e247301b55ccbd06011fac3ff17f4d9b04c7aed6a53a161d7"
+      "digest": "sha256:55cf1b90782d252ba32c94aedba6a869df45ab9c3c3091b066e92efe73e8a330",
+      "spec_hash": "sha256:e5ac7dc8c1ca08624b89217c585f1020cefd992fafef7296e96468c6b1f974f4"
+    },
+    "ext:pcov:1.0.12:8.5:linux:x86_64:nts": {
+      "digest": "sha256:cb672fe7d540927dca35208a77753a99f9ea66f6070b6b5461d5477a8e995644",
+      "spec_hash": "sha256:e2ca096604e859fca9c8565955d52e5405804612f3cfb142f84ddb5dfb0d8ffc"
     },
     "ext:redis:6.2.0:8.4:linux:x86_64:nts": {
-      "digest": "sha256:ac33ac604bc08ac7760e7f97eee8c14b6a9826d62a705aa6441e1d480f8b7e9a",
-      "spec_hash": "sha256:c8309cc6fe56fc125a80126459d48f3da11928661f7eb80bc90bae6eae49c9f4"
+      "digest": "sha256:7fc363f8e09589af6967eafdda0938554f5fac4483138dd4ae4ebc12b4693695",
+      "spec_hash": "sha256:b12d7950cd5000a28449c89d48dcc522772ac02e251a6251c7af38c76c9dc212"
     },
     "ext:xdebug:3.5.1:8.4:linux:x86_64:nts": {
-      "digest": "sha256:e2199d5b9e1c2435f18a926e35ad8660780ede77b56f38f8cb7707a2aef7e1d3",
-      "spec_hash": "sha256:976d4afe384f4a83b172aada160332c008a09e7a933e20daecb6e313337eafa7"
+      "digest": "sha256:2ef5e2f7cfd19504ea7242f1cc997d57487c796b25e4edbff6b63dbdcf7ebee5",
+      "spec_hash": "sha256:37a2896dffad31bd2780f5736e836396c843be868d3d8bb33177da76fd008fcc"
+    },
+    "ext:xdebug:3.5.1:8.5:linux:x86_64:nts": {
+      "digest": "sha256:9f83c173d863c1b15310ed9ba13159c1d6be5cd038b65fcb0d1de92f45739ba8",
+      "spec_hash": "sha256:c71f538daddb457e8608f7c2da934f00e60ba585d4673ca2bac52a136a29cea4"
     },
     "php:8.4:linux:x86_64:nts": {
       "digest": "sha256:9b1e47ff354c8a03e71a9223d0c5005d9bc83bd4ba17c2055e7c1ce54ecf108a",
       "spec_hash": "sha256:f8fc1e3cb7ff8248b4c88c8eb6a767e845d6ac6166f51033c528a7f9aa272e3a"
+    },
+    "php:8.5:linux:x86_64:nts": {
+      "digest": "sha256:597ee0728e7966de8e97a60a7ead68d15e5b2118995b99f3db6353ff1f3e844a",
+      "spec_hash": "sha256:e797fcb0759061f587b9c3582ee394bfa366dead66f2479a473abd9a822fa291"
     }
   }
 }
