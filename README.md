@@ -2,7 +2,7 @@
 
 Fast, reproducible PHP setup for GitHub Actions using prebuilt bundles.
 
-> **Status:** Alpha. Linux x86_64 only. PHP 8.4.
+> **Status:** Alpha. Linux x86_64 only. PHP 8.1 – 8.5.
 
 ## Quick Start
 
