@@ -55,6 +55,11 @@ linters:
       - linters: [gosec]
         text: "G204"
         path: cmd/lockfile-update/
+      # Subprocess calls in gc-bundles execute git with internally-constructed args only;
+      # no untrusted input touches the command vector
+      - linters: [gosec]
+        text: "G204"
+        path: cmd/gc-bundles/
       # CommitOpts (96 bytes) parameter passing cost is negligible vs. git subprocess invocation cost
       - linters: [gocritic]
         text: "hugeParam"
