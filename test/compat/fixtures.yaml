@@ -153,3 +153,52 @@ fixtures:
     extensions: 'redis'
     ini-values: ''
     coverage: 'none'
+
+  - name: bare-82
+    php-version: '8.2'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: coverage-pcov-82
+    php-version: '8.2'
+    extensions: ''
+    ini-values: ''
+    coverage: 'pcov'
+
+  - name: exclusion-82
+    php-version: '8.2'
+    extensions: ':opcache'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: ini-and-coverage-82
+    php-version: '8.2'
+    extensions: ''
+    ini-values: 'memory_limit=256M,date.timezone=UTC'
+    coverage: 'xdebug'
+
+  - name: ini-file-development-82
+    php-version: '8.2'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+    ini-file: 'development'
+
+  - name: multi-ext-82
+    php-version: '8.2'
+    extensions: 'redis, xdebug'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: none-reset-82
+    php-version: '8.2'
+    extensions: 'none, redis'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: single-ext-82
+    php-version: '8.2'
+    extensions: 'redis'
+    ini-values: ''
+    coverage: 'none'
