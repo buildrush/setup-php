@@ -170,11 +170,18 @@ top of it.
 
 ### 2.4 `src/configs/ini/jit_aarch64.ini` (arm64/aarch64 only)
 
-Not fetched in this audit because PHP 8+ aarch64 ini content diverges (the
-upstream file sets `opcache.jit=off` for some PHP×arch combinations). **Gap**:
-confirm contents of `src/configs/ini/jit_aarch64.ini` before encoding in Go.
-Link:
-https://raw.githubusercontent.com/shivammathur/setup-php/accd6127cb78bee3e8082180cb391013d204ef9f/src/configs/ini/jit_aarch64.ini
+Audited 2026-04-21 against pinned SHA `accd6127cb78bee3e8082180cb391013d204ef9f`:
+
+| Key                       | Value  |
+| ------------------------- | ------ |
+| `opcache.enable`          | `1`    |
+| `opcache.jit_buffer_size` | `128M` |
+| `opcache.jit`             | `1235` |
+
+Only `opcache.jit_buffer_size` diverges from x86_64's §2.3 (`256M`). Encoded
+in `internal/compat.DefaultIniValues(phpVersion, arch)` by slice C1.
+
+Source: https://raw.githubusercontent.com/shivammathur/setup-php/accd6127cb78bee3e8082180cb391013d204ef9f/src/configs/ini/jit_aarch64.ini
 
 ### 2.5 Base ini file selection
 
