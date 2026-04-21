@@ -516,13 +516,13 @@ deviations:
   - path: ini.xdebug.mode
     kind: ignore
     reason: 'v2 apt xdebug install unreliable on ubuntu-24.04; theirs often unloaded'
-    fixtures: ['multi-ext']
+    fixtures: ['multi-ext*']
   - path: ini.xdebug.start_with_request
     kind: ignore
     reason: 'xdebug version-default drift (v2 apt unreliable; ours = xdebug 3.5.1 default)'
-    fixtures: ['multi-ext']
+    fixtures: ['multi-ext*']
 
-  # disable_functions: Ondrej's php8.4-cli Debian package patches
+  # disable_functions: Ondrej's php8.*-cli Debian packages patch
   # php.ini-development to blacklist all pcntl_* functions (CI hardening).
   # Our source-built PHP uses the stock upstream php.ini-development which
   # has disable_functions= empty. Replicating Ondrej's patch set is out of
@@ -530,6 +530,6 @@ deviations:
   - path: ini.disable_functions
     kind: ignore
     reason: 'Ondrej Debian patch on php.ini-development adds pcntl_* blacklist; stock upstream does not'
-    fixtures: ['ini-file-development']
+    fixtures: ['ini-file-development*']
 ```
 <!-- compat-harness:deviations:end -->
