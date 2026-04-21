@@ -9,6 +9,13 @@ abi_matrix:
   os: ['linux']
   arch: ['x86_64']
   ts: ['nts']
+exclude:
+  # igbinary 3.2.16 references ext/standard/php_smart_string.h which was
+  # removed in PHP 8.5; same class of upstream incompatibility as redis 6.2.0
+  # on 8.5 (see #38). Latest PECL stable is 3.2.16; 3.2.17RC1 exists but is
+  # not stable. Version bump is its own single-purpose slice per spec
+  # non-goals.
+  - { php: '8.5' }
 build_deps:
   linux: []
 runtime_deps:
