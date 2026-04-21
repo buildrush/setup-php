@@ -1,0 +1,19 @@
+name: imagick
+kind: pecl
+source:
+  pecl_package: imagick
+versions:
+  - '3.8.1'
+abi_matrix:
+  php: ['8.1', '8.2', '8.3', '8.4', '8.5']
+  os: ['linux']
+  arch: ['x86_64']
+  ts: ['nts']
+build_deps:
+  linux: ['libmagickwand-dev', 'libmagickcore-dev']
+runtime_deps:
+  linux: ['libmagickwand-6.q16-6t64', 'libmagickcore-6.q16-6t64']
+ini:
+  - 'extension=imagick'
+smoke:
+  - 'php -r "assert(extension_loaded(\"imagick\"));"'
