@@ -36,7 +36,7 @@ on:
 jobs:
   build:
     name: 'ext ${{ inputs.extension }} ${{ inputs.ext_version }} @ PHP ${{ inputs.php_abi }}'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     permissions:
       packages: write
       id-token: write
