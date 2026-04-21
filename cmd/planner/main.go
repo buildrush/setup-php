@@ -130,18 +130,34 @@ func filterExisting(ctx context.Context, cells []planner.MatrixCell, lf *lockfil
 			continue
 		}
 
+		// Resolve the tagged ref and compare its current digest against the
+		// lockfile entry. Tag-form refs go through the same auth / API path
+		// that build jobs successfully use when pulling (`oras pull :tag`),
+		// whereas digest-form HEAD requests have been observed to fail with
+		// 403 for some OCI artifacts on GHCR even when the package is public
+		// and the repo has read access. Switching to tag+compare keeps the
+		// verification semantics (skip only when the registry actually has
+		// the lockfile digest) while working around that inconsistency.
 		var ref string
 		if cell.Extension != "" {
-			ref = fmt.Sprintf("ghcr.io/buildrush/php-ext-%s@%s", cell.Extension, entry.Digest)
+			tag := fmt.Sprintf("%s-%s-%s-%s", cell.ExtVer, cell.PHPAbi, cell.OS, cell.Arch)
+			ref = fmt.Sprintf("ghcr.io/buildrush/php-ext-%s:%s", cell.Extension, tag)
 		} else {
-			ref = fmt.Sprintf("ghcr.io/buildrush/php-core@%s", entry.Digest)
+			tag := fmt.Sprintf("%s-%s-%s-%s", cell.Version, cell.OS, cell.Arch, cell.TS)
+			ref = fmt.Sprintf("ghcr.io/buildrush/php-core:%s", tag)
 		}
-		exists, _ := client.Exists(ctx, ref, entry.Digest)
-		if !exists {
-			filtered = append(filtered, *cell) // missing from registry, rebuild
+		currentDigest, err := client.ResolveDigest(ctx, ref)
+		if err != nil {
+			log.Printf("WARNING: resolve %s: %v; will rebuild", ref, err)
+			filtered = append(filtered, *cell)
+			continue
 		}
-		// else: skip — lockfile digest exists on registry and spec_hash either
-		// matches or is empty (grandfathered).
+		if currentDigest != entry.Digest {
+			log.Printf("INFO: %s tag digest %s differs from lockfile %s; rebuild", ref, currentDigest, entry.Digest)
+			filtered = append(filtered, *cell)
+			continue
+		}
+		// Tag exists and resolves to the lockfile digest — skip.
 	}
 	return filtered
 }
