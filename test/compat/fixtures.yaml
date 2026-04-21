@@ -104,3 +104,52 @@ fixtures:
     extensions: 'apcu'
     ini-values: ''
     coverage: 'none'
+
+  - name: bare-83
+    php-version: '8.3'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: coverage-pcov-83
+    php-version: '8.3'
+    extensions: ''
+    ini-values: ''
+    coverage: 'pcov'
+
+  - name: exclusion-83
+    php-version: '8.3'
+    extensions: ':opcache'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: ini-and-coverage-83
+    php-version: '8.3'
+    extensions: ''
+    ini-values: 'memory_limit=256M,date.timezone=UTC'
+    coverage: 'xdebug'
+
+  - name: ini-file-development-83
+    php-version: '8.3'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+    ini-file: 'development'
+
+  - name: multi-ext-83
+    php-version: '8.3'
+    extensions: 'redis, xdebug'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: none-reset-83
+    php-version: '8.3'
+    extensions: 'none, redis'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: single-ext-83
+    php-version: '8.3'
+    extensions: 'redis'
+    ini-values: ''
+    coverage: 'none'
