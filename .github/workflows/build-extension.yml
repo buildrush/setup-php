@@ -63,6 +63,7 @@ jobs:
           EXT_NAME: ${{ inputs.extension }}
           EXT_VERSION: ${{ inputs.ext_version }}
           PHP_ABI: ${{ inputs.php_abi }}
+          ARCH: ${{ inputs.arch }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REGISTRY: ghcr.io/${{ github.repository_owner }}
           WORKSPACE: ${{ github.workspace }}
