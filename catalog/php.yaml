@@ -49,7 +49,7 @@ versions:
       sig: "https://www.php.net/distributions/php-{version}.tar.xz.asc"
     abi_matrix:
       os: ["linux"]
-      arch: ["x86_64"]
+      arch: ["x86_64", "aarch64"]
       ts: ["nts"]
     configure_flags:
       common: >-
@@ -127,7 +127,7 @@ versions:
       sig: "https://www.php.net/distributions/php-{version}.tar.xz.asc"
     abi_matrix:
       os: ["linux"]
-      arch: ["x86_64"]
+      arch: ["x86_64", "aarch64"]
       ts: ["nts"]
     configure_flags:
       common: >-
@@ -205,7 +205,7 @@ versions:
       sig: "https://www.php.net/distributions/php-{version}.tar.xz.asc"
     abi_matrix:
       os: ["linux"]
-      arch: ["x86_64"]
+      arch: ["x86_64", "aarch64"]
       ts: ["nts"]
     configure_flags:
       common: >-
@@ -283,7 +283,7 @@ versions:
       sig: "https://www.php.net/distributions/php-{version}.tar.xz.asc"
     abi_matrix:
       os: ["linux"]
-      arch: ["x86_64"]
+      arch: ["x86_64", "aarch64"]
       ts: ["nts"]
     configure_flags:
       common: >-
@@ -363,7 +363,7 @@ versions:
       sig: "https://www.php.net/distributions/php-{version}.tar.xz.asc"
     abi_matrix:
       os: ["linux"]
-      arch: ["x86_64"]
+      arch: ["x86_64", "aarch64"]
       ts: ["nts"]
     configure_flags:
       common: >-
