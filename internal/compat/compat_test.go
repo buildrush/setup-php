@@ -39,7 +39,9 @@ func TestUnimplementedInputWarning(t *testing.T) {
 }
 
 func TestDefaultIniValuesMatchesGolden(t *testing.T) {
-	got := DefaultIniValues("8.4")
+	// The golden file pins x86_64's expected keys. aarch64 branch has its
+	// own targeted cases in TestDefaultIniValues_PHP8xOpcacheJIT below.
+	got := DefaultIniValues("8.4", "x86_64")
 
 	want := map[string]string{}
 	for _, line := range readGoldenLines(t, "default_ini_values.golden") {
@@ -239,35 +241,48 @@ func TestXdebugIniFragment(t *testing.T) {
 }
 
 func TestDefaultIniValues_PHP8xOpcacheJIT(t *testing.T) {
-	for _, php := range []string{"8.0", "8.1", "8.2", "8.3", "8.4", "8.5", "8.4.5", "8.9"} {
-		t.Run(php, func(t *testing.T) {
-			got := DefaultIniValues(php)
-			want := map[string]string{
-				"date.timezone":           "UTC",
-				"memory_limit":            "-1",
-				"opcache.enable":          "1",
-				"opcache.jit":             "1235",
-				"opcache.jit_buffer_size": "256M",
-			}
-			if !reflect.DeepEqual(got, want) {
-				t.Errorf("DefaultIniValues(%q) = %v, want %v", php, got, want)
-			}
-		})
+	cases := []struct {
+		arch    string
+		wantBuf string
+	}{
+		{"x86_64", "256M"},
+		{"aarch64", "128M"},
+	}
+	for _, tc := range cases {
+		for _, php := range []string{"8.0", "8.1", "8.2", "8.3", "8.4", "8.5", "8.4.5", "8.9"} {
+			t.Run(tc.arch+"/"+php, func(t *testing.T) {
+				got := DefaultIniValues(php, tc.arch)
+				want := map[string]string{
+					"date.timezone":           "UTC",
+					"memory_limit":            "-1",
+					"opcache.enable":          "1",
+					"opcache.jit":             "1235",
+					"opcache.jit_buffer_size": tc.wantBuf,
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Errorf("DefaultIniValues(%q, %q) = %v, want %v", php, tc.arch, got, want)
+				}
+			})
+		}
 	}
 }
 
 func TestDefaultIniValues_NonPHP8(t *testing.T) {
-	for _, php := range []string{"7.4", "9.0"} {
-		t.Run(php, func(t *testing.T) {
-			got := DefaultIniValues(php)
-			want := map[string]string{
-				"date.timezone": "UTC",
-				"memory_limit":  "-1",
-			}
-			if !reflect.DeepEqual(got, want) {
-				t.Errorf("DefaultIniValues(%q) = %v, want %v", php, got, want)
-			}
-		})
+	// Below 8.x the opcache/JIT block does not apply on either arch;
+	// both archs return the same 2-key set.
+	for _, arch := range []string{"x86_64", "aarch64"} {
+		for _, php := range []string{"7.4", "9.0"} {
+			t.Run(arch+"/"+php, func(t *testing.T) {
+				got := DefaultIniValues(php, arch)
+				want := map[string]string{
+					"date.timezone": "UTC",
+					"memory_limit":  "-1",
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Errorf("DefaultIniValues(%q, %q) = %v, want %v", php, arch, got, want)
+				}
+			})
+		}
 	}
 }
 

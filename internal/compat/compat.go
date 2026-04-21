@@ -82,18 +82,18 @@ func BaseIniFileName(iniFile string) (filename, warning string) {
 }
 
 // DefaultIniValues returns the ini key/value pairs that shivammathur/setup-php@v2
-// sets on Linux runners by default, before any user-supplied ini-values. The
-// caller merges the user values over the top so users can still override.
-//
-// Version-conditional defaults:
-//   - PHP 8.x (8.0–8.9): opcache.enable, opcache.jit, opcache.jit_buffer_size
-//     per compat-matrix.md §2.3 (jit_versions regex 8.[0-9]).
+// applies to every Linux run by default via its bundled ini templates. The
+// result is keyed by PHP minor version AND architecture — aarch64 diverges from
+// x86_64 on opcache.jit_buffer_size per v2's src/configs/ini/jit_aarch64.ini
+// (see docs/compat-matrix.md §2.4).
 //
 // Extension-tied defaults (e.g. xdebug.mode=coverage) are applied at compose
 // time by their respective handlers, not by this function.
 //
-// Data source: docs/compat-matrix.md §2.1 and §2.3; mirrored in testdata/default_ini_values.golden.
-func DefaultIniValues(phpVersion string) map[string]string {
+// Data sources: docs/compat-matrix.md §2.1 (base), §2.3 (x86_64 jit),
+// §2.4 (aarch64 jit); golden file testdata/default_ini_values.golden pins the
+// x86_64 form.
+func DefaultIniValues(phpVersion, arch string) map[string]string {
 	base := map[string]string{
 		"date.timezone": "UTC",
 		"memory_limit":  "-1",
@@ -101,7 +101,11 @@ func DefaultIniValues(phpVersion string) map[string]string {
 	if isPHP8x(minorOf(phpVersion)) {
 		base["opcache.enable"] = "1"
 		base["opcache.jit"] = "1235"
-		base["opcache.jit_buffer_size"] = "256M"
+		if arch == "aarch64" {
+			base["opcache.jit_buffer_size"] = "128M"
+		} else {
+			base["opcache.jit_buffer_size"] = "256M"
+		}
 	}
 	return base
 }
