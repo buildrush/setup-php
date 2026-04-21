@@ -35,6 +35,34 @@ func TestSymlinkExtension(t *testing.T) {
 	}
 }
 
+// Regression: PHP 8.5 cores install opcache statically (not shared), so the
+// extracted bundle has no usr/local/lib/php/extensions/ directory. Composing
+// a PECL extension against such a core must still succeed — SymlinkExtension
+// creates the target directory on demand rather than failing on ENOENT.
+func TestSymlinkExtensionCreatesMissingTargetDir(t *testing.T) {
+	dir := t.TempDir()
+	extDir := filepath.Join(dir, "usr", "local", "lib", "php", "extensions")
+	// deliberately do NOT mkdir extDir — simulates an 8.5 core bundle
+
+	soDir := filepath.Join(dir, "bundle")
+	os.MkdirAll(soDir, 0o755)
+	soPath := filepath.Join(soDir, "pcov.so")
+	os.WriteFile(soPath, []byte("fake so"), 0o644)
+
+	if err := SymlinkExtension(soPath, extDir, "pcov"); err != nil {
+		t.Fatalf("SymlinkExtension() error = %v", err)
+	}
+
+	link := filepath.Join(extDir, "pcov.so")
+	target, err := os.Readlink(link)
+	if err != nil {
+		t.Fatalf("Readlink() error = %v", err)
+	}
+	if target != soPath {
+		t.Errorf("symlink target = %q, want %q", target, soPath)
+	}
+}
+
 func TestWriteIniFragment(t *testing.T) {
 	dir := t.TempDir()
 	err := WriteIniFragment(dir, "redis", []string{"extension=redis"})

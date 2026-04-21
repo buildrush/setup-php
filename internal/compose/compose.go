@@ -57,6 +57,13 @@ func writeExtensionDirIni(layout *Layout) error {
 }
 
 func SymlinkExtension(soPath, extensionDir, name string) error {
+	// PHP 8.5 cores install opcache statically, so the extracted bundle has
+	// no extensions/ subdirectory. Earlier PHP cores happened to have one
+	// (shared opcache created it). Create on demand so the compose layer is
+	// independent of the core's shared-vs-static module choice.
+	if err := os.MkdirAll(extensionDir, 0o750); err != nil {
+		return fmt.Errorf("create extension dir: %w", err)
+	}
 	link := filepath.Join(extensionDir, name+".so")
 	if err := os.Remove(link); err != nil && !os.IsNotExist(err) {
 		return err
