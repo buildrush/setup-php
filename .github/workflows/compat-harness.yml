@@ -16,8 +16,12 @@ permissions:
 
 jobs:
   build:
-    name: Build phpup
+    name: 'Build phpup (${{ matrix.goarch }})'
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -26,11 +30,11 @@ jobs:
       - name: Build binary
         run: |
           cp bundles.lock cmd/phpup/bundles.lock
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o phpup ./cmd/phpup
+          GOOS=linux GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -o phpup ./cmd/phpup
           rm -f cmd/phpup/bundles.lock
       - uses: actions/upload-artifact@v7
         with:
-          name: phpup
+          name: phpup-${{ matrix.goarch }}
           path: phpup
           retention-days: 1
 
@@ -70,7 +74,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: phpup
+          name: phpup-${{ matrix.arch == 'aarch64' && 'arm64' || 'amd64' }}
 
       - name: Place binary in tool cache
         run: |
