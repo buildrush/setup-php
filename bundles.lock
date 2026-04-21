@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-04-21T16:07:59.448329265Z",
+  "generated_at": "2026-04-21T16:15:41.933795546Z",
   "bundles": {
     "ext:amqp:2.2.0:8.1:linux:x86_64:nts": {
       "digest": "sha256:3369f1cb2a0ad4d29d822dcecc81eff12136b270850b2fc93758f8ff082ec0f7",
@@ -99,24 +99,24 @@
       "spec_hash": "sha256:777bbb09e59bb89faeb78d4354b33d6e87c3aeaf52557e8598ab681b3ea3bd1f"
     },
     "ext:imagick:3.8.1:8.1:linux:x86_64:nts": {
-      "digest": "sha256:8b77002fb47e129f18c2e867c17bc48dd9878e3f394ef21958cb74f976e26500",
-      "spec_hash": "sha256:79fef75991a15033de5a55403d73ff53fbda9c65cc4f7d715f48899bfc22ccba"
+      "digest": "sha256:f8b9c5e3ec55b3f9e14ce72377828c70016b3731668ff8545a01e329c5fee7ad",
+      "spec_hash": "sha256:60085ff8d67760e988abb4bff2f74d73fffb2ffc63aa8c1a9e74c6039239a8c3"
     },
     "ext:imagick:3.8.1:8.2:linux:x86_64:nts": {
-      "digest": "sha256:3d806d5a0745b4ed8ad6d331de657242ad147d8403c8342d9d2dd7d9a569c521",
-      "spec_hash": "sha256:27d6981859942417a09045983854d4054d4ce051710dfc0450edb236256295a7"
+      "digest": "sha256:5fed96af8e99e2aaec5a223b01129356eb6de5e32396ac5c4a88b4b57502c66c",
+      "spec_hash": "sha256:a3659d1f1b0dcd8f016ca0de924f3c46e9259077beab1e173b4e79c91c33b2b5"
     },
     "ext:imagick:3.8.1:8.3:linux:x86_64:nts": {
-      "digest": "sha256:faf61889057debe723bcefbd8e8344ec05f22eb93be07ad05fab6ac84f9e7dcb",
-      "spec_hash": "sha256:276dddec47255007da49bbbeec461fac58a9f86e8788ffeb74aafb61305420b8"
+      "digest": "sha256:74a84176fd4bfa0d64288024f4b8cb71f4dfd1e1d2c20500fa0a32023c719558",
+      "spec_hash": "sha256:1499e6c7f2efe7981e6f7d4490c64a957ab9c2de57de4d71c882255d0767910f"
     },
     "ext:imagick:3.8.1:8.4:linux:x86_64:nts": {
-      "digest": "sha256:7fa7ece8464b4259d3aaa472b79128155e54cadd39b023e1dd2dc9941977ddac",
-      "spec_hash": "sha256:ec76e1d6a703c169da8d0add9f3d2cff0dee7bff2197999f64d0d46271c8d791"
+      "digest": "sha256:4052addaf8f9773a3c00d2c116c19b03d40e7de7df2114a79036a3cf21af1daf",
+      "spec_hash": "sha256:bef9f50590f1d5f31368d59c230984856d501b818baee4a21c37eca3142b6e25"
     },
     "ext:imagick:3.8.1:8.5:linux:x86_64:nts": {
-      "digest": "sha256:beca4b56ffead290988e80ca2e7c56924710aee6f60e0b34502caceeab7dc3cf",
-      "spec_hash": "sha256:cb0796a0649c54f8a7369bfaed06b80ab0e7e7b993811fd13a4091631b077d3c"
+      "digest": "sha256:1d19768ce493f3aaf6a20b0c23c3216238d9922796220377a19b672d992c939a",
+      "spec_hash": "sha256:fc5aaaafd1c8db34993c14059b73b541399979c4be7faa2d909e3d866a94d53d"
     },
     "ext:memcached:3.4.0:8.1:linux:x86_64:nts": {
       "digest": "sha256:b335e2e08e7d31e7f4ace45acd68fece81389e775a5a222fd75ccc668fbc42a9",
