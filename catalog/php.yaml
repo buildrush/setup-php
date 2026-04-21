@@ -44,6 +44,47 @@ versions:
       - tokenizer
       - opcache
       - zlib
+    sources:
+      url: "https://www.php.net/distributions/php-{version}.tar.xz"
+      sig: "https://www.php.net/distributions/php-{version}.tar.xz.asc"
+    abi_matrix:
+      os: ["linux"]
+      arch: ["x86_64"]
+      ts: ["nts"]
+    configure_flags:
+      common: >-
+        --enable-mbstring
+        --with-curl
+        --with-zlib
+        --with-openssl
+        --enable-bcmath
+        --enable-calendar
+        --enable-exif
+        --enable-ftp
+        --enable-intl
+        --with-zip
+        --enable-soap
+        --enable-sockets
+        --with-pdo-mysql
+        --with-pdo-sqlite
+        --with-sqlite3
+        --with-readline
+        --with-sodium
+        --enable-gd
+        --with-freetype
+        --with-jpeg
+        --with-webp
+        --with-ffi
+        --with-gettext
+        --enable-pcntl
+        --enable-posix
+        --enable-shmop
+        --enable-sysvmsg
+        --enable-sysvsem
+        --enable-sysvshm
+      linux: >-
+        --with-pdo-pgsql
+        --with-pgsql
   "8.2":
     bundled_extensions:
       - calendar
