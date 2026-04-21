@@ -9,6 +9,12 @@ abi_matrix:
   os: ["linux"]
   arch: ["x86_64"]
   ts: ["nts"]
+exclude:
+  # redis 6.2.0 references ext/standard/php_smart_string.h which was removed
+  # in PHP 8.5; compilation fails. Upstream redis 6.3.0 ships the fix, but a
+  # version bump is its own single-purpose slice per the version-expansion
+  # spec non-goals. Until that slice lands, redis is unavailable on 8.5.
+  - { php: "8.5" }
 runtime_deps:
   linux: []
 ini:

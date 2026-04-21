@@ -84,20 +84,23 @@ fixtures:
     coverage: 'none'
     ini-file: 'development'
 
+  # redis is excluded on 8.5 (see catalog/extensions/redis.yaml); these three
+  # fixtures substitute apcu to cover the same input-shape axes (multi-ext,
+  # none-reset, single-ext) against an extension that does build on 8.5.
   - name: multi-ext-85
     php-version: '8.5'
-    extensions: 'redis, xdebug'
+    extensions: 'apcu, xdebug'
     ini-values: ''
     coverage: 'none'
 
   - name: none-reset-85
     php-version: '8.5'
-    extensions: 'none, redis'
+    extensions: 'none, apcu'
     ini-values: ''
     coverage: 'none'
 
   - name: single-ext-85
     php-version: '8.5'
-    extensions: 'redis'
+    extensions: 'apcu'
     ini-values: ''
     coverage: 'none'
