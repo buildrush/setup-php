@@ -21,6 +21,15 @@ $SUDO apt-get update -qq
 $SUDO apt-get install -y -qq build-essential autoconf pkg-config curl
 echo "::endgroup::"
 
+# Per-extension build_deps from catalog (populated by the workflow via yq).
+# Existing extensions with no build_deps block yield empty BUILD_DEPS → no-op.
+if [ -n "${BUILD_DEPS:-}" ]; then
+  echo "::group::Installing per-extension build_deps: ${BUILD_DEPS}"
+  # shellcheck disable=SC2086
+  $SUDO apt-get install -y -qq --no-install-recommends ${BUILD_DEPS}
+  echo "::endgroup::"
+fi
+
 # Fetch PHP core bundle (provides phpize, php-config, headers)
 PHP_TS=$(echo "$PHP_ABI" | rev | cut -d- -f1 | rev)
 PHP_VER=$(echo "$PHP_ABI" | rev | cut -d- -f2- | rev)
