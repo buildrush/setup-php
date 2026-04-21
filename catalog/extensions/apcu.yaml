@@ -5,7 +5,7 @@ source:
 versions:
   - "5.1.28"
 abi_matrix:
-  php: ["8.4", "8.5"]
+  php: ["8.3", "8.4", "8.5"]
   os: ["linux"]
   arch: ["x86_64"]
   ts: ["nts"]
