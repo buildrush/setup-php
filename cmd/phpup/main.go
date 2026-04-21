@@ -271,7 +271,7 @@ func main() {
 		xdebugFrag = compat.XdebugIniFragment(p.PHPVersion)
 	}
 	layered := compose.MergeCompatLayers(
-		compat.DefaultIniValues(p.PHPVersion),
+		compat.DefaultIniValues(p.PHPVersion, p.Arch),
 		xdebugFrag,
 		p.ExtraIni,
 	)
