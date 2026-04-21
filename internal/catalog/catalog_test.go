@@ -3,12 +3,15 @@ package catalog
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestLoadPHPSpecVersionedLayout(t *testing.T) {
-	yaml := `
+	phpYAML := `
 name: php
 versions:
   "8.1":
@@ -30,7 +33,7 @@ smoke:
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "php.yaml")
-	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(phpYAML), 0o600); err != nil {
 		t.Fatalf("write tmp yaml: %v", err)
 	}
 
@@ -101,7 +104,7 @@ func TestBuildTargets(t *testing.T) {
 }
 
 func TestLoadExtensionSpecPECL(t *testing.T) {
-	yaml := `
+	redisYAML := `
 name: redis
 kind: pecl
 source:
@@ -122,7 +125,7 @@ smoke:
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "redis.yaml")
-	os.WriteFile(path, []byte(yaml), 0o644)
+	os.WriteFile(path, []byte(redisYAML), 0o644)
 
 	spec, err := LoadExtensionSpec(path)
 	if err != nil {
@@ -137,14 +140,14 @@ smoke:
 }
 
 func TestLoadExtensionSpecBundled(t *testing.T) {
-	yaml := `
+	mbstringYAML := `
 name: mbstring
 kind: bundled
 note: "Built into PHP core via --enable-mbstring."
 `
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mbstring.yaml")
-	os.WriteFile(path, []byte(yaml), 0o644)
+	os.WriteFile(path, []byte(mbstringYAML), 0o644)
 
 	spec, err := LoadExtensionSpec(path)
 	if err != nil {
@@ -406,5 +409,74 @@ func TestRequiresSeparateBundle(t *testing.T) {
 	}
 	if cat.RequiresSeparateBundle("unknown") {
 		t.Error("unknown extension should not require separate bundle")
+	}
+}
+
+func TestExtensionSpec_BuildDeps(t *testing.T) {
+	cases := []struct {
+		name string
+		yaml string
+		want map[string][]string
+	}{
+		{
+			name: "present with linux packages",
+			yaml: `name: foo
+kind: pecl
+source:
+  pecl_package: foo
+versions: ["1.0.0"]
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+build_deps:
+  linux: ["libfoo-dev", "libbar-dev"]
+`,
+			want: map[string][]string{"linux": {"libfoo-dev", "libbar-dev"}},
+		},
+		{
+			name: "absent",
+			yaml: `name: foo
+kind: pecl
+source:
+  pecl_package: foo
+versions: ["1.0.0"]
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+`,
+			want: nil,
+		},
+		{
+			name: "present but empty",
+			yaml: `name: foo
+kind: pecl
+source:
+  pecl_package: foo
+versions: ["1.0.0"]
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+build_deps:
+  linux: []
+`,
+			want: map[string][]string{"linux": {}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var spec ExtensionSpec
+			if err := yaml.Unmarshal([]byte(tc.yaml), &spec); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if !reflect.DeepEqual(spec.BuildDeps, tc.want) {
+				t.Errorf("BuildDeps = %v, want %v", spec.BuildDeps, tc.want)
+			}
+		})
 	}
 }
