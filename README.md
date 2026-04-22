@@ -2,7 +2,9 @@
 
 Fast, reproducible PHP setup for GitHub Actions using prebuilt bundles.
 
-> **Status:** Alpha. Linux x86_64 only. PHP 8.1 – 8.5.
+> **Status:** Alpha. Linux x86_64 + aarch64 on Ubuntu 22.04 and Ubuntu 24.04. PHP 8.1 – 8.5.
+>
+> **Known gap:** `imagick` is compiled against ImageMagick 6 SOVERSION 6 (jammy's SONAME). On `ubuntu-24.04` runners, Ubuntu ships only SOVERSION 7 via `libmagickwand-6.q16-7t64`, so `imagick` will not load. Use `ubuntu-22.04` runners for `imagick`. Cross-OS support tracked in issue #NN.
 
 ## Quick Start
 
@@ -43,9 +45,9 @@ This means setup typically completes in single-digit seconds, and every run gets
 
 ## Supported Matrix
 
-| OS                   | Arch   | PHP | Thread Safety |
-| -------------------- | ------ | --- | ------------- |
-| Linux (Ubuntu 24.04) | x86_64 | 8.4 | NTS           |
+| OS                                  | Arch              | PHP       | Thread Safety |
+| ----------------------------------- | ----------------- | --------- | ------------- |
+| Linux (Ubuntu 22.04 and 24.04)      | x86_64 + aarch64  | 8.1 – 8.5 | NTS           |
 
 ### Bundled Extensions
 
