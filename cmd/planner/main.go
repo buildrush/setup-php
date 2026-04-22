@@ -46,6 +46,11 @@ func main() {
 
 	result := &planner.Result{}
 
+	builderOS, err := readBuilderOS(filepath.Join("builders", "common", "builder-os.env"))
+	if err != nil {
+		log.Fatalf("read builder-os.env: %v", err)
+	}
+
 	// Hash builder scripts and schema version file
 	builderHashPHP, err := planner.HashFile(filepath.Join("builders", "linux", "build-php.sh"))
 	if err != nil {
@@ -69,7 +74,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("per-version yaml for %s: %v", phpCells[i].Version, err)
 		}
-		phpCells[i].SpecHash = planner.ComputeSpecHash(&phpCells[i], yamlBytes, builderHashPHP)
+		phpCells[i].SpecHash = planner.ComputeSpecHash(&phpCells[i], yamlBytes, builderHashPHP, builderOS)
 	}
 
 	if !*force {
@@ -89,7 +94,7 @@ func main() {
 			log.Fatalf("ext yaml for %s: %v", ext.Name, err)
 		}
 		for i := range cells {
-			cells[i].SpecHash = planner.ComputeSpecHash(&cells[i], extYAML, builderHashExt)
+			cells[i].SpecHash = planner.ComputeSpecHash(&cells[i], extYAML, builderHashExt, builderOS)
 		}
 		if !*force {
 			cells = filterExisting(ctx, cells, lf, client)
@@ -107,6 +112,24 @@ func main() {
 
 	fmt.Printf("Plan complete: %d PHP cores, %d extensions, %d tools\n",
 		len(result.PHP.Include), len(result.Ext.Include), len(result.Tool.Include))
+}
+
+// readBuilderOS parses builders/common/builder-os.env and returns the value of
+// BUILDER_OS. Missing file or missing key is a fatal — the planner's spec_hash
+// depends on this being load-bearing, and silent fallback would produce a
+// lockfile where every entry looks up-to-date but reflects the wrong runner.
+func readBuilderOS(path string) (string, error) {
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "BUILDER_OS=") {
+			return strings.TrimPrefix(line, "BUILDER_OS="), nil
+		}
+	}
+	return "", fmt.Errorf("%s: BUILDER_OS not found", path)
 }
 
 func filterExisting(ctx context.Context, cells []planner.MatrixCell, lf *lockfile.Lockfile, client *oci.Client) []planner.MatrixCell {
