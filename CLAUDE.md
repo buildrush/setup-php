@@ -42,7 +42,7 @@ All code changes MUST pass `make check` before committing. This runs:
 
 - Use conventional commit messages (feat:, fix:, chore:, docs:, test:, refactor:).
 - No "Co-Authored-By" or AI attribution in commit messages or PR descriptions.
-- Verify `make check` passes before every commit.
+- Verify `make check` passes before every commit AND before every push. `make check` now includes the docker-backed `local-ci` smoke that exercises published bundles on both jammy and noble runners (~3-5 min cold); use `make check-fast` during rapid iteration, then `make check` before the push.
 
 ## Testing
 

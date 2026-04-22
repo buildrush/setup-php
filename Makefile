@@ -1,13 +1,34 @@
-.PHONY: check fmt fmt-check vet lint tidy tidy-check test test-node build clean \
-        build-linux-amd64 build-linux-arm64 bundle-php bundle-ext gc-bundles-dry-run
+.PHONY: check check-fast fmt fmt-check vet lint tidy tidy-check test test-node build clean \
+        build-linux-amd64 build-linux-arm64 bundle-php bundle-ext gc-bundles-dry-run \
+        local-ci
 
 # Ensure the embedded lockfile is available for go vet/test/build
 cmd/phpup/bundles.lock: bundles.lock
 	@cp bundles.lock cmd/phpup/bundles.lock
 
-# Run all checks locally (mirrors CI exactly)
-check: fmt-check vet lint tidy-check test test-node build
+# Full pre-push check: static analysis + tests + builds + a docker smoke that
+# exercises the published bundles on both jammy and noble runners. Takes ~5
+# minutes when the bundle caches are cold. Use check-fast for rapid iteration
+# during development; use check before every push.
+check: fmt-check vet lint tidy-check test test-node build local-ci
 	@rm -f cmd/phpup/bundles.lock
+
+# Fast check: skip the docker-based local-ci. Keep PR-authors productive during
+# rapid iteration; real gate is the full `check` target before push.
+check-fast: fmt-check vet lint tidy-check test test-node build
+	@rm -f cmd/phpup/bundles.lock
+
+# Docker-based smoke that mirrors the compat-harness: pulls published bundles,
+# composes them into a mock /opt/buildrush tree, and loads PHP + a multi-ext
+# fixture in both ubuntu:22.04 and ubuntu:24.04 containers. Catches cross-OS
+# runtime-dep / rpath regressions locally in ~3-5 min instead of a 30-min CI
+# cycle. Skipped gracefully if docker is unavailable.
+local-ci:
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "local-ci: docker not found, skipping (fix: install Docker to run this check)"; \
+		exit 0; \
+	fi
+	@./test/smoke/local-ci.sh
 
 # Format all code
 fmt:

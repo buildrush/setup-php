@@ -15,7 +15,7 @@ exclude:
 build_deps:
   linux: ['libssl-dev', 'libcurl4-openssl-dev']
 runtime_deps:
-  linux: ['libssl3t64', 'libcurl4t64']
+  linux: ['libssl3', 'libcurl4']
 ini:
   - 'extension=swoole'
 smoke:

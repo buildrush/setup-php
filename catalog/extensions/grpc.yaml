@@ -12,7 +12,7 @@ abi_matrix:
 build_deps:
   linux: ['zlib1g-dev', 'libssl-dev']
 runtime_deps:
-  linux: ['libssl3t64']
+  linux: ['libssl3']
 ini:
   - 'extension=grpc'
 smoke:
