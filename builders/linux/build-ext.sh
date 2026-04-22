@@ -60,6 +60,9 @@ tar -xf /tmp/ext.tgz -C /tmp/ext-src --strip-components=1
 echo "::group::Building ${EXT_NAME} ${EXT_VERSION}"
 cd /tmp/ext-src
 phpize
+# rpath baked into the .so so compose-time extraction resolves bundled libs
+# via $ORIGIN without LD_LIBRARY_PATH pollution.
+export LDFLAGS="-Wl,-rpath,\$ORIGIN/hermetic ${LDFLAGS:-}"
 ./configure
 make -j"$(nproc)"
 echo "::endgroup::"
@@ -79,5 +82,21 @@ fi
 
 echo "Extension ${EXT_NAME}.so built at ${SO_FILE}"
 
+if ! command -v yq >/dev/null 2>&1; then
+    curl -sSfL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(dpkg --print-architecture)
+    chmod +x /usr/local/bin/yq
+fi
+
+HERMETIC_GLOBS=$(yq -r ".hermetic_libs // [] | join(\",\")" "${WORKSPACE}/catalog/extensions/${EXT_NAME}.yaml")
+echo "::group::Capturing hermetic libs for extension ${EXT_NAME} (globs: ${HERMETIC_GLOBS:-none})"
+CAPTURE_JSON="/tmp/capture-ext.json"
+mkdir -p "${OUTPUT_DIR}/hermetic"
+"${WORKSPACE}/builders/common/capture-hermetic-libs.sh" \
+  --target "$SO_FILE" \
+  --globs "${HERMETIC_GLOBS}" \
+  --output "${OUTPUT_DIR}/hermetic" \
+  > "$CAPTURE_JSON"
+echo "::endgroup::"
+
 # Pack the bundle
-"${WORKSPACE}/builders/common/pack-bundle.sh" php-ext "$OUTPUT_DIR" /tmp/bundle.tar.zst
+"${WORKSPACE}/builders/common/pack-bundle.sh" php-ext "$OUTPUT_DIR" /tmp/bundle.tar.zst "$CAPTURE_JSON"
