@@ -477,12 +477,15 @@ deviations:
     reason: 'v2 auto-installs composer and sets COMPOSER_* env vars; tools parity is Phase 3 scope'
     fixtures: ['*']
 
-  # extensions: v2 on Ondrej PPA ships ~80 extensions; we ship the Phase 1
-  # baseline of ~52 (core + 4 PECLs). `allow` so we still catch the case where
-  # our bundle fails to load any extensions.
+  # extensions: v2 on Ondrej PPA ships ~80 extensions; we ship Phase 2's
+  # top-50 baseline (34 compiled-in + 18 PECL bundles across 8.1-8.5, minus
+  # four upstream-source excludes tracked in #38, #43). The loaded-extension
+  # set is expected to stay a proper subset of v2's indefinitely — we don't
+  # intend to match Ondrej's complete catalog. `allow` so we still catch the
+  # case where our bundle fails to load any extensions.
   - path: extensions
     kind: allow
-    reason: 'bundled extension set expansion is Phase 2 follow-up slice #3 (top-50)'
+    reason: 'our top-50 baseline is a documented subset of Ondrej PPA; see top-10/hard-4 slice specs'
     fixtures: ['*']
 
   # path_additions: both sides add a tool-chain directory to PATH, but the
@@ -491,27 +494,6 @@ deviations:
   - path: path_additions
     kind: allow
     reason: 'both sides prepend a PHP install prefix; exact directory differs by design'
-    fixtures: ['*']
-
-  # Opcache defaults from php.ini-production: v2 ships php.ini-production; our
-  # builder now does too (T5). These four keys come from the production preset
-  # and should match once the 8.4 core is rebuilt. Pending post-merge CI
-  # confirmation before removing.
-  - path: ini.opcache.enable_cli
-    kind: ignore
-    reason: 'php.ini-production default; pending post-merge harness confirmation'
-    fixtures: ['*']
-  - path: ini.opcache.memory_consumption
-    kind: ignore
-    reason: 'php.ini-production default; pending post-merge harness confirmation'
-    fixtures: ['*']
-  - path: ini.opcache.revalidate_freq
-    kind: ignore
-    reason: 'php.ini-production default; pending post-merge harness confirmation'
-    fixtures: ['*']
-  - path: ini.opcache.validate_timestamps
-    kind: ignore
-    reason: 'php.ini-production default; pending post-merge harness confirmation'
     fixtures: ['*']
 
   # xdebug.mode / start_with_request on multi-ext: v2's apt xdebug install is
