@@ -77,6 +77,10 @@ if [ -z "$SO_FILE" ]; then
   exit 1
 fi
 
+# Strip debug info. Without this, C++-heavy extensions (grpc especially) can
+# exceed 500 MB uncompressed and hit the runtime extractor's per-file cap.
+strip --strip-unneeded "$SO_FILE" 2>/dev/null || true
+
 # Set rpath on the .so via patchelf. Link-time -Wl,-rpath doesn't survive
 # phpize-generated Makefile + shell double-expansion: $ORIGIN gets eaten at
 # expansion time. patchelf writes the literal string directly into DT_RUNPATH.
