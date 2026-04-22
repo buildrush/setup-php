@@ -424,3 +424,42 @@ fixtures:
     extensions: 'imagick, mongodb, swoole, grpc'
     ini-values: ''
     coverage: 'none'
+
+  # bare fixtures on ubuntu-22.04 prove that jammy-built bundles load on
+  # jammy runners (slice D moves the builder from noble → jammy).
+  # x86_64 only for now; arm64-jammy is a potential follow-up if drift
+  # surfaces beyond what glibc forward-compat + transitional packages cover.
+  - name: bare-jammy-81
+    php-version: '8.1'
+    runner_os: 'ubuntu-22.04'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: bare-jammy-82
+    php-version: '8.2'
+    runner_os: 'ubuntu-22.04'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: bare-jammy-83
+    php-version: '8.3'
+    runner_os: 'ubuntu-22.04'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: bare-jammy-84
+    php-version: '8.4'
+    runner_os: 'ubuntu-22.04'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+
+  - name: bare-jammy-85
+    php-version: '8.5'
+    runner_os: 'ubuntu-22.04'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'

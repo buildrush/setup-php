@@ -69,7 +69,7 @@ jobs:
   ours:
     name: 'ours: ${{ matrix.name }}'
     needs: [build, fixtures]
-    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: ${{ matrix.arch == 'aarch64' && (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04-arm' || 'ubuntu-24.04-arm') || (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04' || 'ubuntu-24.04') }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.fixtures.outputs.matrix) }}
@@ -118,7 +118,7 @@ jobs:
   theirs:
     name: 'theirs: ${{ matrix.name }}'
     needs: [fixtures]
-    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: ${{ matrix.arch == 'aarch64' && (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04-arm' || 'ubuntu-24.04-arm') || (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04' || 'ubuntu-24.04') }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.fixtures.outputs.matrix) }}
