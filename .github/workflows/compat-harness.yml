@@ -14,6 +14,14 @@ permissions:
   contents: read
   packages: read
 
+# Scope concurrency by event so a new PR push cancels its older harness runs,
+# but does NOT cancel a workflow_call invocation from plan-and-build's
+# post-rebuild path (which exercises the just-built bundles and must run to
+# completion).
+concurrency:
+  group: compat-harness-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_call' }}
+
 jobs:
   build:
     name: 'Build phpup (${{ matrix.goarch }})'
