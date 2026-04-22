@@ -7,8 +7,8 @@ func TestMinBundleSchema_KnownKinds(t *testing.T) {
 		kind string
 		want int
 	}{
-		{"php-core", 3},
-		{"php-ext", 3},
+		{"php-core", 2},
+		{"php-ext", 1},
 	}
 	for _, tt := range tests {
 		if got := MinBundleSchema(tt.kind); got != tt.want {

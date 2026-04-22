@@ -356,7 +356,7 @@ func TestAssertBundleSchema_BlocksBelowMinimum(t *testing.T) {
 }
 
 func TestAssertBundleSchema_AllowsAtOrAboveMinimum(t *testing.T) {
-	if err := AssertBundleSchema("php-core", 3); err != nil {
+	if err := AssertBundleSchema("php-core", 2); err != nil {
 		t.Errorf("expected nil at exact min, got %v", err)
 	}
 	if err := AssertBundleSchema("php-core", 99); err != nil {
