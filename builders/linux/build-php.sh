@@ -21,6 +21,7 @@ if [[ "$PHP_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
   echo "Resolved PHP ${PHP_VERSION} -> ${RESOLVED}"
   PHP_VERSION="$RESOLVED"
 fi
+PHP_MINOR="${PHP_VERSION%.*}"
 
 echo "Building PHP ${PHP_VERSION} for linux/${ARCH}"
 
@@ -50,6 +51,9 @@ tar -xf /tmp/php.tar.xz -C "$PHP_SRC_DIR" --strip-components=1
 # Configure
 echo "::group::Configuring PHP ${PHP_VERSION}"
 cd "$PHP_SRC_DIR"
+# rpath baked into the compiled binaries so compose-time extraction resolves
+# bundled ICU/etc. via $ORIGIN without LD_LIBRARY_PATH pollution.
+export LDFLAGS="-Wl,-rpath,\$ORIGIN/../lib/hermetic -Wl,-rpath,\$ORIGIN/../lib ${LDFLAGS:-}"
 ./configure \
   --prefix=/usr/local \
   --enable-mbstring \
@@ -116,5 +120,24 @@ echo "::endgroup::"
 "${OUTPUT_DIR}/usr/local/bin/php" -v
 echo "PHP ${PHP_VERSION} built successfully"
 
+# Ensure yq is present (GitHub runners ship it; local Docker image may not).
+if ! command -v yq >/dev/null 2>&1; then
+    curl -sSfL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(dpkg --print-architecture)
+    chmod +x /usr/local/bin/yq
+fi
+
+# Hermetic library capture: read catalog's hermetic_libs for this PHP minor,
+# pass them to the shared capture script.
+HERMETIC_GLOBS=$(yq -r ".versions.\"${PHP_MINOR}\".hermetic_libs // [] | join(\",\")" "${WORKSPACE}/catalog/php.yaml")
+echo "::group::Capturing hermetic libs for PHP core (globs: ${HERMETIC_GLOBS:-none})"
+CAPTURE_JSON="/tmp/capture-core.json"
+mkdir -p "${OUTPUT_DIR}/usr/local/lib/hermetic"
+"${WORKSPACE}/builders/common/capture-hermetic-libs.sh" \
+  --target "${OUTPUT_DIR}/usr/local/bin/php" \
+  --globs "${HERMETIC_GLOBS}" \
+  --output "${OUTPUT_DIR}/usr/local/lib/hermetic" \
+  > "$CAPTURE_JSON"
+echo "::endgroup::"
+
 # Pack the bundle
-"${WORKSPACE}/builders/common/pack-bundle.sh" php-core "$OUTPUT_DIR" /tmp/bundle.tar.zst
+"${WORKSPACE}/builders/common/pack-bundle.sh" php-core "$OUTPUT_DIR" /tmp/bundle.tar.zst "$CAPTURE_JSON"
