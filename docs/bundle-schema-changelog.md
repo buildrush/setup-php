@@ -2,6 +2,13 @@
 
 Tracks per-kind `schema_version` bumps in `builders/common/bundle-schema-version.env`. One entry per bump. Bump when adding/removing a file or directory the runtime asserts on, or changing on-disk layout the runtime depends on. Do not bump for upstream-source-only changes.
 
+## v3 (2026-04-22) — hermetic library capture
+
+- Adds `usr/local/lib/hermetic/` (core) and `hermetic/` (ext) directories, populated at build time from the catalog's `hermetic_libs` glob list.
+- Adds `meta.json.hermetic_libs` (resolved filenames, not globs) and `meta.json.builder_os`.
+- Binaries in the bundle carry `DT_RUNPATH` / `DT_RPATH` entries pointing into the hermetic dirs; `compose` does not set `LD_LIBRARY_PATH`.
+- Rationale: cross-OS runtime compatibility (jammy builds running on noble and future Ubuntu releases). Replaces the slice-D approach of glibc-forward-compat, which did not hold for versioned `.so` dependencies like ICU and ImageMagick.
+
 ## `php-core`
 
 ### v2 (2026-04-20)

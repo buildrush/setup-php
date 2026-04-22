@@ -16,9 +16,9 @@ var (
 func MinBundleSchema(kind string) int {
 	switch kind {
 	case "php-core":
-		return 2
+		return 3
 	case "php-ext":
-		return 1
+		return 3
 	default:
 		return 0
 	}
