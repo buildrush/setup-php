@@ -23,7 +23,10 @@
 set -euo pipefail
 
 PHP_VERSION="8.4"
-ARCH="$(uname -m | sed -e 's/arm64/aarch64/' -e 's/amd64/x86_64/')"
+# Default: exercise BOTH arches. x86_64 runs under docker's QEMU on ARM hosts
+# (slower but catches x86-only issues like pgdg picking on GH's x86 runners).
+# Override with --arch to scope to one.
+ARCHES="aarch64 x86_64"
 REGISTRY="ghcr.io/buildrush"
 WORKSPACE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK="${TMPDIR:-/tmp}/local-ci-$$"
@@ -55,7 +58,7 @@ usage() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --php) PHP_VERSION="$2"; shift 2 ;;
-    --arch) ARCH="$2"; shift 2 ;;
+    --arch) ARCHES="$2"; shift 2 ;;
     --keep) KEEP_WORK=true; shift ;;
     -h|--help) usage ;;
     *) echo "unknown arg: $1" >&2; usage ;;
@@ -75,7 +78,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "=== local-ci: PHP $PHP_VERSION / $ARCH ==="
+echo "=== local-ci: PHP $PHP_VERSION / arches=${ARCHES} ==="
 echo "workspace: $WORKSPACE"
 echo "scratch:   $WORK (KEEP=$KEEP_WORK)"
 
@@ -166,8 +169,14 @@ run_in_container() {
   local deps_line
   deps_line="$(apt_deps_for "$fixture_exts" | tr '\n' ' ')"
 
-  local platform=""
-  if [ "$ARCH" = "x86_64" ]; then platform="--platform=linux/amd64"; fi
+  # Always pin platform so docker doesn't pick a cached non-matching image.
+  local docker_arch
+  case "$ARCH" in
+    x86_64) docker_arch="linux/amd64" ;;
+    aarch64) docker_arch="linux/arm64" ;;
+    *) echo "::error::unsupported ARCH: $ARCH" >&2; return 1 ;;
+  esac
+  local platform="--platform=$docker_arch"
 
   # Build ext-loading fragment. Empty fixture → just `php -v`. The ext path
   # contains a glob (no-debug-non-zts-<api>) that must be expanded inside the
@@ -210,43 +219,53 @@ SCRIPT
   fi
 }
 
-# 1. Pull core.
-echo "=== pulling php-core:${PHP_VERSION}-${ARCH} ==="
-pull_bundle core
-
-# 2. Pull every ext referenced by any fixture (deduped).
-seen=()
-for entry in "${FIXTURES[@]}"; do
-  exts="${entry#*|}"
-  [ -z "$exts" ] && continue
-  IFS=',' read -r -a es <<< "$exts"
-  for ext in "${es[@]}"; do
-    ext="$(echo "$ext" | xargs)"
-    if ! printf '%s\n' "${seen[@]-}" | grep -qx "$ext"; then
-      echo "=== pulling php-ext-${ext} ==="
-      pull_bundle ext "$ext"
-      seen+=("$ext")
-    fi
-  done
-done
-
-# 3. For every fixture × runner combination, compose the mock and run.
+# Outer loop over arches so every arch gets its own pull + extract + run.
 fail_count=0
-for entry in "${FIXTURES[@]}"; do
-  fname="${entry%%|*}"
-  fexts="${entry#*|}"
-  compose_mock "$fexts"
-  for runner in "${RUNNERS[@]}"; do
-    if ! run_in_container "$runner" "$fname" "$fexts"; then
-      fail_count=$((fail_count + 1))
-    fi
+for ARCH in $ARCHES; do
+  echo
+  echo "########## arch=${ARCH} ##########"
+
+  # Reset per-arch bundle scratch so we don't cross-contaminate.
+  rm -rf "$WORK/bundles"
+  mkdir -p "$WORK/bundles"
+
+  # 1. Pull core.
+  echo "=== pulling php-core:${PHP_VERSION}-${ARCH} ==="
+  pull_bundle core
+
+  # 2. Pull every ext referenced by any fixture (deduped per arch).
+  seen=()
+  for entry in "${FIXTURES[@]}"; do
+    exts="${entry#*|}"
+    [ -z "$exts" ] && continue
+    IFS=',' read -r -a es <<< "$exts"
+    for ext in "${es[@]}"; do
+      ext="$(echo "$ext" | xargs)"
+      if ! printf '%s\n' "${seen[@]-}" | grep -qx "$ext"; then
+        echo "=== pulling php-ext-${ext} ==="
+        pull_bundle ext "$ext"
+        seen+=("$ext")
+      fi
+    done
+  done
+
+  # 3. For every fixture × runner combination, compose the mock and run.
+  for entry in "${FIXTURES[@]}"; do
+    fname="${entry%%|*}"
+    fexts="${entry#*|}"
+    compose_mock "$fexts"
+    for runner in "${RUNNERS[@]}"; do
+      if ! run_in_container "$runner" "$fname" "$fexts"; then
+        fail_count=$((fail_count + 1))
+      fi
+    done
   done
 done
 
 echo
 if [ "$fail_count" -eq 0 ]; then
-  echo "=== local-ci: ALL GREEN ($ARCH, PHP $PHP_VERSION) ==="
+  echo "=== local-ci: ALL GREEN (arches=${ARCHES}, PHP $PHP_VERSION) ==="
   exit 0
 fi
-echo "::error::local-ci: $fail_count failure(s)"
+echo "::error::local-ci: $fail_count failure(s) across arches=${ARCHES}"
 exit 1

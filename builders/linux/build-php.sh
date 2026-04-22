@@ -28,8 +28,28 @@ echo "Building PHP ${PHP_VERSION} for linux/${ARCH}"
 # Install build dependencies
 export DEBIAN_FRONTEND=noninteractive
 SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"
-echo "::group::Installing build dependencies"
+
+# Strip any third-party apt sources the runner image ships. GitHub's
+# ubuntu-22.04 x86 runner preinstalls apt.postgresql.org (pgdg), which
+# provides PG17's libpq-dev — newer than jammy's libpq 14. Without this
+# cleanup, the core's configure picks up PG17 symbols (e.g. PQchangePassword)
+# and the resulting binary fails to link on any runner with jammy-era
+# libpq5 — even the jammy runners we *just* built on, plus every noble
+# runner. Arm runners don't ship pgdg, which is why this failure only
+# surfaced on x86_64 bundles.
+echo "::group::Strip non-jammy apt sources (pgdg et al)"
+$SUDO rm -f /etc/apt/sources.list.d/pgdg.list \
+            /etc/apt/sources.list.d/postgresql.list \
+            /etc/apt/sources.list.d/pgdg.sources
+# Defensive: downgrade any already-installed non-jammy libpq packages so
+# subsequent apt installs pick the distro version. `apt-get install <pkg>/jammy`
+# pulls from the default release pocket regardless of version-preference.
 $SUDO apt-get update -qq
+$SUDO apt-get install -y -qq --allow-downgrades \
+  libpq5/jammy libpq-dev/jammy || true
+echo "::endgroup::"
+
+echo "::group::Installing build dependencies"
 $SUDO apt-get install -y -qq \
   autoconf bison re2c pkg-config build-essential \
   libicu-dev libcurl4-openssl-dev libzip-dev libsqlite3-dev \
