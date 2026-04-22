@@ -351,6 +351,41 @@ fixtures:
     ini-values: ''
     coverage: 'none'
 
+  - name: bare-jammy-81
+    php-version: '8.1'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+    runner_os: 'ubuntu-22.04'
+
+  - name: bare-jammy-82
+    php-version: '8.2'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+    runner_os: 'ubuntu-22.04'
+
+  - name: bare-jammy-83
+    php-version: '8.3'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+    runner_os: 'ubuntu-22.04'
+
+  - name: bare-jammy-84
+    php-version: '8.4'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+    runner_os: 'ubuntu-22.04'
+
+  - name: bare-jammy-85
+    php-version: '8.5'
+    extensions: ''
+    ini-values: ''
+    coverage: 'none'
+    runner_os: 'ubuntu-22.04'
+
   # 8.1 omits protobuf (PECL metadata min PHP 8.2).
   - name: multi-ext-top14-arm64-81
     php-version: '8.1'
