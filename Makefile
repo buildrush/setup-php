@@ -68,7 +68,7 @@ bundle-php:
 		-v $$(pwd):/workspace -w /workspace \
 		-e PHP_VERSION=$(PHP_VERSION) \
 		-e ARCH=$(or $(ARCH),x86_64) \
-		ubuntu:24.04 \
+		ubuntu:22.04 \
 		bash -c "apt-get update && apt-get install -y curl xz-utils && ./builders/linux/build-php.sh"
 
 # Build an extension bundle locally via Docker
@@ -78,7 +78,7 @@ bundle-ext:
 		-e EXT_NAME=$(EXT_NAME) \
 		-e EXT_VERSION=$(EXT_VERSION) \
 		-e PHP_ABI=$(PHP_ABI) \
-		ubuntu:24.04 \
+		ubuntu:22.04 \
 		bash -c "apt-get update && apt-get install -y curl && ./builders/linux/build-ext.sh"
 
 # Clean build artifacts
