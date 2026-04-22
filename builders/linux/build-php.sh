@@ -53,7 +53,10 @@ echo "::group::Configuring PHP ${PHP_VERSION}"
 cd "$PHP_SRC_DIR"
 # rpath baked into the compiled binaries so compose-time extraction resolves
 # bundled ICU/etc. via $ORIGIN without LD_LIBRARY_PATH pollution.
-export LDFLAGS="-Wl,-rpath,\$ORIGIN/../lib/hermetic -Wl,-rpath,\$ORIGIN/../lib ${LDFLAGS:-}"
+# $$ORIGIN (not $ORIGIN) because PHP's Makefile interprets $ as a make-variable
+# reference and expands $O to empty; $$ survives make and becomes a literal $
+# by the time the linker records it in DT_RUNPATH.
+export LDFLAGS="-Wl,-rpath,\$\$ORIGIN/../lib/hermetic -Wl,-rpath,\$\$ORIGIN/../lib ${LDFLAGS:-}"
 ./configure \
   --prefix=/usr/local \
   --enable-mbstring \

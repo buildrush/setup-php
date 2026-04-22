@@ -62,7 +62,10 @@ cd /tmp/ext-src
 phpize
 # rpath baked into the .so so compose-time extraction resolves bundled libs
 # via $ORIGIN without LD_LIBRARY_PATH pollution.
-export LDFLAGS="-Wl,-rpath,\$ORIGIN/hermetic ${LDFLAGS:-}"
+# $$ORIGIN (not $ORIGIN) because phpize-generated Makefiles interpret $ as a
+# make-variable reference and expand $O to empty; $$ survives make and becomes
+# a literal $ by the time the linker records it in DT_RUNPATH.
+export LDFLAGS="-Wl,-rpath,\$\$ORIGIN/hermetic ${LDFLAGS:-}"
 ./configure
 make -j"$(nproc)"
 echo "::endgroup::"
