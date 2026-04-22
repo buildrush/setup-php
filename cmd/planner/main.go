@@ -62,6 +62,11 @@ func main() {
 	builderHashPHP = builderHashPHP + ":" + schemaEnvHash
 	builderHashExt = builderHashExt + ":" + schemaEnvHash
 
+	builderOS, err := planner.ReadBuilderOS(filepath.Join("builders", "common", "builder-os.env"))
+	if err != nil {
+		log.Fatalf("read builder OS: %v", err)
+	}
+
 	// Expand PHP matrix
 	phpCells := planner.ExpandPHPMatrix(cat.PHP)
 	for i := range phpCells {
@@ -69,7 +74,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("per-version yaml for %s: %v", phpCells[i].Version, err)
 		}
-		phpCells[i].SpecHash = planner.ComputeSpecHash(&phpCells[i], yamlBytes, builderHashPHP)
+		phpCells[i].SpecHash = planner.ComputeSpecHash(&phpCells[i], yamlBytes, builderHashPHP, builderOS)
 	}
 
 	if !*force {
@@ -89,7 +94,7 @@ func main() {
 			log.Fatalf("ext yaml for %s: %v", ext.Name, err)
 		}
 		for i := range cells {
-			cells[i].SpecHash = planner.ComputeSpecHash(&cells[i], extYAML, builderHashExt)
+			cells[i].SpecHash = planner.ComputeSpecHash(&cells[i], extYAML, builderHashExt, builderOS)
 		}
 		if !*force {
 			cells = filterExisting(ctx, cells, lf, client)

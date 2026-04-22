@@ -125,12 +125,12 @@ func TestExpandExtMatrixWithExclude(t *testing.T) {
 
 func TestComputeSpecHash(t *testing.T) {
 	cell := MatrixCell{Version: "8.4", OS: "linux", Arch: "x86_64", TS: "nts"}
-	h1 := ComputeSpecHash(&cell, []byte("catalog data"), "builder-hash-1")
-	h2 := ComputeSpecHash(&cell, []byte("catalog data"), "builder-hash-1")
+	h1 := ComputeSpecHash(&cell, []byte("catalog data"), "builder-hash-1", "ubuntu-22.04")
+	h2 := ComputeSpecHash(&cell, []byte("catalog data"), "builder-hash-1", "ubuntu-22.04")
 	if h1 != h2 {
 		t.Error("ComputeSpecHash should be deterministic")
 	}
-	h3 := ComputeSpecHash(&cell, []byte("different catalog"), "builder-hash-1")
+	h3 := ComputeSpecHash(&cell, []byte("different catalog"), "builder-hash-1", "ubuntu-22.04")
 	if h1 == h3 {
 		t.Error("ComputeSpecHash should differ for different inputs")
 	}
@@ -241,20 +241,81 @@ func TestExtensionYAMLDeterminism(t *testing.T) {
 
 func TestComputeSpecHashDeltas(t *testing.T) {
 	cell := MatrixCell{Version: "8.4", OS: "linux", Arch: "x86_64", TS: "nts"}
-	base := ComputeSpecHash(&cell, []byte("catalog"), "builder-a")
+	base := ComputeSpecHash(&cell, []byte("catalog"), "builder-a", "ubuntu-22.04")
 
-	if got := ComputeSpecHash(&cell, []byte("catalog"), "builder-a"); got != base {
+	if got := ComputeSpecHash(&cell, []byte("catalog"), "builder-a", "ubuntu-22.04"); got != base {
 		t.Error("same inputs must produce same hash")
 	}
-	if got := ComputeSpecHash(&cell, []byte("catalog-v2"), "builder-a"); got == base {
+	if got := ComputeSpecHash(&cell, []byte("catalog-v2"), "builder-a", "ubuntu-22.04"); got == base {
 		t.Error("changing catalog must change hash")
 	}
-	if got := ComputeSpecHash(&cell, []byte("catalog"), "builder-b"); got == base {
+	if got := ComputeSpecHash(&cell, []byte("catalog"), "builder-b", "ubuntu-22.04"); got == base {
 		t.Error("changing builder must change hash")
 	}
 	cell2 := cell
 	cell2.Version = "8.5"
-	if got := ComputeSpecHash(&cell2, []byte("catalog"), "builder-a"); got == base {
+	if got := ComputeSpecHash(&cell2, []byte("catalog"), "builder-a", "ubuntu-22.04"); got == base {
 		t.Error("changing cell must change hash")
+	}
+}
+
+func TestComputeSpecHash_BuilderOSIsLoadBearing(t *testing.T) {
+	cell := &MatrixCell{
+		Version: "8.4", OS: "linux", Arch: "x86_64", TS: "nts", PHPAbi: "8.4-nts",
+	}
+	catalogData := []byte("name: php\nversions: {}\n")
+	builderHash := "sha256:deadbeef"
+
+	h1 := ComputeSpecHash(cell, catalogData, builderHash, "ubuntu-22.04")
+	h2 := ComputeSpecHash(cell, catalogData, builderHash, "ubuntu-24.04")
+
+	if h1 == h2 {
+		t.Errorf("expected different hashes for different BUILDER_OS; both = %q", h1)
+	}
+}
+
+func TestComputeSpecHash_BuilderOSStableForSameValue(t *testing.T) {
+	cell := &MatrixCell{
+		Version: "8.4", OS: "linux", Arch: "x86_64", TS: "nts", PHPAbi: "8.4-nts",
+	}
+	catalogData := []byte("name: php\n")
+	builderHash := "sha256:cafebabe"
+
+	h1 := ComputeSpecHash(cell, catalogData, builderHash, "ubuntu-22.04")
+	h2 := ComputeSpecHash(cell, catalogData, builderHash, "ubuntu-22.04")
+
+	if h1 != h2 {
+		t.Errorf("expected stable hash for same BUILDER_OS; got %q vs %q", h1, h2)
+	}
+}
+
+func TestReadBuilderOS(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "builder-os.env")
+
+	// Valid file
+	if err := os.WriteFile(path, []byte("# comment\nBUILDER_OS=ubuntu-22.04\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+	got, err := ReadBuilderOS(path)
+	if err != nil {
+		t.Fatalf("ReadBuilderOS: %v", err)
+	}
+	if got != "ubuntu-22.04" {
+		t.Errorf("ReadBuilderOS = %q, want %q", got, "ubuntu-22.04")
+	}
+
+	// Missing file
+	if _, err := ReadBuilderOS(filepath.Join(dir, "nonexistent.env")); err == nil {
+		t.Error("expected error for missing file")
+	}
+
+	// File without BUILDER_OS key
+	other := filepath.Join(dir, "other.env")
+	if err := os.WriteFile(other, []byte("OTHER_VAR=x\n"), 0o600); err != nil {
+		t.Fatalf("write other env: %v", err)
+	}
+	if _, err := ReadBuilderOS(other); err == nil {
+		t.Error("expected error for file without BUILDER_OS")
 	}
 }

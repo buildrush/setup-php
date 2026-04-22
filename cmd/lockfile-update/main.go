@@ -69,6 +69,11 @@ func main() {
 	builderHashPHP = builderHashPHP + ":" + schemaEnvHash
 	builderHashExt = builderHashExt + ":" + schemaEnvHash
 
+	builderOS, err := planner.ReadBuilderOS(filepath.Join("builders", "common", "builder-os.env"))
+	if err != nil {
+		log.Fatalf("read builder OS: %v", err)
+	}
+
 	var resolved []resolvedEntry
 
 	// PHP core cells.
@@ -79,7 +84,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("per-version yaml %s: %v", c.Version, err)
 		}
-		c.SpecHash = planner.ComputeSpecHash(c, yamlBytes, builderHashPHP)
+		c.SpecHash = planner.ComputeSpecHash(c, yamlBytes, builderHashPHP, builderOS)
 
 		tag := fmt.Sprintf("%s-%s-%s-%s", c.Version, c.OS, c.Arch, c.TS)
 		ref := fmt.Sprintf("%s/php-core:%s", *registry, tag)
@@ -104,7 +109,7 @@ func main() {
 		cells := planner.ExpandExtMatrix(ext)
 		for i := range cells {
 			c := &cells[i]
-			c.SpecHash = planner.ComputeSpecHash(c, extYAML, builderHashExt)
+			c.SpecHash = planner.ComputeSpecHash(c, extYAML, builderHashExt, builderOS)
 
 			tag := fmt.Sprintf("%s-%s-%s-%s", c.ExtVer, c.PHPAbi, c.OS, c.Arch)
 			ref := fmt.Sprintf("%s/php-ext-%s:%s", *registry, c.Extension, tag)

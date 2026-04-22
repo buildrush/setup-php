@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -110,10 +111,16 @@ func isExcluded(rules []catalog.ExcludeRule, osName, arch, php string) bool {
 }
 
 // ComputeSpecHash computes a deterministic hash for a matrix cell.
-func ComputeSpecHash(cell *MatrixCell, catalogData []byte, builderHash string) string {
+// builderOS is the pinned builder runner OS (e.g. "ubuntu-22.04"), read from
+// builders/common/builder-os.env by the caller. Including it here means a
+// runner-OS change invalidates every cell's spec_hash and forces the pipeline
+// to rebuild every bundle on the new OS, guaranteeing the lockfile and the
+// physical bundles stay in sync.
+func ComputeSpecHash(cell *MatrixCell, catalogData []byte, builderHash, builderOS string) string {
 	h := sha256.New()
 	h.Write(catalogData)
 	h.Write([]byte(builderHash))
+	h.Write([]byte(builderOS))
 	_, _ = fmt.Fprintf(h, "%s:%s:%s:%s:%s:%s",
 		cell.Version, cell.Extension, cell.OS, cell.Arch, cell.TS, cell.PHPAbi)
 	return fmt.Sprintf("sha256:%x", h.Sum(nil))
@@ -129,6 +136,32 @@ func HashFile(path string) (string, error) {
 	}
 	sum := sha256.Sum256(data)
 	return fmt.Sprintf("sha256:%x", sum[:]), nil
+}
+
+// ReadBuilderOS reads the pinned BUILDER_OS value from
+// builders/common/builder-os.env. The file format is one or more VAR=value
+// lines; only the BUILDER_OS key is consulted. Missing file or missing key
+// produces a clear error so callers can bail early with a recognisable
+// diagnostic (matches the HashFile missing-file contract).
+func ReadBuilderOS(path string) (string, error) {
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("read builder-os env %s: %w", path, err)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(key) == "BUILDER_OS" {
+			return strings.TrimSpace(value), nil
+		}
+	}
+	return "", fmt.Errorf("BUILDER_OS not set in %s", path)
 }
 
 // PerVersionYAML marshals a single version entry from a PHP spec into
