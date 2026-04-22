@@ -69,7 +69,10 @@ jobs:
   ours:
     name: 'ours: ${{ matrix.name }}'
     needs: [build, fixtures]
-    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: >-
+      ${{ matrix.arch == 'aarch64'
+          && (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04-arm' || 'ubuntu-24.04-arm')
+          || (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04' || 'ubuntu-24.04') }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.fixtures.outputs.matrix) }}
@@ -100,6 +103,35 @@ jobs:
           coverage: ${{ matrix.coverage }}
           ini-file: ${{ matrix['ini-file'] }}
 
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Build hermetic-audit
+        run: |
+          go build -o /tmp/hermetic-audit ./cmd/hermetic-audit
+
+      - name: Audit extracted bundles
+        env:
+          RUNNER_OS_INPUT: ${{ matrix.runner_os || 'ubuntu-24.04' }}
+        run: |
+          set -e
+          # phpup extracts bundles under $RUNNER_TOOL_CACHE/buildrush/<plan-hash>/.
+          # Each bundle (core + ext) sits at a subdir with its own meta.json.
+          ROOT="$RUNNER_TOOL_CACHE/buildrush"
+          [ -d "$ROOT" ] || { echo "buildrush cache not found at $ROOT"; ls -la "$RUNNER_TOOL_CACHE" || true; exit 1; }
+          shopt -s globstar nullglob
+          audited=0
+          for meta in "$ROOT"/**/meta.json; do
+            bundle_dir="$(dirname "$meta")"
+            echo "::group::hermetic-audit $bundle_dir (expected=$RUNNER_OS_INPUT)"
+            /tmp/hermetic-audit --bundle "$bundle_dir" --expected-runner-os "$RUNNER_OS_INPUT"
+            echo "::endgroup::"
+            audited=$((audited + 1))
+          done
+          echo "Audited $audited bundle(s)"
+          [ "$audited" -gt 0 ] || { echo "no bundles found under $ROOT — setup-php may have used the tool cache on a different path"; exit 1; }
+
       - name: Probe
         run: |
           chmod +x test/compat/probe.sh
@@ -118,7 +150,10 @@ jobs:
   theirs:
     name: 'theirs: ${{ matrix.name }}'
     needs: [fixtures]
-    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: >-
+      ${{ matrix.arch == 'aarch64'
+          && (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04-arm' || 'ubuntu-24.04-arm')
+          || (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04' || 'ubuntu-24.04') }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.fixtures.outputs.matrix) }}
