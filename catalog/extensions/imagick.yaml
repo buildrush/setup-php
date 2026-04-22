@@ -11,8 +11,19 @@ abi_matrix:
   ts: ['nts']
 build_deps:
   linux: ['libmagickwand-dev', 'libmagickcore-dev']
+# Runtime deps cover the transitive system libs that libMagickCore/Wand link
+# against but whose SOVERSION does NOT drift between jammy and noble. The
+# drifty trio (MagickWand/Core/ltdl) is captured into the bundle instead via
+# hermetic_libs below.
 runtime_deps:
-  linux: []
+  linux:
+    - libfontconfig1
+    - libx11-6
+    - libxext6
+    - liblcms2-2
+    - liblqr-1-0
+    - libfftw3-double3
+    - libbz2-1.0
 hermetic_libs:
   - libMagickWand-6.Q16.so.*
   - libMagickCore-6.Q16.so.*

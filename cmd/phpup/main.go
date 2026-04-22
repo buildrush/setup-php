@@ -87,7 +87,7 @@ func main() {
 			"event":     {Name: "event", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.1.4"}, RuntimeDeps: map[string][]string{"linux": {"libevent-2.1-7t64", "libevent-openssl-2.1-7t64"}}},
 			"rdkafka":   {Name: "rdkafka", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.0.5"}, RuntimeDeps: map[string][]string{"linux": {"librdkafka1"}}},
 			"protobuf":  {Name: "protobuf", Kind: catalog.ExtensionKindPECL, Versions: []string{"5.34.1"}},
-			"imagick":   {Name: "imagick", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.8.1"}},
+			"imagick":   {Name: "imagick", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.8.1"}, RuntimeDeps: map[string][]string{"linux": {"libfontconfig1", "libx11-6", "libxext6", "liblcms2-2", "liblqr-1-0", "libfftw3-double3", "libbz2-1.0"}}},
 			"mongodb":   {Name: "mongodb", Kind: catalog.ExtensionKindPECL, Versions: []string{"2.2.1"}, RuntimeDeps: map[string][]string{"linux": {"libssl3t64", "libsasl2-2"}}},
 			"swoole":    {Name: "swoole", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.2.0"}, RuntimeDeps: map[string][]string{"linux": {"libssl3t64", "libcurl4t64"}}},
 			"grpc":      {Name: "grpc", Kind: catalog.ExtensionKindPECL, Versions: []string{"1.80.0"}, RuntimeDeps: map[string][]string{"linux": {"libssl3t64"}}},
