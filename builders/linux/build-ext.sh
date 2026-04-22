@@ -95,11 +95,16 @@ fi
 HERMETIC_GLOBS=$(yq -r ".hermetic_libs // [] | join(\",\")" "${WORKSPACE}/catalog/extensions/${EXT_NAME}.yaml")
 echo "::group::Capturing hermetic libs for extension ${EXT_NAME} (globs: ${HERMETIC_GLOBS:-none})"
 CAPTURE_JSON="/tmp/capture-ext.json"
-mkdir -p "${OUTPUT_DIR}/hermetic"
+# Hermetic libs go into a directory sibling to the .so so the '$ORIGIN/hermetic'
+# rpath we set on imagick.so resolves correctly at runtime. If we put them at
+# $OUTPUT_DIR/hermetic (bundle root), runtime $ORIGIN of the deep-nested .so
+# points at the nested extension dir, and hermetic-at-bundle-root doesn't match.
+SO_HERMETIC_DIR="$(dirname "$SO_FILE")/hermetic"
+mkdir -p "$SO_HERMETIC_DIR"
 "${WORKSPACE}/builders/common/capture-hermetic-libs.sh" \
   --target "$SO_FILE" \
   --globs "${HERMETIC_GLOBS}" \
-  --output "${OUTPUT_DIR}/hermetic" \
+  --output "$SO_HERMETIC_DIR" \
   > "$CAPTURE_JSON"
 echo "::endgroup::"
 
