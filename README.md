@@ -43,9 +43,9 @@ This means setup typically completes in single-digit seconds, and every run gets
 
 ## Supported Matrix
 
-| OS                   | Arch   | PHP | Thread Safety |
-| -------------------- | ------ | --- | ------------- |
-| Linux (Ubuntu 24.04) | x86_64 | 8.4 | NTS           |
+| OS                           | Arch            | PHP                      | Thread Safety |
+| ---------------------------- | --------------- | ------------------------ | ------------- |
+| Linux (Ubuntu 22.04 + 24.04) | x86_64, aarch64 | 8.1, 8.2, 8.3, 8.4, 8.5 | NTS           |
 
 ### Bundled Extensions
 
