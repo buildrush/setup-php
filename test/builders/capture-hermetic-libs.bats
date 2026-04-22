@@ -43,8 +43,12 @@ teardown() {
     [ "$(echo "$output" | jq -r '.captured | length')" = "0" ]
 }
 
-@test "target lacking rpath at output dir fails" {
-    patchelf --set-rpath "/tmp/other" "$TARGET"
+@test "target with no rpath at all fails" {
+    # Strip any rpath / runpath to simulate a builder that forgot to call
+    # patchelf. capture-hermetic-libs only asserts an rpath *exists*; it does
+    # not resolve $ORIGIN at build time (the .so may be at a build-layout path
+    # different from its runtime bundle-root path).
+    patchelf --remove-rpath "$TARGET"
     run ./builders/common/capture-hermetic-libs.sh --target "$TARGET" --globs 'libc.so.*' --output "$OUT"
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "rpath"

@@ -132,24 +132,15 @@ for nm in "${!CAPTURED_PATHS[@]}"; do
     cp -L "$p" "$dst"
 done
 
-# Assert target has an rpath including $OUTPUT.
-RPATHS=$(readelf -d "$TARGET" 2>/dev/null | awk -F '[][]' '/R(UN)?PATH/ { print $2 }')
-TARGET_DIR="$(cd "$(dirname "$TARGET")" && pwd)"
-OUTPUT_ABS="$(cd "$OUTPUT" && pwd)"
-MATCH=false
-for field in $RPATHS; do
-    IFS=':' read -r -a parts <<< "$field"
-    for part in "${parts[@]}"; do
-        expanded="${part//\$ORIGIN/$TARGET_DIR}"
-        expanded="${expanded//\$\{ORIGIN\}/$TARGET_DIR}"
-        if [ -d "$expanded" ]; then
-            canon="$(cd "$expanded" && pwd)"
-            if [ "$canon" = "$OUTPUT_ABS" ]; then MATCH=true; fi
-        fi
-    done
-done
-if ! $MATCH; then
-    echo "::error::capture-hermetic-libs: $TARGET has no rpath pointing at $OUTPUT (readelf -d shows: $RPATHS)" >&2
+# Assert target declares at least one DT_RUNPATH or DT_RPATH entry. We do NOT
+# try to resolve $ORIGIN and compare against $OUTPUT: the target may be at a
+# different path at build time than at runtime (e.g. ext .so compiled under
+# usr/local/lib/php/extensions/... but moved to bundle root at compose time).
+# Callers that want the rpath to contain specific directories should assert
+# that explicitly; here we only verify the target has any rpath at all so an
+# accidentally-dropped patchelf invocation fails loudly.
+if ! readelf -d "$TARGET" 2>/dev/null | grep -Eq '\b(RUN)?PATH\b'; then
+    echo "::error::capture-hermetic-libs: $TARGET has no DT_RUNPATH/DT_RPATH — builder must apply rpath via patchelf or -Wl,-rpath before capture" >&2
     exit 1
 fi
 
