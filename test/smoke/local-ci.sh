@@ -82,26 +82,38 @@ echo "=== local-ci: PHP $PHP_VERSION / arches=${ARCHES} ==="
 echo "workspace: $WORKSPACE"
 echo "scratch:   $WORK (KEEP=$KEEP_WORK)"
 
-# Pull + extract one bundle into $WORK/bundles/<kind>/<name>/
+# Pull + extract one bundle into $WORK/bundles/<kind>/<name>/. Pulls by digest
+# from bundles.lock (what phpup embeds and uses at runtime), NOT by floating
+# tag. This is what makes local-ci exercise the same bundle bits CI does —
+# floating tags race ahead of lockfile updates on every PR push.
 # Kinds: "core" (whole php-core), "ext" (extension named $2).
 pull_bundle() {
   local kind="$1" name="${2:-}"
-  local tag dest ref
+  local key ref dest
   case "$kind" in
     core)
-      tag="${PHP_VERSION}-linux-${ARCH}-nts"
-      ref="${REGISTRY}/php-core:${tag}"
+      key="php:${PHP_VERSION}:linux:${ARCH}:nts"
       dest="$WORK/bundles/core"
       ;;
     ext)
-      # Look up version from the catalog so this stays in lockstep.
       local ver
       ver=$(yq -r ".versions[0]" "${WORKSPACE}/catalog/extensions/${name}.yaml")
-      tag="${ver}-${PHP_VERSION}-nts-linux-${ARCH}"
-      ref="${REGISTRY}/php-ext-${name}:${tag}"
+      # bundles.lock stores ext keys with PHP minor only (e.g. "8.4"); phpup
+      # reconstructs the 8.4-nts PHP_ABI on the consumer side. Match the
+      # storage format here.
+      key="ext:${name}:${ver}:${PHP_VERSION}:linux:${ARCH}:nts"
       dest="$WORK/bundles/ext/${name}"
       ;;
     *) echo "pull_bundle: unknown kind $kind" >&2; return 1 ;;
+  esac
+
+  local digest
+  digest=$(jq -r ".bundles[\"${key}\"].digest // empty" "${WORKSPACE}/bundles.lock")
+  [ -n "$digest" ] || { echo "::error::lockfile has no entry for ${key}" >&2; return 1; }
+
+  case "$kind" in
+    core) ref="${REGISTRY}/php-core@${digest}" ;;
+    ext)  ref="${REGISTRY}/php-ext-${name}@${digest}" ;;
   esac
 
   mkdir -p "$dest"
