@@ -33,7 +33,7 @@ on:
 jobs:
   build:
     name: 'core PHP ${{ inputs.version }} (${{ inputs.os }}/${{ inputs.arch }}/${{ inputs.ts }})'
-    runs-on: ${{ inputs.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: ${{ inputs.arch == 'aarch64' && 'ubuntu-22.04-arm' || 'ubuntu-22.04' }}
     permissions:
       packages: write
       id-token: write
