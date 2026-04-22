@@ -56,10 +56,21 @@ jobs:
         #
         # Fixtures default arch to 'x86_64' when the field is absent so existing
         # 50 x86_64 fixtures stay covered without schema churn.
+        #
+        # runner_os-specified fixtures (e.g. bare-jammy-<NN>) validate the
+        # jammy-built bundles landing via BUILDER_OS=ubuntu-22.04. Those
+        # bundles only exist after plan-and-build's post-merge rebuild.
+        # Skip them in standalone (pull_request / push / workflow_dispatch)
+        # invocations; include them via workflow_call from plan-and-build.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           pairs_json=$(jq -c '[.bundles | keys[] | select(startswith("php:")) | capture("^php:(?<v>[^:]+):linux:(?<a>[^:]+):") | .v + "/" + .a] | unique' bundles.lock)
           matrix=$(yq -o=json '.fixtures' test/compat/fixtures.yaml \
             | jq --argjson p "$pairs_json" -c '{include: [.[] | select((.["php-version"] + "/" + (.arch // "x86_64")) as $pa | $p | index($pa))]}')
+          if [ "$EVENT_NAME" != "workflow_call" ]; then
+            matrix=$(echo "$matrix" | jq -c '{include: [.include[] | select((.runner_os // "") == "")]}')
+          fi
           {
             echo "matrix<<EOF"
             echo "$matrix"
