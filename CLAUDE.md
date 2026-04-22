@@ -42,7 +42,8 @@ All code changes MUST pass `make check` before committing. This runs:
 
 - Use conventional commit messages (feat:, fix:, chore:, docs:, test:, refactor:).
 - No "Co-Authored-By" or AI attribution in commit messages or PR descriptions.
-- Verify `make check` passes before every commit AND before every push. `make check` now includes the docker-backed `local-ci` smoke that exercises published bundles on both jammy and noble runners (~3-5 min cold); use `make check-fast` during rapid iteration, then `make check` before the push.
+- Verify `make check` passes before every commit AND before every push. `make check` now includes the docker-backed `local-ci` smoke that exercises the currently-published bundles on both jammy and noble runners (~3-5 min cold); use `make check-fast` during rapid iteration, then `make check` before the push.
+- **Exception — builder/catalog bootstrap**: commits that change `builders/linux/*.sh`, `builders/common/*.sh`, `builders/common/*.env`, or `catalog/**` invalidate the published bundles by design. `local-ci` on such a commit exercises the OLD bundles (not what the commit produces) and will fail until the pipeline rebuilds and publishes. In that case: run `make check-fast` before pushing, note the pending rebuild in the commit message, and re-run full `make check` after the pipeline's bot-committed lockfile lands to confirm the fix.
 
 ## Testing
 
