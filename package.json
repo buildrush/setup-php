@@ -1,6 +1,6 @@
 {
   "name": "@buildrush/setup-php",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Fast, reproducible PHP setup for GitHub Actions",
   "private": true,
   "main": "src/index.js",

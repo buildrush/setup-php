@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.7.0](https://github.com/buildrush/setup-php/compare/v1.6.0...v1.7.0) (2026-04-22)
+
+
+### Features
+
+* **builders/linux:** parametrize build-ext.sh arch ([ff1b597](https://github.com/buildrush/setup-php/commit/ff1b597c9bfbb91b1164530d89290fbafc84ba14))
+* **catalog:** enable aarch64 builds on all 5 PHP cores ([5189111](https://github.com/buildrush/setup-php/commit/5189111c5b8af1a3cd190941d517090a024d9277))
+* **compat:** per-arch DefaultIniValues (aarch64 jit_buffer_size=128M) ([e7a99ec](https://github.com/buildrush/setup-php/commit/e7a99ec7f935e9f67a8a64c4c4528ac0e6980390))
+* easy+medium PECL extensions on aarch64 (phase 2 C2a) ([#48](https://github.com/buildrush/setup-php/issues/48)) ([276d89c](https://github.com/buildrush/setup-php/commit/276d89c1ebf3cc01f99b976394fa7859ed468bfd))
+* hard-tier PECL extensions on aarch64 (phase 2 C2b) ([#49](https://github.com/buildrush/setup-php/issues/49)) ([d3ce025](https://github.com/buildrush/setup-php/commit/d3ce02538f279d57e0afb03512aad9e42db754f8))
+* **workflows:** runs-on mapping for aarch64 matrix cells ([e8062a6](https://github.com/buildrush/setup-php/commit/e8062a669e1071a2949e38c617dbe6f063b767d0))
+
+
+### Bug Fixes
+
+* **workflows:** build phpup for both amd64 and arm64 in compat-harness ([0bb7e45](https://github.com/buildrush/setup-php/commit/0bb7e458cf67bedd29fd7c164bd1eecace7f1c8d))
+* **workflows:** harness fixture filter is (version, arch)-aware ([5a0da10](https://github.com/buildrush/setup-php/commit/5a0da10b521c2d2cc1e20b4fe674301014f3a678))
+* **workflows:** per-arch oras download in build-php-core / build-extension ([713c140](https://github.com/buildrush/setup-php/commit/713c1400937f6a4b86ce715c031bf400734d9b2b))
+
+
+### Documentation
+
+* add Phase 2 aarch64 C2a design (easy+medium PECL extensions) ([bea0345](https://github.com/buildrush/setup-php/commit/bea0345ae34585b7e93a54a188900200f5e208b1))
+* add Phase 2 aarch64 C2b design (hard-tier PECL on arm64) ([3913064](https://github.com/buildrush/setup-php/commit/3913064f3bf73980c545b7a48236166f38725569))
+* add Phase 2 slice D design (ubuntu-22.04 runner coverage) ([26c0131](https://github.com/buildrush/setup-php/commit/26c01312b922cacbc8c0dff908e9b36cbfaa448e))
+* **compat-matrix:** record audited jit_aarch64.ini ([ef3fd3f](https://github.com/buildrush/setup-php/commit/ef3fd3ffbbb7256c06b89731c875f5a954b8b04f))
+
 ## [1.6.0](https://github.com/buildrush/setup-php/compare/v1.5.0...v1.6.0) (2026-04-21)
 
 
