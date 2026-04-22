@@ -84,13 +84,13 @@ func main() {
 			"yaml":      {Name: "yaml", Kind: catalog.ExtensionKindPECL, Versions: []string{"2.3.0"}, RuntimeDeps: map[string][]string{"linux": {"libyaml-0-2"}}},
 			"memcached": {Name: "memcached", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.4.0"}, RuntimeDeps: map[string][]string{"linux": {"libmemcached11", "libsasl2-2"}}},
 			"amqp":      {Name: "amqp", Kind: catalog.ExtensionKindPECL, Versions: []string{"2.2.0"}, RuntimeDeps: map[string][]string{"linux": {"librabbitmq4"}}},
-			"event":     {Name: "event", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.1.4"}, RuntimeDeps: map[string][]string{"linux": {"libevent-2.1-7t64", "libevent-openssl-2.1-7t64"}}},
+			"event":     {Name: "event", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.1.4"}, RuntimeDeps: map[string][]string{"linux": {"libevent-2.1-7", "libevent-openssl-2.1-7"}}},
 			"rdkafka":   {Name: "rdkafka", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.0.5"}, RuntimeDeps: map[string][]string{"linux": {"librdkafka1"}}},
 			"protobuf":  {Name: "protobuf", Kind: catalog.ExtensionKindPECL, Versions: []string{"5.34.1"}},
-			"imagick":   {Name: "imagick", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.8.1"}, RuntimeDeps: map[string][]string{"linux": {"libmagickwand-6.q16-7t64", "libmagickcore-6.q16-7t64"}}},
-			"mongodb":   {Name: "mongodb", Kind: catalog.ExtensionKindPECL, Versions: []string{"2.2.1"}, RuntimeDeps: map[string][]string{"linux": {"libssl3t64", "libsasl2-2"}}},
-			"swoole":    {Name: "swoole", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.2.0"}, RuntimeDeps: map[string][]string{"linux": {"libssl3t64", "libcurl4t64"}}},
-			"grpc":      {Name: "grpc", Kind: catalog.ExtensionKindPECL, Versions: []string{"1.80.0"}, RuntimeDeps: map[string][]string{"linux": {"libssl3t64"}}},
+			"imagick":   {Name: "imagick", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.8.1"}, RuntimeDeps: map[string][]string{"linux": {"libfontconfig1", "libx11-6", "libxext6", "liblcms2-2", "liblqr-1-0", "libfftw3-double3", "libbz2-1.0"}}},
+			"mongodb":   {Name: "mongodb", Kind: catalog.ExtensionKindPECL, Versions: []string{"2.2.1"}, RuntimeDeps: map[string][]string{"linux": {"libssl3", "libsasl2-2"}}},
+			"swoole":    {Name: "swoole", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.2.0"}, RuntimeDeps: map[string][]string{"linux": {"libssl3", "libcurl4"}}},
+			"grpc":      {Name: "grpc", Kind: catalog.ExtensionKindPECL, Versions: []string{"1.80.0"}, RuntimeDeps: map[string][]string{"linux": {"libssl3"}}},
 		},
 	}
 
@@ -215,9 +215,17 @@ func main() {
 	for _, ext := range res.Extensions {
 		extDir := filepath.Join(bundlesDir, ext.Name)
 		soPath := findSO(extDir, ext.Name)
-		ini := []string{fmt.Sprintf("extension=%s", ext.Name)}
+		// Use the absolute .so path in the load directive rather than the
+		// extension's name. The name form makes PHP open <extension_dir>/<name>.so
+		// which is a symlink we create in compose.SymlinkExtension. glibc's
+		// ld.so resolves $ORIGIN in the .so's DT_RUNPATH relative to the
+		// SYMLINK'S directory, not the target's — so $ORIGIN/hermetic points
+		// at an empty dir inside core/ and transitive hermetic libs fail to
+		// dlopen. Absolute path bypasses the symlink entirely: ld.so evaluates
+		// $ORIGIN against the real file's directory, where hermetic/ lives.
+		ini := []string{fmt.Sprintf("extension=%s", soPath)}
 		if spec, ok := cat.Extensions[ext.Name]; ok && len(spec.Ini) > 0 {
-			ini = spec.Ini
+			ini = rewriteCatalogIniToAbsolute(spec.Ini, ext.Name, soPath)
 		}
 		exts = append(exts, compose.ExtensionComposition{
 			Name: ext.Name, SOPath: soPath, IniLines: ini,
@@ -434,6 +442,28 @@ func findSO(dir, name string) string {
 		log.Printf("WARNING: walk %s: %v", filepath.Clean(dir), err)
 	}
 	return result
+}
+
+// rewriteCatalogIniToAbsolute replaces catalog-declared "extension=<name>" and
+// "zend_extension=<name>" directives with absolute-path variants pointing at
+// soPath. See the comment at the call site for why: ld.so's $ORIGIN resolution
+// uses the symlink's directory, which breaks hermetic-lib discovery when PHP
+// opens an extension via its symlink in extension_dir.
+func rewriteCatalogIniToAbsolute(lines []string, extName, soPath string) []string {
+	targets := map[string]string{
+		"extension=" + extName:      "extension=" + soPath,
+		"zend_extension=" + extName: "zend_extension=" + soPath,
+	}
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if replaced, ok := targets[trimmed]; ok {
+			out[i] = replaced
+			continue
+		}
+		out[i] = line
+	}
+	return out
 }
 
 // installRuntimeDeps installs the union of runtime_deps.linux apt packages

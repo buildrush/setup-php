@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -38,6 +39,7 @@ type PHPVersionSpec struct {
 	ABIMatrix         ABIMatrix      `yaml:"abi_matrix,omitempty"`
 	ConfigureFlags    ConfigureFlags `yaml:"configure_flags,omitempty"`
 	Smoke             []string       `yaml:"smoke,omitempty"`
+	HermeticLibs      []string       `yaml:"hermetic_libs,omitempty"`
 }
 
 // BuildTarget pairs a PHP version with its version-specific spec. Only
@@ -82,17 +84,18 @@ type ConfigureFlags struct {
 }
 
 type ExtensionSpec struct {
-	Name        string              `yaml:"name"`
-	Kind        ExtensionKind       `yaml:"kind"`
-	Note        string              `yaml:"note,omitempty"`
-	Source      ExtensionSource     `yaml:"source,omitempty"`
-	Versions    []string            `yaml:"versions,omitempty"`
-	ABIMatrix   ABIMatrix           `yaml:"abi_matrix,omitempty"`
-	Exclude     []ExcludeRule       `yaml:"exclude,omitempty"`
-	BuildDeps   map[string][]string `yaml:"build_deps,omitempty"`
-	RuntimeDeps map[string][]string `yaml:"runtime_deps,omitempty"`
-	Ini         []string            `yaml:"ini,omitempty"`
-	Smoke       []string            `yaml:"smoke,omitempty"`
+	Name         string              `yaml:"name"`
+	Kind         ExtensionKind       `yaml:"kind"`
+	Note         string              `yaml:"note,omitempty"`
+	Source       ExtensionSource     `yaml:"source,omitempty"`
+	Versions     []string            `yaml:"versions,omitempty"`
+	ABIMatrix    ABIMatrix           `yaml:"abi_matrix,omitempty"`
+	Exclude      []ExcludeRule       `yaml:"exclude,omitempty"`
+	BuildDeps    map[string][]string `yaml:"build_deps,omitempty"`
+	RuntimeDeps  map[string][]string `yaml:"runtime_deps,omitempty"`
+	Ini          []string            `yaml:"ini,omitempty"`
+	Smoke        []string            `yaml:"smoke,omitempty"`
+	HermeticLibs []string            `yaml:"hermetic_libs,omitempty"`
 }
 
 type ExtensionSource struct {
@@ -210,6 +213,9 @@ func (s *PHPSpec) Validate() error {
 				return fmt.Errorf("PHP spec %s: abi_matrix must have at least one value in each dimension", v)
 			}
 		}
+		if err := ValidateHermeticLibs(vs.HermeticLibs); err != nil {
+			return fmt.Errorf("PHP spec %s: %w", v, err)
+		}
 	}
 	if !hasBuild {
 		return fmt.Errorf("PHP spec: at least one version must have sources set for the builder to run")
@@ -231,6 +237,39 @@ func (s *ExtensionSpec) Validate() error {
 		if len(s.Versions) == 0 {
 			return fmt.Errorf("extension spec %s: at least one version is required", s.Name)
 		}
+	}
+	if err := ValidateHermeticLibs(s.HermeticLibs); err != nil {
+		return fmt.Errorf("extension spec %s: %w", s.Name, err)
+	}
+	return nil
+}
+
+// ValidateHermeticLibs validates a list of hermetic-lib globs. Globs must look
+// like shared-library filenames (starting with "lib", ending with ".so" or
+// ".so.<soversion>"), must not contain path separators, and must either contain
+// a wildcard or end with a concrete SOVERSION. Duplicates are rejected so
+// catalog authors don't silently list the same glob twice.
+//
+// Pattern: lib<chars>.so or lib<chars>.so.<soversion-or-*>
+// The grammar is intentionally narrow; extend only with a test-driven reason.
+func ValidateHermeticLibs(globs []string) error {
+	pattern := regexp.MustCompile(`^lib[A-Za-z0-9._+-]+\.so(\.[A-Za-z0-9.*]+)?$`)
+	seen := make(map[string]struct{}, len(globs))
+	for _, g := range globs {
+		if strings.Contains(g, "/") {
+			return fmt.Errorf("hermetic_libs glob %q must not contain '/'", g)
+		}
+		if !pattern.MatchString(g) {
+			return fmt.Errorf("hermetic_libs glob %q must match lib<name>.so[.<soversion>]", g)
+		}
+		// Require either a wildcard or a concrete SOVERSION past ".so".
+		if !strings.Contains(g, "*") && !strings.Contains(g, ".so.") {
+			return fmt.Errorf("hermetic_libs glob %q must contain '*' or a SOVERSION (e.g. libfoo.so.*)", g)
+		}
+		if _, dup := seen[g]; dup {
+			return fmt.Errorf("hermetic_libs contains duplicate entry %q", g)
+		}
+		seen[g] = struct{}{}
 	}
 	return nil
 }

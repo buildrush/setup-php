@@ -32,7 +32,13 @@ func Extract(data []byte, opts Options) error {
 
 	tr := tar.NewReader(dec)
 	cleanTarget := filepath.Clean(opts.TargetDir) + string(os.PathSeparator)
-	const maxFileSize = 256 << 20 // 256 MB
+	// Per-file extraction cap. Originally 256 MB, but grpc.so compiles to ~550
+	// MB with full debug info — getting silently truncated to 256 MB produced a
+	// malformed ELF that SIGBUS'd on dlopen. Bumped to 2 GB as a defence
+	// against tar-bombs while generously covering real extension sizes. A
+	// build-side `strip` pass would cut grpc.so to ~30 MB; until that lands,
+	// this accommodates the un-stripped worst case.
+	const maxFileSize = 2 << 30 // 2 GiB
 
 	for {
 		hdr, err := tr.Next()

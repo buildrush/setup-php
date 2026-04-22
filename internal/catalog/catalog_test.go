@@ -412,6 +412,89 @@ func TestRequiresSeparateBundle(t *testing.T) {
 	}
 }
 
+func TestHermeticLibsRoundTripPHPVersion(t *testing.T) {
+	yamlIn := []byte(`
+name: php
+versions:
+  "8.4":
+    bundled_extensions: [mbstring]
+    sources:
+      url: "https://example/php-{version}.tar.xz"
+    abi_matrix:
+      os: ["linux"]
+      arch: ["x86_64"]
+      ts: ["nts"]
+    hermetic_libs:
+      - "libicui18n.so.*"
+      - "libicuuc.so.*"
+`)
+	var spec PHPSpec
+	if err := yaml.Unmarshal(yamlIn, &spec); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	got := spec.Versions["8.4"].HermeticLibs
+	want := []string{"libicui18n.so.*", "libicuuc.so.*"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("HermeticLibs = %v, want %v", got, want)
+	}
+}
+
+func TestHermeticLibsRoundTripExtension(t *testing.T) {
+	yamlIn := []byte(`
+name: imagick
+kind: pecl
+source:
+  pecl_package: imagick
+versions: ["3.8.1"]
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+hermetic_libs:
+  - "libMagickWand-6.Q16.so.*"
+  - "libMagickCore-6.Q16.so.*"
+`)
+	var spec ExtensionSpec
+	if err := yaml.Unmarshal(yamlIn, &spec); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	want := []string{"libMagickWand-6.Q16.so.*", "libMagickCore-6.Q16.so.*"}
+	if !reflect.DeepEqual(spec.HermeticLibs, want) {
+		t.Errorf("HermeticLibs = %v, want %v", spec.HermeticLibs, want)
+	}
+}
+
+func TestValidateHermeticLibs(t *testing.T) {
+	cases := []struct {
+		name    string
+		globs   []string
+		wantErr string // substring; empty means expect no error
+	}{
+		{"empty", nil, ""},
+		{"valid wildcard", []string{"libicui18n.so.*"}, ""},
+		{"valid concrete SOVERSION", []string{"libMagickWand.so.6"}, ""},
+		{"rejects path separator", []string{"lib/foo.so.1"}, "must not contain '/'"},
+		{"rejects invalid prefix", []string{"icui18n.so.70"}, "must match"},
+		{"rejects bare name no SOVERSION no wildcard", []string{"libfoo.so"}, "must contain '*' or a SOVERSION"},
+		{"rejects duplicate", []string{"libicui18n.so.*", "libicui18n.so.*"}, "duplicate"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateHermeticLibs(tc.globs)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("err = %v, want substring %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestExtensionSpec_BuildDeps(t *testing.T) {
 	cases := []struct {
 		name string

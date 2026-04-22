@@ -21,14 +21,35 @@ if [[ "$PHP_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
   echo "Resolved PHP ${PHP_VERSION} -> ${RESOLVED}"
   PHP_VERSION="$RESOLVED"
 fi
+PHP_MINOR="${PHP_VERSION%.*}"
 
 echo "Building PHP ${PHP_VERSION} for linux/${ARCH}"
 
 # Install build dependencies
 export DEBIAN_FRONTEND=noninteractive
 SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"
-echo "::group::Installing build dependencies"
+
+# Strip any third-party apt sources the runner image ships. GitHub's
+# ubuntu-22.04 x86 runner preinstalls apt.postgresql.org (pgdg), which
+# provides PG17's libpq-dev — newer than jammy's libpq 14. Without this
+# cleanup, the core's configure picks up PG17 symbols (e.g. PQchangePassword)
+# and the resulting binary fails to link on any runner with jammy-era
+# libpq5 — even the jammy runners we *just* built on, plus every noble
+# runner. Arm runners don't ship pgdg, which is why this failure only
+# surfaced on x86_64 bundles.
+echo "::group::Strip non-jammy apt sources (pgdg et al)"
+$SUDO rm -f /etc/apt/sources.list.d/pgdg.list \
+            /etc/apt/sources.list.d/postgresql.list \
+            /etc/apt/sources.list.d/pgdg.sources
+# Defensive: downgrade any already-installed non-jammy libpq packages so
+# subsequent apt installs pick the distro version. `apt-get install <pkg>/jammy`
+# pulls from the default release pocket regardless of version-preference.
 $SUDO apt-get update -qq
+$SUDO apt-get install -y -qq --allow-downgrades \
+  libpq5/jammy libpq-dev/jammy || true
+echo "::endgroup::"
+
+echo "::group::Installing build dependencies"
 $SUDO apt-get install -y -qq \
   autoconf bison re2c pkg-config build-essential \
   libicu-dev libcurl4-openssl-dev libzip-dev libsqlite3-dev \
@@ -101,6 +122,22 @@ echo "::endgroup::"
 # Strip binaries
 find "${OUTPUT_DIR}/usr/local/bin" -type f -exec strip {} \; 2>/dev/null || true
 
+# Set rpath on all ELF binaries so bundled hermetic libs load via $ORIGIN.
+# Using patchelf after link (rather than -Wl,-rpath at link time) because
+# PHP's Makefile doubly-expands LDFLAGS: make's $(LDFLAGS) collapses $$ to $,
+# then the shell recipe expands $ORIGIN (unset) to empty, leaving a broken
+# relative path like "/../lib/hermetic" in DT_RUNPATH.
+echo "::group::Setting rpath via patchelf"
+if ! command -v patchelf >/dev/null 2>&1; then
+  $SUDO apt-get install -y -qq patchelf
+fi
+for elf in "${OUTPUT_DIR}/usr/local/bin"/*; do
+  if [ -f "$elf" ] && file "$elf" 2>/dev/null | grep -q ELF; then
+    patchelf --set-rpath '$ORIGIN/../lib/hermetic:$ORIGIN/../lib' "$elf"
+  fi
+done
+echo "::endgroup::"
+
 # Create conf.d directory
 mkdir -p "${OUTPUT_DIR}/usr/local/etc/php/conf.d"
 
@@ -116,5 +153,24 @@ echo "::endgroup::"
 "${OUTPUT_DIR}/usr/local/bin/php" -v
 echo "PHP ${PHP_VERSION} built successfully"
 
+# Ensure yq is present (GitHub runners ship it; local Docker image may not).
+if ! command -v yq >/dev/null 2>&1; then
+    curl -sSfL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(dpkg --print-architecture)
+    chmod +x /usr/local/bin/yq
+fi
+
+# Hermetic library capture: read catalog's hermetic_libs for this PHP minor,
+# pass them to the shared capture script.
+HERMETIC_GLOBS=$(yq -r ".versions.\"${PHP_MINOR}\".hermetic_libs // [] | join(\",\")" "${WORKSPACE}/catalog/php.yaml")
+echo "::group::Capturing hermetic libs for PHP core (globs: ${HERMETIC_GLOBS:-none})"
+CAPTURE_JSON="/tmp/capture-core.json"
+mkdir -p "${OUTPUT_DIR}/usr/local/lib/hermetic"
+"${WORKSPACE}/builders/common/capture-hermetic-libs.sh" \
+  --target "${OUTPUT_DIR}/usr/local/bin/php" \
+  --globs "${HERMETIC_GLOBS}" \
+  --output "${OUTPUT_DIR}/usr/local/lib/hermetic" \
+  > "$CAPTURE_JSON"
+echo "::endgroup::"
+
 # Pack the bundle
-"${WORKSPACE}/builders/common/pack-bundle.sh" php-core "$OUTPUT_DIR" /tmp/bundle.tar.zst
+"${WORKSPACE}/builders/common/pack-bundle.sh" php-core "$OUTPUT_DIR" /tmp/bundle.tar.zst "$CAPTURE_JSON"

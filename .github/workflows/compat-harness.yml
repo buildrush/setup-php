@@ -14,6 +14,14 @@ permissions:
   contents: read
   packages: read
 
+# Scope concurrency by event so a new PR push cancels its older harness runs,
+# but does NOT cancel a workflow_call invocation from plan-and-build's
+# post-rebuild path (which exercises the just-built bundles and must run to
+# completion).
+concurrency:
+  group: compat-harness-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_call' }}
+
 jobs:
   build:
     name: 'Build phpup (${{ matrix.goarch }})'
@@ -56,10 +64,21 @@ jobs:
         #
         # Fixtures default arch to 'x86_64' when the field is absent so existing
         # 50 x86_64 fixtures stay covered without schema churn.
+        #
+        # runner_os-specified fixtures (e.g. bare-jammy-<NN>) validate the
+        # jammy-built bundles landing via BUILDER_OS=ubuntu-22.04. Those
+        # bundles only exist after plan-and-build's post-merge rebuild.
+        # Skip them in standalone (pull_request / push / workflow_dispatch)
+        # invocations; include them via workflow_call from plan-and-build.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           pairs_json=$(jq -c '[.bundles | keys[] | select(startswith("php:")) | capture("^php:(?<v>[^:]+):linux:(?<a>[^:]+):") | .v + "/" + .a] | unique' bundles.lock)
           matrix=$(yq -o=json '.fixtures' test/compat/fixtures.yaml \
             | jq --argjson p "$pairs_json" -c '{include: [.[] | select((.["php-version"] + "/" + (.arch // "x86_64")) as $pa | $p | index($pa))]}')
+          if [ "$EVENT_NAME" != "workflow_call" ]; then
+            matrix=$(echo "$matrix" | jq -c '{include: [.include[] | select((.runner_os // "") == "")]}')
+          fi
           {
             echo "matrix<<EOF"
             echo "$matrix"
@@ -69,7 +88,10 @@ jobs:
   ours:
     name: 'ours: ${{ matrix.name }}'
     needs: [build, fixtures]
-    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: >-
+      ${{ matrix.arch == 'aarch64'
+          && (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04-arm' || 'ubuntu-24.04-arm')
+          || (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04' || 'ubuntu-24.04') }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.fixtures.outputs.matrix) }}
@@ -118,7 +140,10 @@ jobs:
   theirs:
     name: 'theirs: ${{ matrix.name }}'
     needs: [fixtures]
-    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    runs-on: >-
+      ${{ matrix.arch == 'aarch64'
+          && (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04-arm' || 'ubuntu-24.04-arm')
+          || (matrix.runner_os == 'ubuntu-22.04' && 'ubuntu-22.04' || 'ubuntu-24.04') }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.fixtures.outputs.matrix) }}

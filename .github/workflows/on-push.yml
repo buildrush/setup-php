@@ -6,6 +6,13 @@ on:
   pull_request:
     paths: ['catalog/**', 'builders/**']
 
+# Cancel older in-progress runs of this workflow on the same ref so a new push
+# supersedes the prior pipeline rather than running alongside it. Prevents
+# stuck matrix slots from an older run blocking new work.
+concurrency:
+  group: on-push-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pipeline:
     permissions:

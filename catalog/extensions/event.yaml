@@ -12,7 +12,7 @@ abi_matrix:
 build_deps:
   linux: ['libevent-dev', 'libssl-dev']
 runtime_deps:
-  linux: ['libevent-2.1-7t64', 'libevent-openssl-2.1-7t64']
+  linux: ['libevent-2.1-7', 'libevent-openssl-2.1-7']
 ini:
   - 'extension=event'
 smoke:

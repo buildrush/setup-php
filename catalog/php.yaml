@@ -85,6 +85,11 @@ versions:
       linux: >-
         --with-pdo-pgsql
         --with-pgsql
+    hermetic_libs:
+      - libicui18n.so.*
+      - libicuuc.so.*
+      - libicudata.so.*
+      - libicuio.so.*
   "8.2":
     bundled_extensions:
       - calendar
@@ -163,6 +168,11 @@ versions:
       linux: >-
         --with-pdo-pgsql
         --with-pgsql
+    hermetic_libs:
+      - libicui18n.so.*
+      - libicuuc.so.*
+      - libicudata.so.*
+      - libicuio.so.*
   "8.3":
     bundled_extensions:
       - calendar
@@ -241,6 +251,11 @@ versions:
       linux: >-
         --with-pdo-pgsql
         --with-pgsql
+    hermetic_libs:
+      - libicui18n.so.*
+      - libicuuc.so.*
+      - libicudata.so.*
+      - libicuio.so.*
   "8.4":
     bundled_extensions:
       - calendar
@@ -319,6 +334,11 @@ versions:
       linux: >-
         --with-pdo-pgsql
         --with-pgsql
+    hermetic_libs:
+      - libicui18n.so.*
+      - libicuuc.so.*
+      - libicudata.so.*
+      - libicuio.so.*
   "8.5":
     bundled_extensions:
       - calendar
@@ -399,6 +419,11 @@ versions:
       linux: >-
         --with-pdo-pgsql
         --with-pgsql
+    hermetic_libs:
+      - libicui18n.so.*
+      - libicuuc.so.*
+      - libicudata.so.*
+      - libicuio.so.*
 smoke:
   - "php -v"
   - "php -m"

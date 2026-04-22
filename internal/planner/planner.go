@@ -109,11 +109,14 @@ func isExcluded(rules []catalog.ExcludeRule, osName, arch, php string) bool {
 	return false
 }
 
-// ComputeSpecHash computes a deterministic hash for a matrix cell.
-func ComputeSpecHash(cell *MatrixCell, catalogData []byte, builderHash string) string {
+// ComputeSpecHash computes a deterministic hash for a matrix cell. builderOS
+// is the runner OS the build will execute on — changing it forces a full
+// rebuild because the resulting bundle's hermetic-lib set differs.
+func ComputeSpecHash(cell *MatrixCell, catalogData []byte, builderHash, builderOS string) string {
 	h := sha256.New()
 	h.Write(catalogData)
 	h.Write([]byte(builderHash))
+	h.Write([]byte(builderOS))
 	_, _ = fmt.Fprintf(h, "%s:%s:%s:%s:%s:%s",
 		cell.Version, cell.Extension, cell.OS, cell.Arch, cell.TS, cell.PHPAbi)
 	return fmt.Sprintf("sha256:%x", h.Sum(nil))

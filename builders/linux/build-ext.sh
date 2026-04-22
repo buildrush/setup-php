@@ -77,7 +77,40 @@ if [ -z "$SO_FILE" ]; then
   exit 1
 fi
 
+# Strip debug info. Without this, C++-heavy extensions (grpc especially) can
+# exceed 500 MB uncompressed and hit the runtime extractor's per-file cap.
+strip --strip-unneeded "$SO_FILE" 2>/dev/null || true
+
+# Set rpath on the .so via patchelf. Link-time -Wl,-rpath doesn't survive
+# phpize-generated Makefile + shell double-expansion: $ORIGIN gets eaten at
+# expansion time. patchelf writes the literal string directly into DT_RUNPATH.
+if ! command -v patchelf >/dev/null 2>&1; then
+  $SUDO apt-get install -y -qq patchelf
+fi
+patchelf --set-rpath '$ORIGIN/hermetic' "$SO_FILE"
+
 echo "Extension ${EXT_NAME}.so built at ${SO_FILE}"
 
+if ! command -v yq >/dev/null 2>&1; then
+    curl -sSfL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(dpkg --print-architecture)
+    chmod +x /usr/local/bin/yq
+fi
+
+HERMETIC_GLOBS=$(yq -r ".hermetic_libs // [] | join(\",\")" "${WORKSPACE}/catalog/extensions/${EXT_NAME}.yaml")
+echo "::group::Capturing hermetic libs for extension ${EXT_NAME} (globs: ${HERMETIC_GLOBS:-none})"
+CAPTURE_JSON="/tmp/capture-ext.json"
+# Hermetic libs go into a directory sibling to the .so so the '$ORIGIN/hermetic'
+# rpath we set on imagick.so resolves correctly at runtime. If we put them at
+# $OUTPUT_DIR/hermetic (bundle root), runtime $ORIGIN of the deep-nested .so
+# points at the nested extension dir, and hermetic-at-bundle-root doesn't match.
+SO_HERMETIC_DIR="$(dirname "$SO_FILE")/hermetic"
+mkdir -p "$SO_HERMETIC_DIR"
+"${WORKSPACE}/builders/common/capture-hermetic-libs.sh" \
+  --target "$SO_FILE" \
+  --globs "${HERMETIC_GLOBS}" \
+  --output "$SO_HERMETIC_DIR" \
+  > "$CAPTURE_JSON"
+echo "::endgroup::"
+
 # Pack the bundle
-"${WORKSPACE}/builders/common/pack-bundle.sh" php-ext "$OUTPUT_DIR" /tmp/bundle.tar.zst
+"${WORKSPACE}/builders/common/pack-bundle.sh" php-ext "$OUTPUT_DIR" /tmp/bundle.tar.zst "$CAPTURE_JSON"
