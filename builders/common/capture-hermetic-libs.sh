@@ -118,7 +118,12 @@ for g in "${GLOBS[@]}"; do
 done
 
 # Copy captured files, dereferencing symlinks so the final basename lands in
-# $OUTPUT and the linker finds it by name.
+# $OUTPUT and the linker finds it by name. Then patchelf each copy's rpath to
+# '$ORIGIN' so it can resolve sibling transitive deps (e.g. libicui18n.so.70
+# locating libicudata.so.70 in the same hermetic dir). Without this, DT_RUNPATH
+# on the top-level binary doesn't cascade to captured libs — ld.so searches
+# only each lib's own runpath for its deps, and the transitive lookup fails
+# at runtime even though the file is sitting right next to it.
 for nm in "${!CAPTURED_PATHS[@]}"; do
     p="${CAPTURED_PATHS[$nm]}"
     dst="$OUTPUT/$nm"
@@ -130,6 +135,9 @@ for nm in "${!CAPTURED_PATHS[@]}"; do
         continue
     fi
     cp -L "$p" "$dst"
+    # Defensive chmod: /usr/lib copies may be read-only.
+    chmod u+w "$dst"
+    patchelf --set-rpath '$ORIGIN' "$dst"
 done
 
 # Assert target declares at least one DT_RUNPATH or DT_RPATH entry. We do NOT
