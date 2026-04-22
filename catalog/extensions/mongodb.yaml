@@ -12,7 +12,7 @@ abi_matrix:
 build_deps:
   linux: ['libssl-dev', 'libsasl2-dev']
 runtime_deps:
-  linux: ['libssl3t64', 'libsasl2-2']
+  linux: ['libssl3', 'libsasl2-2']
 ini:
   - 'extension=mongodb'
 smoke:
