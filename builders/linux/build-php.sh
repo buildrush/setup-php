@@ -51,12 +51,6 @@ tar -xf /tmp/php.tar.xz -C "$PHP_SRC_DIR" --strip-components=1
 # Configure
 echo "::group::Configuring PHP ${PHP_VERSION}"
 cd "$PHP_SRC_DIR"
-# rpath baked into the compiled binaries so compose-time extraction resolves
-# bundled ICU/etc. via $ORIGIN without LD_LIBRARY_PATH pollution.
-# $$ORIGIN (not $ORIGIN) because PHP's Makefile interprets $ as a make-variable
-# reference and expands $O to empty; $$ survives make and becomes a literal $
-# by the time the linker records it in DT_RUNPATH.
-export LDFLAGS="-Wl,-rpath,\$\$ORIGIN/../lib/hermetic -Wl,-rpath,\$\$ORIGIN/../lib ${LDFLAGS:-}"
 ./configure \
   --prefix=/usr/local \
   --enable-mbstring \
@@ -107,6 +101,22 @@ echo "::endgroup::"
 
 # Strip binaries
 find "${OUTPUT_DIR}/usr/local/bin" -type f -exec strip {} \; 2>/dev/null || true
+
+# Set rpath on all ELF binaries so bundled hermetic libs load via $ORIGIN.
+# Using patchelf after link (rather than -Wl,-rpath at link time) because
+# PHP's Makefile doubly-expands LDFLAGS: make's $(LDFLAGS) collapses $$ to $,
+# then the shell recipe expands $ORIGIN (unset) to empty, leaving a broken
+# relative path like "/../lib/hermetic" in DT_RUNPATH.
+echo "::group::Setting rpath via patchelf"
+if ! command -v patchelf >/dev/null 2>&1; then
+  $SUDO apt-get install -y -qq patchelf
+fi
+for elf in "${OUTPUT_DIR}/usr/local/bin"/*; do
+  if [ -f "$elf" ] && file "$elf" 2>/dev/null | grep -q ELF; then
+    patchelf --set-rpath '$ORIGIN/../lib/hermetic:$ORIGIN/../lib' "$elf"
+  fi
+done
+echo "::endgroup::"
 
 # Create conf.d directory
 mkdir -p "${OUTPUT_DIR}/usr/local/etc/php/conf.d"
