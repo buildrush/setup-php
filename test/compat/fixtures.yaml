@@ -387,3 +387,40 @@ fixtures:
     extensions: 'xdebug, pcov, apcu, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
     ini-values: ''
     coverage: 'none'
+
+  # 8.1 omits swoole (see catalog/extensions/swoole.yaml exclude — swoole
+  # 6.2.0 declares min PHP 8.2.0 per PECL metadata).
+  - name: multi-ext-hard4-arm64-81
+    php-version: '8.1'
+    arch: 'aarch64'
+    extensions: 'imagick, mongodb, grpc'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-hard4-arm64-82
+    php-version: '8.2'
+    arch: 'aarch64'
+    extensions: 'imagick, mongodb, swoole, grpc'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-hard4-arm64-83
+    php-version: '8.3'
+    arch: 'aarch64'
+    extensions: 'imagick, mongodb, swoole, grpc'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-hard4-arm64-84
+    php-version: '8.4'
+    arch: 'aarch64'
+    extensions: 'imagick, mongodb, swoole, grpc'
+    ini-values: ''
+    coverage: 'none'
+
+  - name: multi-ext-hard4-arm64-85
+    php-version: '8.5'
+    arch: 'aarch64'
+    extensions: 'imagick, mongodb, swoole, grpc'
+    ini-values: ''
+    coverage: 'none'

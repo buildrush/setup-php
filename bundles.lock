@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-04-21T18:13:54.985366334Z",
+  "generated_at": "2026-04-21T19:40:26.597073391Z",
   "bundles": {
     "ext:amqp:2.2.0:8.1:linux:aarch64:nts": {
       "digest": "sha256:5777547ce3dcfe4ceb34f59af0e3b9ef507bdfbc413e6811353d8bcc1d9c72c7",
@@ -122,25 +122,45 @@
       "digest": "sha256:237abc86ee062ab0ff5fd763fa1411dd0ced3d503a98bafe0562b6a2d28ffdca",
       "spec_hash": "sha256:9bf40979d6ff860dc298f8140268f56afc354d23790259b45beec02fe6b5c92b"
     },
+    "ext:grpc:1.80.0:8.1:linux:aarch64:nts": {
+      "digest": "sha256:79730b1eb0e48dbbbf6cd8a54aede4838137b82bd7087cedad3b4575b10622cc",
+      "spec_hash": "sha256:d342afe360fc9a1350cbb280e1cfe426ed2cd16738d1597619cf1f385f5e0419"
+    },
     "ext:grpc:1.80.0:8.1:linux:x86_64:nts": {
-      "digest": "sha256:83e6bff82abd4b34a8f6cc0f5faf131cf7dc3807d5da9014ae63dc8ee86d39dd",
-      "spec_hash": "sha256:358cdb435b16604b11587af859ffa2acb61e987087bf85376a64a08ed06b0d6d"
+      "digest": "sha256:34ece6ce1433171d6f4ac6789b54f6785d50e710d38ee84f91feb47dccadf760",
+      "spec_hash": "sha256:a2702848e364c0e83308e9b3d54cd471f1f957170b38f8633df1800e221bad87"
+    },
+    "ext:grpc:1.80.0:8.2:linux:aarch64:nts": {
+      "digest": "sha256:01e921836d0813499d3913a4cd3d16b11206eeeb7dca40b0bbacb98ae6244cae",
+      "spec_hash": "sha256:6272b22728a2845f8b8bd0a99523e1dbbffa39f595a2672fab7c977523adc140"
     },
     "ext:grpc:1.80.0:8.2:linux:x86_64:nts": {
-      "digest": "sha256:d0d0ee936556ebb3e9f14eb5f91ec83fb7a8f433ff36cddfcb6665939248c694",
-      "spec_hash": "sha256:4d69585628ff8bc82f19f6898768120027dc751c9463c2122ce979e539d039fd"
+      "digest": "sha256:cce30d48268de7dfdce920b46db953e31ca2e54a3400eb870f3f59b8a5c96b42",
+      "spec_hash": "sha256:f6aadd33849dcfeaa77519301f9d1f9c3117b0b5933c010c490c57909d703e13"
+    },
+    "ext:grpc:1.80.0:8.3:linux:aarch64:nts": {
+      "digest": "sha256:06f876a0ad57cf6ad3096d118c608cd7ff50c5e02697ec1b5ba8043dd7a59891",
+      "spec_hash": "sha256:a69e6e5194635126cb76e5d7ec088eb9c31788948935b459f9d6927abc8c69f6"
     },
     "ext:grpc:1.80.0:8.3:linux:x86_64:nts": {
-      "digest": "sha256:da905d841a0e8571b6090c5024fcd1275e0956faebc8efa0e107be590b5ce770",
-      "spec_hash": "sha256:f4fde1b57eae785fe6d439888d08213e54ef8c34a62b6abfbf5dec62b013408a"
+      "digest": "sha256:0cb4b7d98b400285a8faf85e688d63ccad925a222ac8caaf1bb07d1683e3d42b",
+      "spec_hash": "sha256:e0dfc469e1542ed343fd70cc9f262c0c6f9da2bf382ea3ec04169c1624071431"
+    },
+    "ext:grpc:1.80.0:8.4:linux:aarch64:nts": {
+      "digest": "sha256:c6c9a05608981141d4e94579c2f73d832c62157bf0bd39cf33d1e8685a1fc1f4",
+      "spec_hash": "sha256:407557d64ed7ca1042dca3570a3e6b923f9ed71d944dbe14d270ee78b92be7cf"
     },
     "ext:grpc:1.80.0:8.4:linux:x86_64:nts": {
-      "digest": "sha256:071affd8b84fdd5565a6bc2674a3e61d483f0aa5cb65b1cbe851aa8be7629060",
-      "spec_hash": "sha256:b7d58b750b0db77e0b2c394c9c9998b6422d01f3fec60911758822f015164aa8"
+      "digest": "sha256:47ab69780c4edda3f0f3921d07169e935637e9462bad6ea119274d70b47495ec",
+      "spec_hash": "sha256:8faaae1ade529ed20ea81d2080fd7338d1f23c6259d8489879128c6087cddde9"
+    },
+    "ext:grpc:1.80.0:8.5:linux:aarch64:nts": {
+      "digest": "sha256:d1799c32b07214a23ee5d50c0a3245ef7f151b14440c60914d5f5d0d075140e4",
+      "spec_hash": "sha256:f1390e55adfa96deafff77065b51faf84b7bdf3ce00ed974e529c3173feebfab"
     },
     "ext:grpc:1.80.0:8.5:linux:x86_64:nts": {
-      "digest": "sha256:9bc85c5b6813980c768e58f07169c89ea2619dea860de9f8978af0adbdf875f0",
-      "spec_hash": "sha256:39a3254b816b883e194a051ac9c97a1a947be871dcba5a1d5386e0aec2f408c2"
+      "digest": "sha256:b8f3aff21860eda9909543782adb49828a190833ddbb0cd7d656ea5ba4daa95e",
+      "spec_hash": "sha256:76e6ba2664a42ec29f7bcfc7eaa6d90c99ce8ac462c29e8966ba6547909b4850"
     },
     "ext:igbinary:3.2.16:8.1:linux:aarch64:nts": {
       "digest": "sha256:baf2cbe5d6ff93b53e768a59279e7f65452fc8c3084026fc944b9b3de703d8fc",
@@ -174,25 +194,45 @@
       "digest": "sha256:fe74f21acfa307bad5fc4895828948f342daeff4956fd016ba34f05309536da6",
       "spec_hash": "sha256:b57ddab84da3aa4e4085260e7958a06bcee7df3783e5c5f6b34444c04b5d0c73"
     },
+    "ext:imagick:3.8.1:8.1:linux:aarch64:nts": {
+      "digest": "sha256:165fcdf004a83ddeb54d9bc7c853b959a5afea0c457c4899ef4c8dc6de048739",
+      "spec_hash": "sha256:7c9b5e107d41dd1a313b99459c773d1b458148a2b1f8bdfd5680b68f6fbaea55"
+    },
     "ext:imagick:3.8.1:8.1:linux:x86_64:nts": {
-      "digest": "sha256:ea38456897fe2a1f8b1252c46f3416597574d41dbd34b69f7b0b57172dbbd11b",
-      "spec_hash": "sha256:1cdbcd0e70f2bcb76235d320e747a9f61f14b43e357ccc6a734a8d697addc347"
+      "digest": "sha256:f3ea2021de25bdacda70c89ebde03ec8348e676f30504b561fda1901839c4b9c",
+      "spec_hash": "sha256:c65cd26156976d1ee17c8b183c52f91a68dbca95ce6a11cbc0bae9baa66a46ce"
+    },
+    "ext:imagick:3.8.1:8.2:linux:aarch64:nts": {
+      "digest": "sha256:96e0ea001b04efbeeda889617c43602b56ccc9769765b2e4e95a1f9b9f495a12",
+      "spec_hash": "sha256:bdcb8222be6c939c140a9022965cf990b0cbec3cedd376989edd89ffc6c4743b"
     },
     "ext:imagick:3.8.1:8.2:linux:x86_64:nts": {
-      "digest": "sha256:3ad7714bb60ad36cd3c12c4d38c396a4ce11b2d6219bd004e3f60e453294dd70",
-      "spec_hash": "sha256:34c964c24fb26d57577cd153305adaece759cf1b7fe853783e53e6e96be1e7c1"
+      "digest": "sha256:dcd5152592f9d86e7a41316096091750d3cfd011d73b268b0c06656929873fb5",
+      "spec_hash": "sha256:497c4566e6df0592559b61cc6bc2893f47a60987b8ac63655b313fa75204e5f7"
+    },
+    "ext:imagick:3.8.1:8.3:linux:aarch64:nts": {
+      "digest": "sha256:a3e453ad80c8f6fc9d0e3a1b3dc483d0c11787df7684f690cb698bcad7edb461",
+      "spec_hash": "sha256:9f01fd7ddb5e196c176d553f8ff8623ccbfaab63f076883cbba4d7ab38fad014"
     },
     "ext:imagick:3.8.1:8.3:linux:x86_64:nts": {
-      "digest": "sha256:b318ac46672c0a6a821c7fcd8974d2f1eb6eb1961571d894eb979025dc0ab6d6",
-      "spec_hash": "sha256:d4c01545267d6e0955aef8ad607cde8e84d9e3b9bde3d6e2601d65a4582b97e9"
+      "digest": "sha256:ad83005116864a9468ddecf4b6c2a9f56fb90ebb1b6fc9c05c3732e94c6b1e31",
+      "spec_hash": "sha256:4791f77ac178569e627053ff0695c9f5b69a51abef817100e5f2e45c1c9fbd50"
+    },
+    "ext:imagick:3.8.1:8.4:linux:aarch64:nts": {
+      "digest": "sha256:2309a78680a8a8264dc956621d611f4b6f6c248760abc0af7965d005cf525db3",
+      "spec_hash": "sha256:ea958c9fd9b98b13824737d72a6929b321f38188086b483473b9054b9e8d88dd"
     },
     "ext:imagick:3.8.1:8.4:linux:x86_64:nts": {
-      "digest": "sha256:3bb4e272a9266e356deb6bc13a420de85aa94a4547bb0e4bd41ae3fa6ae13ee1",
-      "spec_hash": "sha256:e3ec0927fe87d6fbd1310d8b8bb707b6a54bce49e741cac93299a2b29d8e3621"
+      "digest": "sha256:a264441af43c305c8751c5d06f05adc8807a12c4ca033c49f909bace8474ccd4",
+      "spec_hash": "sha256:f36f64ca45580fc2b58490097ababd2874d64198ff041290b436fe14970483e9"
+    },
+    "ext:imagick:3.8.1:8.5:linux:aarch64:nts": {
+      "digest": "sha256:f2224a1a8959d0787d6c5de0fac246d382f5f46105198ba035ab5e05c2599ff3",
+      "spec_hash": "sha256:c3c3fd0fe0ddaa58110ea43b67f629157e3ed457a8ec61393a525889d3cc11b9"
     },
     "ext:imagick:3.8.1:8.5:linux:x86_64:nts": {
-      "digest": "sha256:c5fbdd5b9900bf0339af60da0f4ee544fe36765482e2ab051607efe2129513f1",
-      "spec_hash": "sha256:338e5476d7d4f9b20eaf2240fa0558b488a03951f6fbc965e0684299beb90670"
+      "digest": "sha256:62a7e4670be91551172d7d94d10a1f10c00439ab20b1fa863d22e3ca6d4fc873",
+      "spec_hash": "sha256:966467e775d0d65a049435b084c8a67971f53d8173691217ce7e13bbc73e6fa3"
     },
     "ext:memcached:3.4.0:8.1:linux:aarch64:nts": {
       "digest": "sha256:d0e3588212961fe24368c81a1ff7543833134f15a047e00ec838328872e476d5",
@@ -234,25 +274,45 @@
       "digest": "sha256:488684c4fcee12f1772a03e85a3150db0eb02de46401693c7099b84429a7ca3b",
       "spec_hash": "sha256:6d8c68c316caada1a1b3a8280a8d15a1c94fc9867eb10d9ff3a399d587a8e6af"
     },
+    "ext:mongodb:2.2.1:8.1:linux:aarch64:nts": {
+      "digest": "sha256:3e7eefaeaa0e3438bfe199d4c303a7b81bcd567986731dc52e1b4117ecdec3e3",
+      "spec_hash": "sha256:803ad7791c73f21717f3e21f7b8bcd6ff8b80c60cb8f0769ebd82e638cb86597"
+    },
     "ext:mongodb:2.2.1:8.1:linux:x86_64:nts": {
-      "digest": "sha256:8803231f3c7d97c68b453ce57982daa35c031c005800481da8aa0dbb94d5ff8f",
-      "spec_hash": "sha256:26b5216c131695db62a40fca2311328dc32b39870fd9643db69291bc211d77e0"
+      "digest": "sha256:8fd28fe219d81a369e95e53c8ea9109562e04fc9ff73864c3458e2aad73d780b",
+      "spec_hash": "sha256:d5968d5c5fc02516da30cde91a8a80a3416f2843001a323d560f5293c8eb885c"
+    },
+    "ext:mongodb:2.2.1:8.2:linux:aarch64:nts": {
+      "digest": "sha256:48fefde66abeaea811b5cb210c88daf050c852bdf5ca631cb8a3893a3925abb9",
+      "spec_hash": "sha256:e87be75aee82573f652b41a407a511bd9f6b6a9b0ac2a08cbab8578ac7c27986"
     },
     "ext:mongodb:2.2.1:8.2:linux:x86_64:nts": {
-      "digest": "sha256:86fdc12462e91bee54d9d5d6991c3e877103567ff647aa36bca0e9b3dde8d579",
-      "spec_hash": "sha256:8e3f5abd49d3cf785f5373ce9128eb36c67d6eb576308d27a704a9c06d706e53"
+      "digest": "sha256:511f6a7b365968a6f84951215149658bb4c2774bf4424a21f4bf01d95d05a222",
+      "spec_hash": "sha256:2b3d8b1e7e61071b5225dca68c92aaf56554031964707b834379cc591e5b337e"
+    },
+    "ext:mongodb:2.2.1:8.3:linux:aarch64:nts": {
+      "digest": "sha256:8209c33368897b7f9a151720473a3a072749e8755abfe538697288c65ebc8821",
+      "spec_hash": "sha256:2e8486fd1ebec2b9816c7c93fb7d46a25c6f29f0c2b02f5bfa01466a4cc62a21"
     },
     "ext:mongodb:2.2.1:8.3:linux:x86_64:nts": {
-      "digest": "sha256:6d0517abb5378d2bf70b33b92bc1b61a7ac538f6db7e102fb936b9fa9d468e3e",
-      "spec_hash": "sha256:c68129df1c791e45ab41883a95a94e28f3293a206f339ec7dce3ad02a0646c71"
+      "digest": "sha256:74185c8ea8c7dbc6cbc08e149c3227db298a60c431177eff0431130ec51d8e7c",
+      "spec_hash": "sha256:e0cfd9a1fbea6c728cd9196ab12f1bf83f1c62e2bd16956c226c51861e163545"
+    },
+    "ext:mongodb:2.2.1:8.4:linux:aarch64:nts": {
+      "digest": "sha256:496db2ae77b635e3dd5135d9e53453dda2c15f1a2a37c5060e24e8658573da68",
+      "spec_hash": "sha256:f7e0aa32f77b84c187d3a58ccd2cb58c52b33864f5bd267e539bc5b950829477"
     },
     "ext:mongodb:2.2.1:8.4:linux:x86_64:nts": {
-      "digest": "sha256:d114888f7c456c336d7c0bc228bae6ca7b222aa4d7caa34bb077994a16a317fd",
-      "spec_hash": "sha256:c052d64d8e9f9f12bea3906fea290d41c825a85cdb701481befb4ccfed0671d9"
+      "digest": "sha256:4cd4645660eb426e855167a74c3828e66a0c5eda3412f895391ad1a459e9ab06",
+      "spec_hash": "sha256:c4ade1af59c6a9ffd996b53f82d3403103e226a61b49baf01395d0412998be06"
+    },
+    "ext:mongodb:2.2.1:8.5:linux:aarch64:nts": {
+      "digest": "sha256:d3a1cc2db3b73922c05733e7c1a82aa2bfb266dbfcc82aaa8b1f6abe75254d2b",
+      "spec_hash": "sha256:8657a8113781cb2d3a07c6ecca3004f1da19cdbd6801332f73a1fc565389d5ad"
     },
     "ext:mongodb:2.2.1:8.5:linux:x86_64:nts": {
-      "digest": "sha256:ba4ef7b889a7730e53b7c5267cbd27ee2570408dc8a8421b249fedd061f9a6b5",
-      "spec_hash": "sha256:5c0f1f549d12023632109076d9d4a97256765662790a0e4d30387da26120a195"
+      "digest": "sha256:b39144307d28d5b4023f198ee68791a8aeeaf02e7da3f42c5d36d42380ee135d",
+      "spec_hash": "sha256:a63fe15e219692ba4386eba6da0e00d19b654a82a663deb49d0a1b765b1562cb"
     },
     "ext:msgpack:3.0.0:8.1:linux:aarch64:nts": {
       "digest": "sha256:1a0c0e724f5b83a369ace4e4aa901793c59acbef503e17234a311295b40663f3",
@@ -478,21 +538,37 @@
       "digest": "sha256:11775cf94e34430d89f4900ad85991f5dcaa6c2a3949598ec466f7f7def2c122",
       "spec_hash": "sha256:8d477ca05899e8c7702a6e81d7606d4c6f7f58ca0bfa84e08e3f6dc59b075884"
     },
+    "ext:swoole:6.2.0:8.2:linux:aarch64:nts": {
+      "digest": "sha256:12b9f978d097fed2157a6abf3cf8cfb6b14d353e326a3c84ad89b7e51dbb03d1",
+      "spec_hash": "sha256:8269c1fcb24ac2c540ecb88b078dfeb312ef5ac378f51a5c1f33d7bc5cd0e248"
+    },
     "ext:swoole:6.2.0:8.2:linux:x86_64:nts": {
-      "digest": "sha256:5d6c2689a5d09d60422fc2d564e8e25fd4cf5bef2f582d353c24263d6ef74eb1",
-      "spec_hash": "sha256:c92c6a1803a78b362a4790adc42bd8e0011f3db6219c4b129132e37dd30ed153"
+      "digest": "sha256:f2f51f5a77acb2bb0c1c31ee4d5826729df59cbbb94a69fc22d1217fe98bb5eb",
+      "spec_hash": "sha256:79d5f36c43140259a7b0d61507356b678fbca577ad4620e693a8c4b5dcb36b50"
+    },
+    "ext:swoole:6.2.0:8.3:linux:aarch64:nts": {
+      "digest": "sha256:884c5aeee6cc8e33e068d4651ce08354eab1fa3d199f1ac8e9aadf86b0d1f985",
+      "spec_hash": "sha256:ee995a17e7903e191faf779c95a37a23280e14c0e8d2a2dd49f72ea80538f002"
     },
     "ext:swoole:6.2.0:8.3:linux:x86_64:nts": {
-      "digest": "sha256:9cfbd45c8c39bcb4abd75f6a847e7701cc2e62e0a97d955caeef840c7ddf2530",
-      "spec_hash": "sha256:1fe85da1788170af2d2872ab24ffbbf4d7b8a05cc6bee90d8696d74a2b4cd081"
+      "digest": "sha256:87a5049d51560dbc06aafc4ea123fd7ba5051720c5c54358003b69b992899a5c",
+      "spec_hash": "sha256:37206bd63e9ca39f6a6aef758223c7b134f7d5654475e69a2e8660a47cf39b19"
+    },
+    "ext:swoole:6.2.0:8.4:linux:aarch64:nts": {
+      "digest": "sha256:e1c87d671cd916c2f5de191af441354699fa2739082de545f87eb07adb1831f7",
+      "spec_hash": "sha256:dc428c9b205a4723999ddb584274143f6c5aea6a8867d6d3e6ef2d4817caf529"
     },
     "ext:swoole:6.2.0:8.4:linux:x86_64:nts": {
-      "digest": "sha256:de617e0abbb9225cd150511416ec5e6eb3b1048584f83ee475ba64b419753788",
-      "spec_hash": "sha256:09c50420ac024fbffc5b08ae6668ea87d1f6f19908f196aee3c36d01de2bbcd1"
+      "digest": "sha256:fccfc368d3ab335c344dadbd06c70a4ab10841563eb9a5cf904ad1607ea0b300",
+      "spec_hash": "sha256:e29db9afc166323ccbc37daff08ce1223f142794f5ebef934ab41cbcf23f0038"
+    },
+    "ext:swoole:6.2.0:8.5:linux:aarch64:nts": {
+      "digest": "sha256:0c35cefe21d4e558ed5d2cda882ef07788c56d8fa9a0c4a8ae637507a48067b9",
+      "spec_hash": "sha256:48eca9ec47948c3389da85ced2e19ddc468f3c88f9983fdf0abd698ed359c431"
     },
     "ext:swoole:6.2.0:8.5:linux:x86_64:nts": {
-      "digest": "sha256:b335b99e7774a8caff280bf35387acbc2eb1aa047d5405b1620d9b63a146550d",
-      "spec_hash": "sha256:d86046680eedb69dd00f123bec6e17c651b0547e1436805a7287978e575fa966"
+      "digest": "sha256:1e8a9a75e36452e8179af3ad7e838fe8e12536cce4f5b07f0e0f1166fd47a07d",
+      "spec_hash": "sha256:ecb655718bfe5e4e8cf5fc7cdbcecb8ee6181000650bd95cf542f96ccabb3189"
     },
     "ext:uuid:1.3.0:8.1:linux:aarch64:nts": {
       "digest": "sha256:a3d8dbe7d09ac192ec5a202fc22c73a141dfcb7f53a6781f882ae09038db7138",
