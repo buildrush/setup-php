@@ -51,7 +51,9 @@ func main() {
 		log.Fatalf("read builder-os.env: %v", err)
 	}
 
-	// Hash builder scripts and schema version file
+	// Hash builder scripts and shared support files the builders source. Changes
+	// to any of these change the bundle contents; fold them into builderHash so
+	// spec_hash invalidates and bundles rebuild.
 	builderHashPHP, err := planner.HashFile(filepath.Join("builders", "linux", "build-php.sh"))
 	if err != nil {
 		log.Fatalf("hash php builder: %v", err)
@@ -64,8 +66,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("hash schema env: %v", err)
 	}
-	builderHashPHP = builderHashPHP + ":" + schemaEnvHash
-	builderHashExt = builderHashExt + ":" + schemaEnvHash
+	captureHash, err := planner.HashFile(filepath.Join("builders", "common", "capture-hermetic-libs.sh"))
+	if err != nil {
+		log.Fatalf("hash capture script: %v", err)
+	}
+	packHash, err := planner.HashFile(filepath.Join("builders", "common", "pack-bundle.sh"))
+	if err != nil {
+		log.Fatalf("hash pack-bundle script: %v", err)
+	}
+	commonHash := schemaEnvHash + ":" + captureHash + ":" + packHash
+	builderHashPHP = builderHashPHP + ":" + commonHash
+	builderHashExt = builderHashExt + ":" + commonHash
 
 	// Expand PHP matrix
 	phpCells := planner.ExpandPHPMatrix(cat.PHP)
