@@ -322,12 +322,22 @@ func writeIniKeysFromFixture(path string, f *Fixture) error {
 // fixture: INPUT_PHP-VERSION, INPUT_EXTENSIONS, INPUT_INI-VALUES,
 // INPUT_COVERAGE, INPUT_INI-FILE. PHPUP_REGISTRY inherited from the
 // cell opts (which got it from --registry).
+//
+// plan.FromEnv reads RUNNER_OS and RUNNER_ARCH (GHA convention) to build
+// the lockfile key `php:<ver>:<os>:<arch>:<ts>`. Inside our bare-ubuntu
+// test container there are no GHA variables set, so without these the
+// key becomes malformed (e.g. `php:8.4://nts`) and resolve fails. Inject
+// them explicitly: OS is always Linux in the container; ARCH is mapped
+// from the cell's canonical arch back to GHA's X64/ARM64 spelling so
+// plan.normalizeArch round-trips cleanly.
 func composeInstallEnv(opts *testCellOpts, f *Fixture) map[string]string {
 	env := map[string]string{
 		"INPUT_PHP-VERSION": f.PHPVersion,
 		"INPUT_EXTENSIONS":  f.Extensions,
 		"INPUT_INI-VALUES":  f.INIValues,
 		"INPUT_COVERAGE":    f.Coverage,
+		"RUNNER_OS":         "Linux",
+		"RUNNER_ARCH":       runnerArchFromCellArch(opts.Arch),
 	}
 	if f.INIFile != "" {
 		env["INPUT_INI-FILE"] = f.INIFile
@@ -336,6 +346,21 @@ func composeInstallEnv(opts *testCellOpts, f *Fixture) map[string]string {
 		env["PHPUP_REGISTRY"] = opts.RegistryURI
 	}
 	return env
+}
+
+// runnerArchFromCellArch maps the test-cell's canonical arch to GHA's
+// RUNNER_ARCH values: x86_64 -> X64, aarch64 -> ARM64. Unknown arches
+// are passed through unchanged so downstream normalizeArch can still
+// make a best-effort match.
+func runnerArchFromCellArch(arch string) string {
+	switch arch {
+	case "x86_64":
+		return "X64"
+	case "aarch64":
+		return "ARM64"
+	default:
+		return arch
+	}
 }
 
 // assertFixtureInvariants checks the probe output against what the fixture

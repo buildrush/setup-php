@@ -275,6 +275,23 @@ func TestProbeOutputRoundTrip_JSONParses(t *testing.T) {
 	}
 }
 
+func TestComposeInstallEnv_SetsRunnerEnv(t *testing.T) {
+	opts := &testCellOpts{Arch: "x86_64", RegistryURI: "oci-layout:/reg"}
+	env := composeInstallEnv(opts, &Fixture{PHPVersion: "8.4", Extensions: "", Coverage: "none"})
+	if env["RUNNER_OS"] != "Linux" {
+		t.Errorf("RUNNER_OS = %q, want Linux", env["RUNNER_OS"])
+	}
+	if env["RUNNER_ARCH"] != "X64" {
+		t.Errorf("RUNNER_ARCH = %q, want X64", env["RUNNER_ARCH"])
+	}
+	// Aarch64 mapping.
+	opts.Arch = "aarch64"
+	env = composeInstallEnv(opts, &Fixture{PHPVersion: "8.4"})
+	if env["RUNNER_ARCH"] != "ARM64" {
+		t.Errorf("RUNNER_ARCH aarch64 = %q, want ARM64", env["RUNNER_ARCH"])
+	}
+}
+
 func TestPrintFixtureSummary_IncludesAllRows(t *testing.T) {
 	var buf bytes.Buffer
 	printFixtureSummary(&buf, []fixtureOutcome{
