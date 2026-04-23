@@ -149,6 +149,12 @@ ci-cell:
 	esac; \
 	$(MAKE) "$$phpup_linux_bin" && \
 	$(MAKE) $(PHPUP_BIN) && \
+	$(PHPUP_BIN) build cell \
+	    --os $(OS) \
+	    --arch $(ARCH) \
+	    --php $(PHP) \
+	    --registry $(or $(REGISTRY),oci-layout:./out/oci-layout) \
+	    --repo . && \
 	$(PHPUP_BIN) test \
 	    --os $(OS) \
 	    --arch $(ARCH) \
