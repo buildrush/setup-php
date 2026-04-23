@@ -13,11 +13,11 @@ import (
 // dispatch, plus Push gated on ErrUnsupported since published remotes are
 // read-only from the action's perspective.
 type remoteStore struct {
-	root string
+	base string
 }
 
 func openRemote(uri string) (*remoteStore, error) {
-	return &remoteStore{root: uri}, nil
+	return &remoteStore{base: uri}, nil
 }
 
 func (s *remoteStore) Kind() string { return "remote" }

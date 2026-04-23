@@ -53,6 +53,10 @@ type Meta struct {
 //
 // Kind returns a short identifier for the backend ("remote", "layout") and is
 // intended for logs and test assertions only.
+//
+// Fetch may return a nil *Meta when the backend has no sidecar metadata for
+// the ref; callers must tolerate that. Push accepts a nil meta to write a
+// bundle without a meta sidecar.
 type Store interface {
 	Kind() string
 	Fetch(ctx context.Context, ref Ref) (io.ReadCloser, *Meta, error)
@@ -70,8 +74,9 @@ type Store interface {
 //     the first "/" must contain a dot and only [a-zA-Z0-9.-] characters),
 //     for example "ghcr.io/buildrush".
 //
-// Any other input — including the empty string — is rejected with an error
-// that mentions "scheme".
+// Any unrecognised URI form is rejected with an error. The empty string yields
+// "registry: empty URI"; other unrecognised forms yield an error whose message
+// contains "scheme".
 func Open(uri string) (Store, error) {
 	if uri == "" {
 		return nil, errors.New("registry: empty URI")
