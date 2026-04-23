@@ -166,6 +166,40 @@ func TestBuildCellMounts_RemoteRegistry_Errors(t *testing.T) {
 	}
 }
 
+func TestParseTestFlags_SelfBinaryOverride(t *testing.T) {
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "phpup-fake")
+	if err := os.WriteFile(fake, []byte(""), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	opts, err := parseTestFlags([]string{
+		"--php", "8.4",
+		"--self-binary", fake,
+	})
+	if err != nil {
+		t.Fatalf("parseTestFlags: %v", err)
+	}
+	absFake, err := filepath.Abs(fake)
+	if err != nil {
+		t.Fatalf("filepath.Abs(%s): %v", fake, err)
+	}
+	// filepath.Abs may normalize (e.g. resolve /var → /private/var on macOS).
+	// Accept either the exact input or its absolutized form.
+	if opts.SelfBinary != fake && opts.SelfBinary != absFake {
+		t.Errorf("SelfBinary = %q, want %q (or abs %q)", opts.SelfBinary, fake, absFake)
+	}
+}
+
+func TestParseTestFlags_SelfBinaryMissing_Errors(t *testing.T) {
+	_, err := parseTestFlags([]string{
+		"--php", "8.4",
+		"--self-binary", "/tmp/definitely-not-here-XYZ",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--self-binary") {
+		t.Errorf("parseTestFlags err = %v, want mentions --self-binary", err)
+	}
+}
+
 func TestCellSummary_FormatsOK(t *testing.T) {
 	var buf bytes.Buffer
 	printCellSummary(&buf, []cellResult{

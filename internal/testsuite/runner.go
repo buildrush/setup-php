@@ -66,6 +66,12 @@ func parseTestFlags(args []string) (*testOpts, error) {
 		"Number of cells to run concurrently (default 1)")
 	cacheFlag := fs.String("cache", "./.cache/phpup-test",
 		"Cache directory (reserved for future use)")
+	selfBinaryFlag := fs.String("self-binary", "",
+		"Absolute path to a linux/<cell-arch> phpup binary to mount as "+
+			"/usr/local/bin/phpup inside the bare-ubuntu container. "+
+			"When empty, os.Executable() is used — only correct when the "+
+			"host arch matches the cell arch (e.g. linux CI runners). On "+
+			"macOS hosts or cross-arch runs, pass a cross-compiled binary.")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
@@ -83,13 +89,9 @@ func parseTestFlags(args []string) (*testOpts, error) {
 		fixturesPath = filepath.Join(absRepo, fixturesPath)
 	}
 
-	self, err := os.Executable()
+	selfAbs, err := resolveSelfBinary(*selfBinaryFlag)
 	if err != nil {
-		return nil, fmt.Errorf("phpup test: resolve self binary: %w", err)
-	}
-	selfAbs, err := filepath.Abs(self)
-	if err != nil {
-		return nil, fmt.Errorf("phpup test: absolutize self binary: %w", err)
+		return nil, err
 	}
 
 	return &testOpts{
@@ -105,6 +107,37 @@ func parseTestFlags(args []string) (*testOpts, error) {
 		AbsRepo:     absRepo,
 		SelfBinary:  selfAbs,
 	}, nil
+}
+
+// resolveSelfBinary picks the absolute path to the phpup binary that should
+// be mounted at /usr/local/bin/phpup inside the bare-ubuntu cell container.
+// When override is non-empty it is absolutized and checked for existence —
+// this is the path CI/Makefile use to supply a cross-compiled
+// linux/<cell-arch> binary when the host arch or OS doesn't match the cell.
+// When override is empty the caller is trusted (host is a linux/<cell-arch>
+// runner) and os.Executable() is used. An empty override on a mismatched
+// host will surface as `exec format error` when the container tries to run
+// the darwin/amd64/wrong-arch binary, which is why CI threads --self-binary.
+func resolveSelfBinary(override string) (string, error) {
+	if override != "" {
+		abs, err := filepath.Abs(override)
+		if err != nil {
+			return "", fmt.Errorf("phpup test: resolve --self-binary: %w", err)
+		}
+		if _, err := os.Stat(abs); err != nil {
+			return "", fmt.Errorf("phpup test: --self-binary missing: %w", err)
+		}
+		return abs, nil
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("phpup test: resolve self binary: %w", err)
+	}
+	abs, err := filepath.Abs(self)
+	if err != nil {
+		return "", fmt.Errorf("phpup test: absolutize self binary: %w", err)
+	}
+	return abs, nil
 }
 
 // splitCSV splits s on commas, trims whitespace, and drops empty tokens.
