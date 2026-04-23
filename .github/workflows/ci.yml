@@ -64,6 +64,8 @@ jobs:
           node-version: 24
       - name: Prepare embedded lockfile
         run: cp bundles.lock cmd/phpup/bundles.lock
+      - name: Install node deps
+        run: npm ci
       - run: make test test-node
 
   pipeline:
