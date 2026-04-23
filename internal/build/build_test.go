@@ -114,6 +114,7 @@ func TestBuildPHP_CacheHit_ShortCircuitsWithoutRunning(t *testing.T) {
 			"--php", "8.4",
 			"--registry", layoutURI,
 			"--repo", repo,
+			"--out-dir", t.TempDir(),
 		})
 	})
 	if err != nil {
@@ -140,6 +141,7 @@ func TestBuildPHP_CacheMiss_InvokesRunnerThenPushes(t *testing.T) {
 		"--php", "8.4",
 		"--registry", layoutURI,
 		"--repo", repo,
+		"--out-dir", t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("BuildPHP: %v", err)
@@ -175,6 +177,7 @@ func TestBuildPHP_RunnerError_Propagates(t *testing.T) {
 		"--php", "8.4",
 		"--registry", layoutURI,
 		"--repo", repo,
+		"--out-dir", t.TempDir(),
 	})
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Errorf("BuildPHP err = %v, want containing \"boom\"", err)
@@ -196,6 +199,7 @@ func TestBuildPHP_UnknownOS_Errors(t *testing.T) {
 	err := BuildPHP(context.Background(), []string{
 		"--php", "8.4", "--os", "bogus",
 		"--registry", layoutURI, "--repo", repo,
+		"--out-dir", t.TempDir(),
 	})
 	if err == nil || !strings.Contains(err.Error(), "unknown os") {
 		t.Errorf("BuildPHP err = %v, want unknown os", err)
@@ -210,6 +214,7 @@ func TestBuildPHP_UnknownArch_Errors(t *testing.T) {
 	err := BuildPHP(context.Background(), []string{
 		"--php", "8.4", "--arch", "bogus",
 		"--registry", layoutURI, "--repo", repo,
+		"--out-dir", t.TempDir(),
 	})
 	if err == nil || !strings.Contains(err.Error(), "unknown arch") {
 		t.Errorf("BuildPHP err = %v, want unknown arch", err)
@@ -227,6 +232,7 @@ func TestBuildPHP_ZTSNotSupported_Errors(t *testing.T) {
 		"--php", "8.4", "--ts", "zts",
 		"--registry", "oci-layout:" + filepath.Join(t.TempDir(), "layout"),
 		"--repo", repo,
+		"--out-dir", t.TempDir(),
 	})
 	if err == nil || !strings.Contains(err.Error(), "zts") {
 		t.Errorf("BuildPHP err = %v, want zts rejection", err)
@@ -307,6 +313,7 @@ func TestBuildPHP_RealDockerSmoke(t *testing.T) {
 		"--php", "8.4",
 		"--registry", layoutURI,
 		"--repo", repo,
+		"--out-dir", t.TempDir(),
 	})
 	if err != nil {
 		t.Fatalf("BuildPHP: %v", err)
@@ -329,6 +336,37 @@ func TestBuildPHP_RealDockerSmoke(t *testing.T) {
 	}
 	if ref.Digest == "" {
 		t.Fatal("pushed ref has empty digest after real-docker build")
+	}
+}
+
+// TestResolveOutDir_DefaultShape asserts the derived default path when
+// --out-dir is not supplied: <repo>/build/php/<version>-<os>-<arch>-<ts>/.
+// Shape is load-bearing because it participates in the gitignore contract
+// (build/ is ignored) and the Task 5 ext mirror will reuse <repo>/build/.
+// Use a temp dir as the repo root — keeps the test OS-agnostic (so it
+// works on Windows CI too where "/abs/repo" isn't absolute) and side-
+// steps gocritic's "filepath.Join on a string that already contains a
+// separator" complaint.
+func TestResolveOutDir_DefaultShape(t *testing.T) {
+	repo := t.TempDir()
+	opts := &phpOpts{
+		Version: "8.4", OS: "jammy", Arch: "x86_64", TS: "nts",
+		Repo: repo,
+	}
+	got := resolveOutDir(opts)
+	want := filepath.Join(repo, "build", "php", "8.4-jammy-x86_64-nts")
+	if got != want {
+		t.Errorf("resolveOutDir = %q, want %q", got, want)
+	}
+}
+
+// TestResolveOutDir_ExplicitOverride asserts --out-dir is honored verbatim
+// (pass-through, no derivation), which is how tests keep the worktree
+// clean by pointing at t.TempDir().
+func TestResolveOutDir_ExplicitOverride(t *testing.T) {
+	opts := &phpOpts{OutDir: "/custom/path"}
+	if got := resolveOutDir(opts); got != "/custom/path" {
+		t.Errorf("resolveOutDir with --out-dir = %q, want /custom/path", got)
 	}
 }
 

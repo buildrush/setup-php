@@ -83,12 +83,21 @@ func BuildPHP(ctx context.Context, args []string) error {
 		return nil
 	}
 
-	// 3. Prepare output mount dir.
-	outDir, err := os.MkdirTemp("", "phpup-build-php-*")
-	if err != nil {
-		return fmt.Errorf("phpup build php: mktemp: %w", err)
+	// 3. Prepare output mount dir. Default is <repo>/build/php/<slug>/ so
+	// artifacts persist next to the source tree for easy inspection;
+	// --out-dir overrides verbatim. We wipe before writing so stale files
+	// from an aborted previous run don't masquerade as fresh output.
+	// Docker requires absolute host paths for bind mounts, so absolutize
+	// whatever we end up with. No defer-cleanup — artifacts are meant to
+	// persist; the next run's cache-hit path reads from registry.Store.
+	outDir := resolveOutDir(opts)
+	if err := prepareOutDir(outDir); err != nil {
+		return fmt.Errorf("phpup build php: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(outDir) }()
+	absOutDir, err := filepath.Abs(outDir)
+	if err != nil {
+		return fmt.Errorf("phpup build php: resolve out dir: %w", err)
+	}
 
 	// 4. Invoke builder in docker.
 	image, err := ubuntuImage(opts.OS)
@@ -111,7 +120,7 @@ func BuildPHP(ctx context.Context, args []string) error {
 			// files in the container's ephemeral /tmp and lose them on exit.
 			// OUTPUT_DIR=/tmp/out still lives INSIDE the mount so the
 			// builder's INSTALL_ROOT staging tree is preserved unchanged.
-			{Host: outDir, Container: "/tmp", ReadOnly: false},
+			{Host: absOutDir, Container: "/tmp", ReadOnly: false},
 		},
 		Env: map[string]string{
 			"PHP_VERSION": opts.Version,
@@ -126,10 +135,11 @@ func BuildPHP(ctx context.Context, args []string) error {
 	}
 
 	// 5. Read the bundle + meta from the mount dir. Paths are constructed
-	// internally from os.MkdirTemp output, not user input; no filepath.Clean
-	// needed (and the linter's G304 is excluded project-wide).
-	bundlePath := filepath.Join(outDir, "bundle.tar.zst")
-	metaPath := filepath.Join(outDir, "meta.json")
+	// internally from resolveOutDir (repo-derived or explicit --out-dir),
+	// not arbitrary user input; no filepath.Clean needed (and the linter's
+	// G304 is excluded project-wide).
+	bundlePath := filepath.Join(absOutDir, "bundle.tar.zst")
+	metaPath := filepath.Join(absOutDir, "meta.json")
 	bundle, err := os.Open(bundlePath)
 	if err != nil {
 		return fmt.Errorf("phpup build php: open bundle: %w", err)
@@ -168,6 +178,10 @@ type phpOpts struct {
 	TS       string // "nts" or "zts"
 	Registry string // "oci-layout:./out/oci-layout" or "ghcr.io/..."
 	Repo     string // absolute path to setup-php repo root
+	// OutDir is the docker output mount path. Empty = derive the default
+	// under <repo>/build/php/<version>-<os>-<arch>-<ts>/; non-empty =
+	// use verbatim (may be absolute or relative — absolutized in BuildPHP).
+	OutDir string
 }
 
 // parsePHPFlags parses the flag tail for `phpup build php`. The FlagSet
@@ -182,6 +196,8 @@ func parsePHPFlags(args []string) (*phpOpts, error) {
 	registryFlag := fs.String("registry", "oci-layout:./out/oci-layout",
 		"Target registry URI (oci-layout:<path> or ghcr.io/<owner>)")
 	repo := fs.String("repo", ".", "Path to setup-php repo root")
+	outDir := fs.String("out-dir", "",
+		"Docker output directory (defaults to <repo>/build/php/<version>-<os>-<arch>-<ts>/)")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -210,7 +226,40 @@ func parsePHPFlags(args []string) (*phpOpts, error) {
 		TS:       *ts,
 		Registry: *registryFlag,
 		Repo:     absRepo,
+		OutDir:   *outDir,
 	}, nil
+}
+
+// resolveOutDir derives the project-relative build output directory from
+// the input tuple when the caller didn't pass --out-dir explicitly. The
+// directory lives under <repo>/build/ so it's project-local (gitignored
+// via the repo's .gitignore). Path shape:
+//
+//	<repo>/build/php/<version>-<os>-<arch>-<ts>/
+//
+// Keying on the same tuple as the spec-hash makes the path deterministic:
+// repeated runs with the same inputs overwrite the same dir instead of
+// piling up random tempdirs. Task 5 (BuildExt) will mirror this pattern
+// under <repo>/build/ext/<name>-<version>-<php_abi>-<os>-<arch>/.
+func resolveOutDir(opts *phpOpts) string {
+	if opts.OutDir != "" {
+		return opts.OutDir
+	}
+	slug := opts.Version + "-" + opts.OS + "-" + opts.Arch + "-" + opts.TS
+	return filepath.Join(opts.Repo, "build", "php", slug)
+}
+
+// prepareOutDir wipes any previous content at path (so stale files from an
+// aborted earlier run don't masquerade as fresh output) and creates a
+// clean directory.
+func prepareOutDir(path string) error {
+	if err := os.RemoveAll(path); err != nil {
+		return fmt.Errorf("clean out dir: %w", err)
+	}
+	if err := os.MkdirAll(path, 0o750); err != nil {
+		return fmt.Errorf("create out dir: %w", err)
+	}
+	return nil
 }
 
 // ubuntuImage maps a short OS flavour name onto the concrete docker image
