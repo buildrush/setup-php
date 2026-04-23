@@ -11,8 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
+	"github.com/buildrush/setup-php/internal/catalog"
 	"github.com/buildrush/setup-php/internal/registry"
 )
 
@@ -451,32 +450,14 @@ func tsFromPHPABI(phpABI string) string {
 //	yq eval '.build_deps.linux // [] | join(" ")' catalog/extensions/<name>.yaml
 //
 // Absent or empty returns "" — the builder treats that as a no-op.
-// Reading YAML into map[string]any keeps us schema-agnostic so catalog
-// additions don't require Go changes.
+// Uses the typed catalog API so the extension-schema shape lives in one
+// place (internal/catalog) instead of drifting across ad-hoc parsers.
 func loadExtBuildDeps(path string) (string, error) {
-	data, err := os.ReadFile(filepath.Clean(path))
+	spec, err := catalog.LoadExtensionSpec(path)
 	if err != nil {
-		return "", fmt.Errorf("read extension catalog: %w", err)
+		return "", fmt.Errorf("load extension catalog: %w", err)
 	}
-	var doc map[string]any
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return "", fmt.Errorf("parse extension catalog: %w", err)
-	}
-	bd, ok := doc["build_deps"].(map[string]any)
-	if !ok {
-		return "", nil
-	}
-	linux, ok := bd["linux"].([]any)
-	if !ok {
-		return "", nil
-	}
-	pkgs := make([]string, 0, len(linux))
-	for _, p := range linux {
-		if s, ok := p.(string); ok {
-			pkgs = append(pkgs, s)
-		}
-	}
-	return strings.Join(pkgs, " "), nil
+	return strings.Join(spec.BuildDeps["linux"], " "), nil
 }
 
 // phpOpts is the parsed flag set for `phpup build php`. Repo is resolved
