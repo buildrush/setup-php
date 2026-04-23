@@ -52,8 +52,9 @@ type Mount struct {
 
 // RunnerFunc runs a single docker invocation. Tests substitute a fake via
 // SetRunner to assert the argv phpup would construct without needing real
-// docker in the test environment.
-type RunnerFunc func(ctx context.Context, opts DockerRunOpts) error
+// docker in the test environment. Takes a pointer so the ~136-byte
+// DockerRunOpts isn't copied on every call.
+type RunnerFunc func(ctx context.Context, opts *DockerRunOpts) error
 
 // runnerMu protects defaultRunner during SetRunner swaps. Swaps are rare
 // (test setup/teardown only) so the mutex cost is negligible, but it rules
@@ -63,20 +64,13 @@ type RunnerFunc func(ctx context.Context, opts DockerRunOpts) error
 var runnerMu sync.Mutex
 
 // defaultRunner is the RunnerFunc DockerRun dispatches through when no test
-// has overridden it via SetRunner. The lambda adapts the value-type
-// RunnerFunc signature (pinned by the public API) to realDockerRun's
-// pointer-receiver shape so the underlying function doesn't need to copy
-// the 136-byte DockerRunOpts on every call.
-var defaultRunner RunnerFunc = func(ctx context.Context, opts DockerRunOpts) error {
-	return realDockerRun(ctx, &opts)
-}
+// has overridden it via SetRunner.
+var defaultRunner RunnerFunc = realDockerRun
 
 // DockerRun dispatches the invocation through the currently-installed
 // runner. Production callers go through the default realDockerRun; tests
 // call SetRunner first to install a fake.
-//
-//nolint:gocritic // hugeParam: RunnerFunc signature takes DockerRunOpts by value by design — the tests in docker_test.go assign recorder.got = opts without dereferencing, and the per-call 136-byte copy is negligible vs. a docker invocation's seconds-scale runtime.
-func DockerRun(ctx context.Context, opts DockerRunOpts) error {
+func DockerRun(ctx context.Context, opts *DockerRunOpts) error {
 	runnerMu.Lock()
 	r := defaultRunner
 	runnerMu.Unlock()
@@ -105,17 +99,14 @@ func SetRunner(r RunnerFunc) func() {
 
 // realDockerRun shells out to the `docker` binary via exec.CommandContext
 // and streams stdio to the caller-provided writers (defaulting to
-// os.Stdout/Stderr). Takes a pointer so the 136-byte DockerRunOpts doesn't
-// need to be copied per invocation; the adapter in defaultRunner converts
-// from the value-type RunnerFunc shape. Context cancellation relies on
-// exec.CommandContext's built-in SIGKILL behaviour.
+// os.Stdout/Stderr). Context cancellation relies on exec.CommandContext's
+// built-in SIGKILL behaviour.
 func realDockerRun(ctx context.Context, opts *DockerRunOpts) error {
 	if opts.Image == "" {
 		return fmt.Errorf("DockerRun: Image is required")
 	}
 	args := argvFor(opts)
-	//nolint:gosec // G204: args come exclusively from typed DockerRunOpts fields above; callers are first-party Go code (Task 4/5), no shell interpretation occurs.
-	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd := exec.CommandContext(ctx, "docker", args...) //nolint:gosec // G204 false positive: exec.CommandContext passes argv directly to execve(2) (no shell), and all args come from typed DockerRunOpts fields assembled by internal callers — the wrapper's purpose is precisely to spawn docker with dynamic argv, so a fixed argv is impossible by design.
 	cmd.Stdout = coalesceWriter(opts.Stdout, os.Stdout)
 	cmd.Stderr = coalesceWriter(opts.Stderr, os.Stderr)
 	if err := cmd.Run(); err != nil {

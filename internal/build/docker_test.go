@@ -12,9 +12,9 @@ import (
 
 // recorder is a RunnerFunc test double that captures the last DockerRunOpts
 // it received. Tests install it via SetRunner to assert the argv phpup would
-// build without invoking real docker. The run closure is defined inline in
-// each test (rather than as a method on *recorder) so the value-type opts
-// parameter required by RunnerFunc doesn't hit gocritic's hugeParam linter.
+// build without invoking real docker. The captured value is stored by
+// dereference rather than by pointer so assertions remain immune to any
+// post-return mutation of the caller's opts struct.
 type recorder struct {
 	got DockerRunOpts
 	err error
@@ -22,8 +22,8 @@ type recorder struct {
 
 // asRunner returns a RunnerFunc closure that captures into r and returns r.err.
 func (r *recorder) asRunner() RunnerFunc {
-	return func(_ context.Context, opts DockerRunOpts) error {
-		r.got = opts
+	return func(_ context.Context, opts *DockerRunOpts) error {
+		r.got = *opts
 		return r.err
 	}
 }
@@ -37,7 +37,7 @@ func TestDockerRun_PropagatesOptsToRunner(t *testing.T) {
 	restore := SetRunner(r.asRunner())
 	defer restore()
 
-	opts := DockerRunOpts{
+	opts := &DockerRunOpts{
 		Image:    "ubuntu:22.04",
 		Platform: "linux/arm64",
 		Network:  "test-net",
@@ -51,8 +51,8 @@ func TestDockerRun_PropagatesOptsToRunner(t *testing.T) {
 	if err := DockerRun(context.Background(), opts); err != nil {
 		t.Fatalf("DockerRun: %v", err)
 	}
-	if !reflect.DeepEqual(r.got, opts) {
-		t.Errorf("recorder.got = %+v, want %+v", r.got, opts)
+	if !reflect.DeepEqual(r.got, *opts) {
+		t.Errorf("recorder.got = %+v, want %+v", r.got, *opts)
 	}
 }
 
@@ -64,7 +64,7 @@ func TestDockerRun_PropagatesError(t *testing.T) {
 	restore := SetRunner(r.asRunner())
 	defer restore()
 
-	err := DockerRun(context.Background(), DockerRunOpts{Image: "alpine:3"})
+	err := DockerRun(context.Background(), &DockerRunOpts{Image: "alpine:3"})
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("err = %v, want containing \"boom\"", err)
 	}
@@ -76,7 +76,7 @@ func TestDockerRun_PropagatesError(t *testing.T) {
 // exec.CommandContext's SIGKILL behaviour; here we simulate that with a
 // runner that blocks on ctx.Done and returns ctx.Err.
 func TestDockerRun_ContextCancellation(t *testing.T) {
-	slow := func(ctx context.Context, _ DockerRunOpts) error {
+	slow := func(ctx context.Context, _ *DockerRunOpts) error {
 		<-ctx.Done()
 		return ctx.Err()
 	}
@@ -85,7 +85,7 @@ func TestDockerRun_ContextCancellation(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
-	go func() { errCh <- DockerRun(ctx, DockerRunOpts{Image: "alpine:3"}) }()
+	go func() { errCh <- DockerRun(ctx, &DockerRunOpts{Image: "alpine:3"}) }()
 	cancel()
 	select {
 	case err := <-errCh:
@@ -164,7 +164,7 @@ func TestRealDockerRun_SmokeIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	out := &strings.Builder{}
-	err := DockerRun(ctx, DockerRunOpts{
+	err := DockerRun(ctx, &DockerRunOpts{
 		Image:  "alpine:3",
 		Cmd:    []string{"echo", "hello"},
 		Stdout: out,
