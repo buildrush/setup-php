@@ -28,8 +28,12 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-      - name: ESLint + Prettier
+      - name: Install node deps
+        run: npm ci
+      - name: ESLint
         run: npx eslint src/ test/
+      - name: Prettier
+        run: npx prettier --check src/ test/
       - name: go mod tidy check
         run: |
           go mod tidy
