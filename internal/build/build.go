@@ -25,12 +25,12 @@ const linuxAptPreamble = "apt-get update && " +
 	"apt-get install -y --no-install-recommends curl xz-utils ca-certificates && "
 
 // Main is the entry point for `phpup build …`. args is the tail after
-// the "build" subcommand token (so args[0] is "php" or "ext"). Returning
-// a nil error means the requested build (or cache hit) succeeded; a
-// non-nil error is safe to pass straight to log.Fatalf.
+// the "build" subcommand token (so args[0] is "php", "ext", or "cell").
+// Returning a nil error means the requested build (or cache hit)
+// succeeded; a non-nil error is safe to pass straight to log.Fatalf.
 func Main(args []string) error {
 	if len(args) == 0 {
-		return errors.New("phpup build: usage: phpup build (php|ext) [flags]")
+		return errors.New("phpup build: usage: phpup build (php|ext|cell) [flags]")
 	}
 	ctx := context.Background()
 	switch args[0] {
@@ -38,8 +38,10 @@ func Main(args []string) error {
 		return BuildPHP(ctx, args[1:])
 	case "ext":
 		return BuildExt(ctx, args[1:])
+	case "cell":
+		return BuildCell(ctx, args[1:])
 	default:
-		return fmt.Errorf("phpup build: unknown kind %q (want php or ext)", args[0])
+		return fmt.Errorf("phpup build: unknown kind %q (want php, ext, or cell)", args[0])
 	}
 }
 
@@ -326,6 +328,179 @@ func BuildExt(ctx context.Context, args []string) error {
 
 	fmt.Printf("phpup build ext: built and pushed %s (spec-hash %s) to %s\n", bundleName, specHash, opts.Registry)
 	return nil
+}
+
+// BuildCell is the entry point for `phpup build cell …`. It is a
+// one-shot convenience that wraps BuildPHP + a loop of BuildExt over
+// every catalog extension compatible with the cell's PHP ABI, so a
+// single invocation produces a populated oci-layout for one
+// (php, os, arch, ts) tuple. Intended for the local-CI pipeline:
+//
+//	phpup build cell --php 8.4 --os jammy --arch x86_64
+//
+// Produces (approximately, subject to the catalog's abi_matrix):
+//
+//	oci-layout:./out/oci-layout
+//	  ├── php-core (spec-hash for php 8.4/jammy/x86_64/nts)
+//	  ├── php-ext-redis
+//	  ├── php-ext-xdebug
+//	  └── …
+//
+// On cache hit in the target registry, per-step BuildPHP/BuildExt
+// invocations short-circuit without touching docker — so repeat runs of
+// `phpup build cell` against a warm layout are cheap. The function
+// returns the first error encountered (no partial-success graph walk);
+// callers that want per-step resilience should invoke phpup build php
+// and phpup build ext directly from a retry wrapper.
+func BuildCell(ctx context.Context, args []string) error {
+	opts, err := parseCellFlags(args)
+	if err != nil {
+		return err
+	}
+
+	// Step 1: discover extensions for the cell up front so progress
+	// banners can show "[1/N] build php" with an accurate N instead of
+	// a placeholder. Uses the same abi_matrix + exclude gate as the
+	// planner so the local build graph is byte-identical to what CI
+	// would have enqueued for this cell.
+	exts, err := discoverExtensionsForCell(opts.Repo, opts.Version, "linux", opts.Arch, opts.TS)
+	if err != nil {
+		return fmt.Errorf("phpup build cell: discover extensions: %w", err)
+	}
+	total := len(exts) + 1 // +1 for the prerequisite php-core step
+	fmt.Printf("phpup build cell: %d extensions compatible with PHP %s linux/%s\n", len(exts), opts.Version, opts.Arch)
+
+	// Step 2: build php-core. Same flags the user would have passed to
+	// `phpup build php` directly, forwarded verbatim (no shell-level
+	// string concatenation — each flag is a single argv element so
+	// spaces in repo paths never trip the downstream FlagSet).
+	phpArgs := []string{
+		"--php", opts.Version,
+		"--os", opts.OS,
+		"--arch", opts.Arch,
+		"--ts", opts.TS,
+		"--registry", opts.Registry,
+		"--repo", opts.Repo,
+	}
+	if opts.OutDir != "" {
+		phpArgs = append(phpArgs, "--out-dir", opts.OutDir)
+	}
+	fmt.Printf("phpup build cell: [1/%d] build php %s\n", total, opts.Version)
+	if err := BuildPHP(ctx, phpArgs); err != nil {
+		return fmt.Errorf("phpup build cell: build php: %w", err)
+	}
+
+	// Step 3: resolve the just-built php-core digest for the ext builds.
+	// LookupBySpec is the only affordance the Store interface offers for
+	// "find the bundle I just pushed"; a remote backend returns
+	// ErrUnsupported here, which cells are not expected to target (the
+	// primary use case is a local oci-layout).
+	specHash, err := ComputeSpecHash(&SpecHashInputs{
+		Kind: "php", Version: opts.Version,
+		OS: "linux", Arch: opts.Arch, TS: opts.TS,
+		Repo: opts.Repo,
+	})
+	if err != nil {
+		return fmt.Errorf("phpup build cell: recompute core spec-hash: %w", err)
+	}
+	store, err := registry.Open(opts.Registry)
+	if err != nil {
+		return fmt.Errorf("phpup build cell: open registry: %w", err)
+	}
+	coreRef, hit, err := store.LookupBySpec(ctx, "php-core", specHash)
+	if err != nil {
+		return fmt.Errorf("phpup build cell: lookup core: %w", err)
+	}
+	if !hit || coreRef.Digest == "" {
+		return fmt.Errorf("phpup build cell: php-core not in layout after build (expected spec-hash=%s)", specHash)
+	}
+
+	// Step 4: build each extension.
+	phpAbi := opts.Version + "-" + opts.TS
+	for i, ext := range exts {
+		extArgs := []string{
+			"--ext", ext.Name,
+			"--ext-version", ext.Version,
+			"--php-abi", phpAbi,
+			"--os", opts.OS,
+			"--arch", opts.Arch,
+			"--php-core-digest", coreRef.Digest,
+			"--registry", opts.Registry,
+			"--repo", opts.Repo,
+		}
+		if opts.OutDir != "" {
+			// When --out-dir was passed at cell level, slot each
+			// extension into its own subdir so the php-core artifacts
+			// and per-extension artifacts don't fight over the same
+			// /tmp mount.
+			extArgs = append(extArgs, "--out-dir", filepath.Join(opts.OutDir, "ext", ext.Name+"-"+ext.Version))
+		}
+		fmt.Printf("phpup build cell: [%d/%d] build ext %s %s\n", i+2, total, ext.Name, ext.Version)
+		if err := BuildExt(ctx, extArgs); err != nil {
+			return fmt.Errorf("phpup build cell: build ext %s: %w", ext.Name, err)
+		}
+	}
+
+	fmt.Printf("phpup build cell: completed php-core + %d extensions for %s/%s PHP %s\n", len(exts), opts.OS, opts.Arch, opts.Version)
+	return nil
+}
+
+// cellOpts is the parsed flag set for `phpup build cell`. Shape
+// deliberately mirrors phpOpts so resolveOutDir-style derivation is
+// straightforward — Repo is resolved to an absolute path during parsing
+// so downstream code can use it directly.
+type cellOpts struct {
+	Version  string // "8.4"
+	OS       string // "jammy" or "noble"
+	Arch     string // "x86_64" or "aarch64" (after normalisation)
+	TS       string // "nts" — zts not yet supported
+	Registry string // "oci-layout:./out/oci-layout" or "ghcr.io/..."
+	Repo     string // absolute path to setup-php repo root
+	OutDir   string // --out-dir override; empty = let BuildPHP/BuildExt derive
+}
+
+// parseCellFlags parses the flag tail for `phpup build cell`. The shape
+// matches phpOpts + a cell-specific --out-dir meaning: when set, each
+// sub-build lands in a subdir of the supplied directory (see BuildCell).
+// ZTS is rejected for the same reason as parsePHPFlags — accepting it
+// would silently cache an NTS artifact under a ZTS key.
+func parseCellFlags(args []string) (*cellOpts, error) {
+	fs := flag.NewFlagSet("phpup build cell", flag.ContinueOnError)
+	version := fs.String("php", "", "PHP version, e.g. 8.4 (required)")
+	osFlag := fs.String("os", "jammy", "Ubuntu flavour: jammy or noble")
+	arch := fs.String("arch", "x86_64", "Target arch: x86_64 or aarch64 (amd64/arm64 aliases accepted)")
+	ts := fs.String("ts", "nts", "Thread safety: nts (zts not yet supported)")
+	registryFlag := fs.String("registry", "oci-layout:./out/oci-layout",
+		"Target registry URI (oci-layout:<path> or ghcr.io/<owner>)")
+	repo := fs.String("repo", ".", "Path to setup-php repo root")
+	outDir := fs.String("out-dir", "",
+		"Shared docker output directory root (defaults to <repo>/build/ derivation for each build subcommand)")
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	if *version == "" {
+		return nil, errors.New("phpup build cell: --php is required")
+	}
+	if *ts != "nts" {
+		return nil, fmt.Errorf("phpup build cell: --ts %q not yet supported (only nts)", *ts)
+	}
+	archNormalized, err := normalizeArch(*arch)
+	if err != nil {
+		return nil, fmt.Errorf("phpup build cell: %w", err)
+	}
+	absRepo, err := filepath.Abs(*repo)
+	if err != nil {
+		return nil, fmt.Errorf("phpup build cell: resolve repo path: %w", err)
+	}
+	return &cellOpts{
+		Version:  *version,
+		OS:       *osFlag,
+		Arch:     archNormalized,
+		TS:       *ts,
+		Registry: *registryFlag,
+		Repo:     absRepo,
+		OutDir:   *outDir,
+	}, nil
 }
 
 // extOpts is the parsed flag set for `phpup build ext`. Repo is

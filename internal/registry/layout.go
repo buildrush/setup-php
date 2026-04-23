@@ -284,24 +284,34 @@ func (s *layoutStore) ResolveDigest(_ context.Context, reference string) (string
 	return "", fmt.Errorf("layout.ResolveDigest: not supported on layout backend (reference=%q)", reference)
 }
 
-// list walks the index and returns one Ref per manifest. Intended for tests
-// only — callers in production should track their own refs or use a remote
-// backend that can advertise them.
-func (s *layoutStore) list(_ context.Context) ([]Ref, error) {
+// List walks the index and returns one Ref per manifest. Ref.Name is
+// recovered from the annotationBundleName annotation (possibly empty for
+// manifests written by other tools, e.g. `oras copy`); Ref.Digest is the
+// manifest digest. An absent layout is not an error — it is a valid empty
+// listing so callers can probe un-seeded paths without a pre-check.
+//
+// Introduced in PR 4 (phpup push) so the push source walk can iterate a
+// source layout's index and promote every manifest to a destination Store.
+// This is a concrete method on *layoutStore rather than a Store-interface
+// addition so the blast radius stays minimal: remoteStore cannot implement
+// an anonymous index walk without either a custom API (deferred to PR 6)
+// or a pre-known tag list, so the push dispatcher type-asserts for this
+// method and refuses a remote source.
+func (s *layoutStore) List(_ context.Context) ([]Ref, error) {
 	p, err := layout.FromPath(s.root)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("layout.list: open %q: %w", s.root, err)
+		return nil, fmt.Errorf("layout.List: open %q: %w", s.root, err)
 	}
 	idx, err := p.ImageIndex()
 	if err != nil {
-		return nil, fmt.Errorf("layout.list: load index: %w", err)
+		return nil, fmt.Errorf("layout.List: load index: %w", err)
 	}
 	manifest, err := idx.IndexManifest()
 	if err != nil {
-		return nil, fmt.Errorf("layout.list: parse index: %w", err)
+		return nil, fmt.Errorf("layout.List: parse index: %w", err)
 	}
 	if len(manifest.Manifests) == 0 {
 		return nil, nil

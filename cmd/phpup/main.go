@@ -76,6 +76,19 @@ func main() {
 		return
 	}
 
+	// `phpup push --from oci-layout:<path> --to ghcr.io/<owner>` promotes
+	// every manifest in a local oci-layout to a remote registry. Lives
+	// at the top level (rather than under `phpup internal`) because the
+	// local-CI pipeline's publish job invokes it directly — see
+	// .github/workflows/** for the usage contract. build.PushMain uses
+	// its own FlagSet; no collision with the setup-flow flag.Parse below.
+	if len(os.Args) > 1 && os.Args[1] == "push" {
+		if err := build.PushMain(os.Args[2:]); err != nil {
+			log.Fatalf("%v", err)
+		}
+		return
+	}
+
 	// `phpup internal <subcmd> …` is the maintainer-only umbrella for
 	// commands that are driven by the outer tooling rather than by end
 	// users. Currently only "test-cell" (the inner, container-side part

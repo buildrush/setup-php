@@ -740,6 +740,337 @@ func TestLoadExtBuildDeps_AbsentSection_ReturnsEmpty(t *testing.T) {
 	}
 }
 
+// TestBuildCell_MissingVersion_Errors: parseCellFlags must reject an
+// invocation that omits --php, symmetric with parsePHPFlags.
+func TestBuildCell_MissingVersion_Errors(t *testing.T) {
+	err := BuildCell(context.Background(), []string{"--registry", "oci-layout:/tmp/x"})
+	if err == nil || !strings.Contains(err.Error(), "--php") {
+		t.Errorf("BuildCell err = %v, want --php required", err)
+	}
+}
+
+// TestBuildCell_UnknownArch_Errors: an unrecognised --arch value must
+// trip the normalisation guard BEFORE any docker/sidecar work begins.
+func TestBuildCell_UnknownArch_Errors(t *testing.T) {
+	err := BuildCell(context.Background(), []string{
+		"--php", "8.4", "--arch", "bogus",
+		"--registry", "oci-layout:" + filepath.Join(t.TempDir(), "layout"),
+		"--repo", t.TempDir(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "unknown arch") {
+		t.Errorf("BuildCell err = %v, want unknown arch", err)
+	}
+}
+
+// TestBuildCell_ZTSNotSupported_Errors mirrors the php/ext guard: ZTS
+// differs the spec-hash but today's builder has no ZTS path. Reject at
+// the cell surface so a typo lands fast.
+func TestBuildCell_ZTSNotSupported_Errors(t *testing.T) {
+	err := BuildCell(context.Background(), []string{
+		"--php", "8.4", "--ts", "zts",
+		"--registry", "oci-layout:" + filepath.Join(t.TempDir(), "layout"),
+		"--repo", t.TempDir(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "zts") {
+		t.Errorf("BuildCell err = %v, want zts rejection", err)
+	}
+}
+
+// TestDiscoverExtensionsForCell_FiltersByTripleMatch populates a
+// synthetic catalog with three extensions — one that supports the
+// target cell, one that excludes the target PHP version, and one that
+// targets a different arch — and asserts only the supporting one is
+// returned.
+func TestDiscoverExtensionsForCell_FiltersByTripleMatch(t *testing.T) {
+	repo := t.TempDir()
+	extDir := filepath.Join(repo, "catalog", "extensions")
+	if err := os.MkdirAll(extDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	mustWrite := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(extDir, name), []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	// redis: PECL, supports the target cell — expect included.
+	mustWrite("redis.yaml", `name: redis
+kind: pecl
+source:
+  pecl_package: redis
+versions:
+  - "6.2.0"
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+`)
+	// xdebug: PECL, excludes PHP 8.4 — expect skipped via exclude rule.
+	mustWrite("xdebug.yaml", `name: xdebug
+kind: pecl
+source:
+  pecl_package: xdebug
+versions:
+  - "3.5.1"
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+exclude:
+  - { php: "8.4" }
+`)
+	// curl: arch-limited — expect skipped because x86_64 isn't listed.
+	mustWrite("curl.yaml", `name: curl
+kind: pecl
+source:
+  pecl_package: pecl_http
+versions:
+  - "1.0.0"
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["aarch64"]
+  ts: ["nts"]
+`)
+
+	got, err := discoverExtensionsForCell(repo, "8.4", "linux", "x86_64", "nts")
+	if err != nil {
+		t.Fatalf("discoverExtensionsForCell: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d entries, want 1: %+v", len(got), got)
+	}
+	if got[0].Name != "redis" || got[0].Version != "6.2.0" {
+		t.Errorf("got = %+v, want {Name:redis Version:6.2.0}", got[0])
+	}
+}
+
+// TestDiscoverExtensionsForCell_SkipsBundled asserts that
+// kind: bundled extensions are NOT returned — they ship with php-core
+// and have no separate bundle, so BuildCell must not iterate them.
+func TestDiscoverExtensionsForCell_SkipsBundled(t *testing.T) {
+	repo := t.TempDir()
+	extDir := filepath.Join(repo, "catalog", "extensions")
+	if err := os.MkdirAll(extDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(extDir, "openssl.yaml"), []byte(`name: openssl
+kind: bundled
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+`), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := discoverExtensionsForCell(repo, "8.4", "linux", "x86_64", "nts")
+	if err != nil {
+		t.Fatalf("discoverExtensionsForCell: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %+v, want empty (bundled extensions must be skipped)", got)
+	}
+}
+
+// TestDiscoverExtensionsForCell_SortedByName pins the ordering
+// guarantee. BuildCell's iteration is "[i/N] build ext <name> ...",
+// and a deterministic order means stdout and CI logs are stable across
+// runs.
+func TestDiscoverExtensionsForCell_SortedByName(t *testing.T) {
+	repo := t.TempDir()
+	extDir := filepath.Join(repo, "catalog", "extensions")
+	if err := os.MkdirAll(extDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	mustWrite := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(extDir, name), []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	for _, name := range []string{"zip", "apcu", "redis"} {
+		body := "name: " + name + "\nkind: pecl\nsource:\n  pecl_package: " + name + "\nversions:\n  - \"1.0.0\"\n" +
+			"abi_matrix:\n  php: [\"8.4\"]\n  os: [\"linux\"]\n  arch: [\"x86_64\"]\n  ts: [\"nts\"]\n"
+		mustWrite(name+".yaml", body)
+	}
+	got, err := discoverExtensionsForCell(repo, "8.4", "linux", "x86_64", "nts")
+	if err != nil {
+		t.Fatalf("discoverExtensionsForCell: %v", err)
+	}
+	wantOrder := []string{"apcu", "redis", "zip"}
+	if len(got) != len(wantOrder) {
+		t.Fatalf("got %d entries, want %d: %+v", len(got), len(wantOrder), got)
+	}
+	for i := range got {
+		if got[i].Name != wantOrder[i] {
+			t.Errorf("got[%d].Name = %q, want %q (ordering must be alphabetical)", i, got[i].Name, wantOrder[i])
+		}
+	}
+}
+
+// TestBuildCell_Orchestration_CallsBuildPHPThenBuildExt exercises the
+// full orchestrator: synthesise a minimal repo + catalog with one
+// extension, stub DockerRun + SidecarLifecycle with fakes, invoke
+// BuildCell, and assert (a) the runner was invoked twice (once for
+// php-core, once for the ext), (b) the sidecar was started+stopped
+// exactly once for the single ext build, (c) both bundles land in the
+// layout addressable via LookupBySpec.
+func TestBuildCell_Orchestration_CallsBuildPHPThenBuildExt(t *testing.T) {
+	repo := t.TempDir()
+	writeRepoFixture(t, repo)
+	// Replace redis.yaml with a version that has abi_matrix matching the
+	// target cell so discoverExtensionsForCell picks it up.
+	if err := os.WriteFile(filepath.Join(repo, "catalog", "extensions", "redis.yaml"), []byte(`name: redis
+kind: pecl
+source:
+  pecl_package: redis
+versions:
+  - "6.2.0"
+abi_matrix:
+  php: ["8.4"]
+  os: ["linux"]
+  arch: ["x86_64"]
+  ts: ["nts"]
+build_deps:
+  linux:
+    - libssl-dev
+`), 0o644); err != nil {
+		t.Fatalf("write redis.yaml: %v", err)
+	}
+
+	layoutURI := "oci-layout:" + filepath.Join(t.TempDir(), "layout")
+
+	// Runner must produce the correct meta.json kind for each step: the
+	// php-core push reads meta.kind=php-core from the fixture, and the
+	// redis ext push reads meta.kind=php-ext. We distinguish the two
+	// invocations by the EXT_NAME env: present on ext runs, absent on
+	// php runs.
+	var runnerCalls atomic.Int32
+	var phpRunIndex, extRunIndex atomic.Int32
+	phpBundle := []byte("php-core-bundle")
+	extBundle := []byte("redis-ext-bundle")
+	restoreRunner := SetRunner(func(ctx context.Context, opts *DockerRunOpts) error {
+		n := runnerCalls.Add(1)
+		kind := "php-core"
+		bundle := phpBundle
+		if _, isExt := opts.Env["EXT_NAME"]; isExt {
+			extRunIndex.Store(n)
+			kind = "php-ext"
+			bundle = extBundle
+		} else {
+			phpRunIndex.Store(n)
+		}
+		// Delegate to fakeRunnerKind to write the bundle + meta files
+		// into the docker /tmp mount.
+		return fakeRunnerKind(bundle, kind)(ctx, opts)
+	})
+	defer restoreRunner()
+
+	fs := &fakeSidecar{}
+	restoreSidecar := SetSidecarLifecycle(fs)
+	defer restoreSidecar()
+
+	out := captureStdout(t, func() {
+		err := BuildCell(context.Background(), []string{
+			"--php", "8.4",
+			"--registry", layoutURI,
+			"--repo", repo,
+			"--out-dir", t.TempDir(),
+		})
+		if err != nil {
+			t.Fatalf("BuildCell: %v", err)
+		}
+	})
+
+	// Runner invocation count: one php + one ext = 2.
+	if n := runnerCalls.Load(); n != 2 {
+		t.Errorf("runnerCalls = %d, want 2 (php-core + 1 ext)", n)
+	}
+	// Ordering: php-core must run BEFORE the ext — otherwise the ext
+	// build has no prerequisite core to reference.
+	if phpRunIndex.Load() != 1 || extRunIndex.Load() != 2 {
+		t.Errorf("run order: php=#%d ext=#%d, want php=#1 ext=#2", phpRunIndex.Load(), extRunIndex.Load())
+	}
+	// Sidecar lifecycle: started once (for the ext), seeded once,
+	// stopped once. The php-core build never touches the sidecar.
+	if fs.startCalls.Load() != 1 || fs.seedCalls.Load() != 1 || fs.stopCalls.Load() != 1 {
+		t.Errorf("sidecar calls: start=%d seed=%d stop=%d, want 1/1/1",
+			fs.startCalls.Load(), fs.seedCalls.Load(), fs.stopCalls.Load())
+	}
+
+	// Both bundles addressable via LookupBySpec in the target layout.
+	s, _ := registry.Open(layoutURI)
+	phpHash, _ := ComputeSpecHash(&SpecHashInputs{
+		Kind: "php", Version: "8.4", OS: "linux", Arch: "x86_64", TS: "nts", Repo: repo,
+	})
+	extHash, _ := ComputeSpecHash(&SpecHashInputs{
+		Kind: "ext", Name: "redis", Version: "6.2.0",
+		OS: "linux", Arch: "x86_64", PHPABI: "8.4-nts", TS: "nts", Repo: repo,
+	})
+	if _, hit, err := s.LookupBySpec(context.Background(), "php-core", phpHash); err != nil || !hit {
+		t.Errorf("php-core LookupBySpec after BuildCell: hit=%v err=%v", hit, err)
+	}
+	if _, hit, err := s.LookupBySpec(context.Background(), "php-ext-redis", extHash); err != nil || !hit {
+		t.Errorf("php-ext-redis LookupBySpec after BuildCell: hit=%v err=%v", hit, err)
+	}
+
+	// Progress output: both sub-build banners must appear in order.
+	if !strings.Contains(out, "[1/2] build php 8.4") {
+		t.Errorf("stdout missing php banner: %q", out)
+	}
+	if !strings.Contains(out, "[2/2] build ext redis 6.2.0") {
+		t.Errorf("stdout missing ext banner: %q", out)
+	}
+	if !strings.Contains(out, "completed php-core + 1 extensions") {
+		t.Errorf("stdout missing completion banner: %q", out)
+	}
+}
+
+// TestBuildCell_CoreBuildError_PropagatesWithoutExtBuild ensures a
+// php-core failure stops the graph early — the ext loop must NOT run.
+func TestBuildCell_CoreBuildError_PropagatesWithoutExtBuild(t *testing.T) {
+	repo := t.TempDir()
+	writeRepoFixture(t, repo)
+	layoutURI := "oci-layout:" + filepath.Join(t.TempDir(), "layout")
+
+	var runnerCalls atomic.Int32
+	restoreRunner := SetRunner(func(_ context.Context, _ *DockerRunOpts) error {
+		runnerCalls.Add(1)
+		return errors.New("boom core")
+	})
+	defer restoreRunner()
+	fs := &fakeSidecar{}
+	restoreSidecar := SetSidecarLifecycle(fs)
+	defer restoreSidecar()
+
+	err := BuildCell(context.Background(), []string{
+		"--php", "8.4",
+		"--registry", layoutURI,
+		"--repo", repo,
+		"--out-dir", t.TempDir(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "boom core") {
+		t.Errorf("BuildCell err = %v, want containing boom core", err)
+	}
+	if runnerCalls.Load() != 1 {
+		t.Errorf("runnerCalls after core fail = %d, want 1 (ext loop must not run)", runnerCalls.Load())
+	}
+	if fs.startCalls.Load() != 0 {
+		t.Errorf("sidecar started on core-only failure path: %d, want 0", fs.startCalls.Load())
+	}
+}
+
+// TestMain_CellDispatch_RoutesToBuildCell verifies the `build cell`
+// token in Main's switch dispatches through to BuildCell's flag parser,
+// symmetric with the ext dispatch test.
+func TestMain_CellDispatch_RoutesToBuildCell(t *testing.T) {
+	err := Main([]string{"cell"})
+	if err == nil || !strings.Contains(err.Error(), "--php is required") {
+		t.Errorf("Main([]string{\"cell\"}) err = %v, want --php is required", err)
+	}
+}
+
 // captureStdout redirects os.Stdout for the duration of fn and returns
 // what was written. Simple helper; doesn't need to be fancy. Tests that
 // use this helper must not run with t.Parallel() because os.Stdout is a
