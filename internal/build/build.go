@@ -102,11 +102,11 @@ func BuildPHP(ctx context.Context, args []string) error {
 	}
 
 	// 4. Invoke builder in docker.
-	image, err := ubuntuImage(opts.OS)
+	image, err := UbuntuImage(opts.OS)
 	if err != nil {
 		return fmt.Errorf("phpup build php: %w", err)
 	}
-	platform, err := dockerPlatform(opts.Arch)
+	platform, err := DockerPlatform(opts.Arch)
 	if err != nil {
 		return fmt.Errorf("phpup build php: %w", err)
 	}
@@ -264,11 +264,11 @@ func BuildExt(ctx context.Context, args []string) error {
 
 	// 6. Run build container on the sidecar's network so
 	// fetch-core.sh can reach the sidecar by in-network hostname.
-	image, err := ubuntuImage(opts.OS)
+	image, err := UbuntuImage(opts.OS)
 	if err != nil {
 		return fmt.Errorf("phpup build ext: %w", err)
 	}
-	platform, err := dockerPlatform(opts.Arch)
+	platform, err := DockerPlatform(opts.Arch)
 	if err != nil {
 		return fmt.Errorf("phpup build ext: %w", err)
 	}
@@ -573,12 +573,13 @@ func prepareOutDir(path string) error {
 	return nil
 }
 
-// ubuntuImage maps a short OS flavour name onto the concrete docker image
+// UbuntuImage maps a short OS flavour name onto the concrete docker image
 // tag that builders/linux/build-php.sh expects. Accepts both the short
 // ("jammy"/"noble") and long ("ubuntu-22.04"/"ubuntu-24.04") spellings
 // because the planner emits the long form and humans tend to type the
-// short form; either is unambiguous.
-func ubuntuImage(osFlag string) (string, error) {
+// short form; either is unambiguous. Exported so the testsuite package
+// can reuse the same OS-to-image mapping without duplicating it.
+func UbuntuImage(osFlag string) (string, error) {
 	switch strings.ToLower(osFlag) {
 	case "jammy", "ubuntu-22.04":
 		return "ubuntu:22.04", nil
@@ -604,9 +605,11 @@ func normalizeArch(arch string) (string, error) {
 	}
 }
 
-// dockerPlatform maps the canonical arch name (as produced by
-// normalizeArch) onto the docker --platform value.
-func dockerPlatform(arch string) (string, error) {
+// DockerPlatform maps the canonical arch name (as produced by
+// normalizeArch) onto the docker --platform value. Exported so the
+// testsuite package can reuse the same arch-to-platform mapping without
+// duplicating it.
+func DockerPlatform(arch string) (string, error) {
 	switch arch {
 	case "x86_64":
 		return "linux/amd64", nil

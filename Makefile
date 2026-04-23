@@ -1,6 +1,6 @@
 .PHONY: check check-fast fmt fmt-check vet lint tidy tidy-check test test-node build clean \
         build-linux-amd64 build-linux-arm64 bundle-php bundle-ext gc-bundles-dry-run \
-        local-ci
+        local-ci ci-cell ci
 
 # Path to the native phpup binary used by bundle-php / bundle-ext. Overridable
 # so CI / power users can point at a pre-built binary.
@@ -129,6 +129,58 @@ bundle-ext: $(PHPUP_BIN)
 		--php-core-digest $(PHP_CORE_DIGEST) \
 		--registry $(or $(REGISTRY),oci-layout:./out/oci-layout) \
 		--repo .
+
+# Run one compat-harness cell via `phpup test`: loads the published (or local
+# OCI-layout) bundles for the requested OS/ARCH/PHP inside docker and exercises
+# every matching row in test/compat/fixtures.yaml. Caller supplies OS, ARCH,
+# PHP; REGISTRY defaults to the local OCI layout used by bundle-php/bundle-ext.
+# Exercised end-to-end via `make ci` and from test/smoke/local-ci.sh.
+#
+# The cell container is always linux/<ARCH>, so phpup must be cross-compiled
+# to match — a darwin/arm64 host binary or a linux/amd64 host binary running
+# an aarch64 cell would trip `exec format error`. We resolve the right
+# bin/phpup-linux-<arch> via a shell case, rebuild both the host-native and
+# linux binaries on demand, then thread the linux binary via --self-binary.
+ci-cell:
+	@case "$(ARCH)" in \
+	  x86_64|amd64)   phpup_linux_bin="bin/phpup-linux-amd64" ;; \
+	  aarch64|arm64)  phpup_linux_bin="bin/phpup-linux-arm64" ;; \
+	  *) echo "ci-cell: unknown ARCH=$(ARCH), want x86_64 or aarch64" >&2; exit 2 ;; \
+	esac; \
+	$(MAKE) "$$phpup_linux_bin" && \
+	$(MAKE) $(PHPUP_BIN) && \
+	$(PHPUP_BIN) test \
+	    --os $(OS) \
+	    --arch $(ARCH) \
+	    --php $(PHP) \
+	    --self-binary "$$PWD/$$phpup_linux_bin" \
+	    --registry $(or $(REGISTRY),oci-layout:./out/oci-layout) \
+	    --fixtures test/compat/fixtures.yaml \
+	    --repo .
+
+# Cross-compiled phpup binaries used by ci-cell to mount the correct
+# architecture-matching binary into the bare-ubuntu container. Declared as
+# file targets so Make only rebuilds when the embedded lockfile changes.
+bin/phpup-linux-amd64: cmd/phpup/bundles.lock
+	@mkdir -p bin
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/phpup-linux-amd64 ./cmd/phpup
+
+bin/phpup-linux-arm64: cmd/phpup/bundles.lock
+	@mkdir -p bin
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bin/phpup-linux-arm64 ./cmd/phpup
+
+# Iterate ci-cell across jammy+noble × x86_64+aarch64 × PHP 8.1-8.5. Short-
+# circuits on first failure thanks to `set -e`. Requires docker + the relevant
+# bundles in REGISTRY (published GHCR by default).
+ci: $(PHPUP_BIN)
+	@set -e; for os in jammy noble; do \
+	  for arch in x86_64 aarch64; do \
+	    for php in 8.1 8.2 8.3 8.4 8.5; do \
+	      echo "==> ci-cell OS=$$os ARCH=$$arch PHP=$$php"; \
+	      $(MAKE) ci-cell OS=$$os ARCH=$$arch PHP=$$php; \
+	    done; \
+	  done; \
+	done
 
 # Clean build artifacts
 clean:

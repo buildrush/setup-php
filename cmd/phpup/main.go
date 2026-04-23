@@ -25,6 +25,7 @@ import (
 	"github.com/buildrush/setup-php/internal/oci"
 	"github.com/buildrush/setup-php/internal/plan"
 	"github.com/buildrush/setup-php/internal/resolve"
+	"github.com/buildrush/setup-php/internal/testsuite"
 	"github.com/buildrush/setup-php/internal/version"
 )
 
@@ -59,6 +60,29 @@ func main() {
 	// two argv universes never collide. build.Main uses its own FlagSet.
 	if len(os.Args) > 1 && os.Args[1] == "build" {
 		if err := build.Main(os.Args[2:]); err != nil {
+			log.Fatalf("%v", err)
+		}
+		return
+	}
+
+	// `phpup test …` is dispatched the same way as `phpup build …`: its
+	// own FlagSet, its own argv universe. Used by maintainers to run the
+	// compat-harness fixtures locally against a registry (oci-layout or
+	// remote). See internal/testsuite.Main for the flag surface.
+	if len(os.Args) > 1 && os.Args[1] == "test" {
+		if err := testsuite.Main(os.Args[2:]); err != nil {
+			log.Fatalf("%v", err)
+		}
+		return
+	}
+
+	// `phpup internal <subcmd> …` is the maintainer-only umbrella for
+	// commands that are driven by the outer tooling rather than by end
+	// users. Currently only "test-cell" (the inner, container-side part
+	// of `phpup test`). Kept separate so the user-facing help surface
+	// stays lean.
+	if len(os.Args) > 1 && os.Args[1] == "internal" {
+		if err := testsuite.InternalMain(os.Args[2:]); err != nil {
 			log.Fatalf("%v", err)
 		}
 		return

@@ -21,6 +21,17 @@
 # Requires: docker, jq, oras, yq on the host. zstd + tar used inside containers.
 
 set -euo pipefail
+# test/smoke/local-ci.sh — soon-to-be-deprecated.
+#
+# PR 3 of the local+CI unification rollout introduced `phpup test` +
+# `make ci-cell` / `make ci` as the future local-smoke path. This script
+# still runs the OLD shell-orchestrated path (GHCR pull via oras + bash
+# loops) because the new path needs pre-populated bundles that PR 4 will
+# wire via the unified ci.yml. Once that lands, this script becomes a
+# thin wrapper — tracked for deletion.
+#
+# Prefer `make ci-cell OS=... ARCH=... PHP=...` for new work.
+echo "NOTE: test/smoke/local-ci.sh will be superseded by 'make ci-cell' / 'make ci' once PR 4 lands. See CHANGELOG or docs/superpowers/specs/2026-04-23-local-ci-unification-design.md." >&2
 
 PHP_VERSION="8.4"
 # Default: exercise BOTH arches. x86_64 runs under docker's QEMU on ARM hosts
