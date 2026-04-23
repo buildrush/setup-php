@@ -24,12 +24,28 @@ jobs:
           node-version: 24
       - name: Prepare embedded lockfile
         run: cp bundles.lock cmd/phpup/bundles.lock
-      - name: Install golangci-lint
+      - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-          args: --version
-      - run: make lint
+      - name: ESLint + Prettier
+        run: npx eslint src/ test/
+      - name: go mod tidy check
+        run: |
+          go mod tidy
+          if ! git diff --quiet go.mod go.sum; then
+            echo "go.mod / go.sum drift — run 'go mod tidy' locally" >&2
+            git diff go.mod go.sum
+            exit 1
+          fi
+      - name: gofmt check
+        run: |
+          fmt_out=$(gofmt -s -l .)
+          if [ -n "$fmt_out" ]; then
+            echo "gofmt -s drift in:" >&2
+            echo "$fmt_out" >&2
+            exit 1
+          fi
 
   unit:
     name: Unit tests
