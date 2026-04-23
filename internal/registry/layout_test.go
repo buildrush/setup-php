@@ -43,7 +43,7 @@ func TestLayoutStore_RoundTrip(t *testing.T) {
 		t.Fatal("Has returned true on empty layout")
 	}
 
-	if err := s.Push(ctx, ref, bytes.NewReader(payload), meta); err != nil {
+	if err := s.Push(ctx, ref, bytes.NewReader(payload), meta, Annotations{BundleName: "php-core"}); err != nil {
 		t.Fatalf("Push: %v", err)
 	}
 
@@ -100,7 +100,7 @@ func TestLayoutStore_FetchMissingRef_Errors(t *testing.T) {
 
 	// Populated layout, wrong digest — must still error (exercises the
 	// "not found in index" branch, not just the open() failure).
-	if err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader([]byte("x")), nil); err != nil {
+	if err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader([]byte("x")), nil, Annotations{BundleName: "php-core"}); err != nil {
 		t.Fatalf("Push: %v", err)
 	}
 	missing := Ref{Name: "php-core", Digest: "sha256:" + strings.Repeat("0", 64)}
@@ -162,10 +162,10 @@ func TestLayoutStore_DigestOnlyFallback_PrefersExactAnnotationMatch(t *testing.T
 	s := newTestLayoutStore(t)
 
 	// Two pushes with distinct payloads → distinct digests.
-	if err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader([]byte("core-bytes")), nil); err != nil {
+	if err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader([]byte("core-bytes")), nil, Annotations{BundleName: "php-core"}); err != nil {
 		t.Fatalf("Push core: %v", err)
 	}
-	if err := s.Push(ctx, Ref{Name: "php-ext-redis"}, bytes.NewReader([]byte("redis-bytes")), nil); err != nil {
+	if err := s.Push(ctx, Ref{Name: "php-ext-redis"}, bytes.NewReader([]byte("redis-bytes")), nil, Annotations{BundleName: "php-ext-redis"}); err != nil {
 		t.Fatalf("Push redis: %v", err)
 	}
 
@@ -231,7 +231,7 @@ func TestLayoutStore_DigestOnlyFallback_RejectsManifestWithWrongAnnotation(t *te
 	ctx := context.Background()
 	s := newTestLayoutStore(t)
 
-	if err := s.Push(ctx, Ref{Name: "php-ext-redis"}, bytes.NewReader([]byte("redis-bytes")), nil); err != nil {
+	if err := s.Push(ctx, Ref{Name: "php-ext-redis"}, bytes.NewReader([]byte("redis-bytes")), nil, Annotations{BundleName: "php-ext-redis"}); err != nil {
 		t.Fatalf("Push: %v", err)
 	}
 	redisDigest := indexEntryForName(t, s, "php-ext-redis")
@@ -258,7 +258,7 @@ func TestLayoutStore_TolerateMissingMeta(t *testing.T) {
 	ctx := context.Background()
 	s := newTestLayoutStore(t)
 	payload := []byte("legacy-bundle")
-	if err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader(payload), nil); err != nil {
+	if err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader(payload), nil, Annotations{BundleName: "php-core"}); err != nil {
 		t.Fatalf("Push nil meta: %v", err)
 	}
 	got, err := s.list(ctx)

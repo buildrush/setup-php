@@ -136,8 +136,18 @@ func (s *remoteStore) Fetch(ctx context.Context, ref Ref) (io.ReadCloser, *Meta,
 
 // Push is deliberately unsupported in PR 1; remote publication lands with the
 // `phpup build` subcommand in a follow-up PR.
-func (s *remoteStore) Push(_ context.Context, _ Ref, _ io.Reader, _ *Meta) error {
+func (s *remoteStore) Push(_ context.Context, _ Ref, _ io.Reader, _ *Meta, _ Annotations) error {
 	return ErrUnsupported
+}
+
+// LookupBySpec on the remote backend is a no-op returning (zero, false, nil).
+// Anonymous OCI registries don't expose an index walk for annotation-keyed
+// probes, so build callers should use an oci-layout registry as their cache
+// store and publish to the remote only after a fresh build produces an
+// artifact. A non-error miss keeps the build subcommand's default flow
+// correct: "don't know" -> "build anyway".
+func (s *remoteStore) LookupBySpec(_ context.Context, _, _ string) (Ref, bool, error) {
+	return Ref{}, false, nil
 }
 
 func (s *remoteStore) ResolveDigest(ctx context.Context, reference string) (string, error) {
