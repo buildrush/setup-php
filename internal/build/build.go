@@ -27,8 +27,19 @@ import (
 // have file preinstalled; bare ubuntu:22.04 doesn't. Without file the
 // ELF check silently returns false, patchelf is skipped, and
 // capture-hermetic-libs later aborts with "no DT_RUNPATH/DT_RPATH".
+// orasVersion pins the oras release fetched into ext-build containers.
+// Must match what builders/common/fetch-core.sh expects on the PATH.
+const orasVersion = "1.3.1"
+
 const linuxAptPreamble = "apt-get update && " +
-	"apt-get install -y --no-install-recommends curl xz-utils ca-certificates file jq zstd && "
+	"apt-get install -y --no-install-recommends curl xz-utils ca-certificates file jq zstd && " +
+	// fetch-core.sh (called by build-ext.sh) shells out to `oras pull`.
+	// Install the same oras version the existing build-extension.yml uses.
+	// Arch detection: uname -m on linux returns x86_64 or aarch64; oras
+	// releases use amd64/arm64. One shell line keeps the preamble terse.
+	"ARCH_ORAS=$(uname -m); case \"$ARCH_ORAS\" in x86_64) ORAS_ARCH=amd64 ;; aarch64) ORAS_ARCH=arm64 ;; esac; " +
+	"curl -sSfL https://github.com/oras-project/oras/releases/download/v" + orasVersion +
+	"/oras_" + orasVersion + "_linux_${ORAS_ARCH}.tar.gz | tar -xz -C /usr/local/bin oras && "
 
 // Main is the entry point for `phpup build …`. args is the tail after
 // the "build" subcommand token (so args[0] is "php", "ext", or "cell").
