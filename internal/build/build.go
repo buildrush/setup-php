@@ -28,7 +28,7 @@ import (
 // ELF check silently returns false, patchelf is skipped, and
 // capture-hermetic-libs later aborts with "no DT_RUNPATH/DT_RPATH".
 const linuxAptPreamble = "apt-get update && " +
-	"apt-get install -y --no-install-recommends curl xz-utils ca-certificates file jq && "
+	"apt-get install -y --no-install-recommends curl xz-utils ca-certificates file jq zstd && "
 
 // Main is the entry point for `phpup build …`. args is the tail after
 // the "build" subcommand token (so args[0] is "php", "ext", or "cell").
