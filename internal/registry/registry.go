@@ -65,8 +65,20 @@ type Meta struct {
 type Store interface {
 	Kind() string
 	Fetch(ctx context.Context, ref Ref) (io.ReadCloser, *Meta, error)
-	Push(ctx context.Context, ref Ref, body io.Reader, meta *Meta) error
+	// Push writes a bundle to the store under the given ref, attaching
+	// the supplied Annotations to the manifest. Remote backends that
+	// don't support anonymous writes return ErrUnsupported.
+	Push(ctx context.Context, ref Ref, body io.Reader, meta *Meta, ann Annotations) error
 	Has(ctx context.Context, ref Ref) (bool, error)
+	// LookupBySpec finds a manifest whose annotations include both
+	// BundleName==name AND SpecHash==specHash. Returns (Ref, true, nil)
+	// on hit, (zero, false, nil) when absent, (zero, false, err) on
+	// backend error. Used by the build subcommand's cache probe to
+	// short-circuit redundant rebuilds.
+	//
+	// Callers with an `Annotations` value already in scope should pass
+	// `ann.BundleName` and `ann.SpecHash` positionally.
+	LookupBySpec(ctx context.Context, name, specHash string) (Ref, bool, error)
 	ResolveDigest(ctx context.Context, name string) (string, error)
 }
 

@@ -148,7 +148,7 @@ func TestRemoteStore_PushReturnsUnsupported(t *testing.T) {
 	ctx := context.Background()
 	host := startTestRegistry(t)
 	s, _ := Open(host + "/buildrush")
-	err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader([]byte("x")), nil)
+	err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader([]byte("x")), nil, Annotations{BundleName: "php-core"})
 	if !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("Push err = %v, want ErrUnsupported", err)
 	}

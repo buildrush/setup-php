@@ -2,9 +2,22 @@
         build-linux-amd64 build-linux-arm64 bundle-php bundle-ext gc-bundles-dry-run \
         local-ci
 
+# Path to the native phpup binary used by bundle-php / bundle-ext. Overridable
+# so CI / power users can point at a pre-built binary.
+PHPUP_BIN ?= bin/phpup
+
 # Ensure the embedded lockfile is available for go vet/test/build
 cmd/phpup/bundles.lock: bundles.lock
 	@cp bundles.lock cmd/phpup/bundles.lock
+
+# Local native build of phpup used by bundle-php / bundle-ext. Kept as a
+# file target so Make only rebuilds on demand. The embedded lockfile is the
+# sole declared dependency because cmd/phpup's own source files change
+# rarely enough that a `make clean` + `make bin/phpup` is acceptable; if
+# this becomes a friction point, widen the deps to cmd/phpup/*.go.
+$(PHPUP_BIN): cmd/phpup/bundles.lock
+	@mkdir -p $(dir $(PHPUP_BIN))
+	go build -o $(PHPUP_BIN) ./cmd/phpup
 
 # Full pre-push check: static analysis + tests + builds + a docker smoke that
 # exercises the published bundles on both jammy and noble runners. Takes ~5
@@ -83,24 +96,39 @@ build-linux-arm64:
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bin/phpup-linux-arm64 ./cmd/phpup
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bin/planner-linux-arm64 ./cmd/planner
 
-# Build a PHP core bundle locally via Docker
-bundle-php:
-	docker run --rm \
-		-v $$(pwd):/workspace -w /workspace \
-		-e PHP_VERSION=$(PHP_VERSION) \
-		-e ARCH=$(or $(ARCH),x86_64) \
-		ubuntu:22.04 \
-		bash -c "apt-get update && apt-get install -y curl xz-utils && ./builders/linux/build-php.sh"
+# Build a PHP core bundle locally via phpup (docker-wrapped under the hood).
+# Invocation:
+#     make bundle-php PHP_VERSION=8.4 [OS=jammy] [ARCH=x86_64] [TS=nts] \
+#                     [REGISTRY=oci-layout:./out/oci-layout]
+# phpup docker-wraps builders/linux/build-php.sh unchanged and writes the
+# resulting OCI bundle into the target registry.
+bundle-php: $(PHPUP_BIN)
+	$(PHPUP_BIN) build php \
+		--php $(PHP_VERSION) \
+		--os $(or $(OS),jammy) \
+		--arch $(or $(ARCH),x86_64) \
+		--ts $(or $(TS),nts) \
+		--registry $(or $(REGISTRY),oci-layout:./out/oci-layout) \
+		--repo .
 
-# Build an extension bundle locally via Docker
-bundle-ext:
-	docker run --rm \
-		-v $$(pwd):/workspace -w /workspace \
-		-e EXT_NAME=$(EXT_NAME) \
-		-e EXT_VERSION=$(EXT_VERSION) \
-		-e PHP_ABI=$(PHP_ABI) \
-		ubuntu:22.04 \
-		bash -c "apt-get update && apt-get install -y curl && ./builders/linux/build-ext.sh"
+# Build an extension bundle locally via phpup (docker-wrapped under the hood).
+# Invocation:
+#     make bundle-ext EXT_NAME=redis EXT_VERSION=6.2.0 PHP_ABI=8.4-nts \
+#                     PHP_CORE_DIGEST=sha256:… \
+#                     [OS=jammy] [ARCH=x86_64] \
+#                     [REGISTRY=oci-layout:./out/oci-layout]
+# Requires the prerequisite php-core already in REGISTRY (run `make bundle-php`
+# first, or point REGISTRY at a remote where the core is published).
+bundle-ext: $(PHPUP_BIN)
+	$(PHPUP_BIN) build ext \
+		--ext $(EXT_NAME) \
+		--ext-version $(EXT_VERSION) \
+		--php-abi $(PHP_ABI) \
+		--arch $(or $(ARCH),x86_64) \
+		--os $(or $(OS),jammy) \
+		--php-core-digest $(PHP_CORE_DIGEST) \
+		--registry $(or $(REGISTRY),oci-layout:./out/oci-layout) \
+		--repo .
 
 # Clean build artifacts
 clean:

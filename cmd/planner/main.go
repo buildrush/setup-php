@@ -53,30 +53,28 @@ func main() {
 
 	// Hash builder scripts and shared support files the builders source. Changes
 	// to any of these change the bundle contents; fold them into builderHash so
-	// spec_hash invalidates and bundles rebuild.
-	builderHashPHP, err := planner.HashFile(filepath.Join("builders", "linux", "build-php.sh"))
+	// spec_hash invalidates and bundles rebuild. Ordering mirrors the historical
+	// inline concatenation (build-<kind>.sh + schema env + capture + pack) so
+	// spec_hash values stay byte-identical across this refactor.
+	common := []string{
+		filepath.Join("builders", "common", "bundle-schema-version.env"),
+		filepath.Join("builders", "common", "capture-hermetic-libs.sh"),
+		filepath.Join("builders", "common", "pack-bundle.sh"),
+	}
+	builderHashPHP, err := planner.HashFiles(append(
+		[]string{filepath.Join("builders", "linux", "build-php.sh")},
+		common...,
+	))
 	if err != nil {
 		log.Fatalf("hash php builder: %v", err)
 	}
-	builderHashExt, err := planner.HashFile(filepath.Join("builders", "linux", "build-ext.sh"))
+	builderHashExt, err := planner.HashFiles(append(
+		[]string{filepath.Join("builders", "linux", "build-ext.sh")},
+		common...,
+	))
 	if err != nil {
 		log.Fatalf("hash ext builder: %v", err)
 	}
-	schemaEnvHash, err := planner.HashFile(filepath.Join("builders", "common", "bundle-schema-version.env"))
-	if err != nil {
-		log.Fatalf("hash schema env: %v", err)
-	}
-	captureHash, err := planner.HashFile(filepath.Join("builders", "common", "capture-hermetic-libs.sh"))
-	if err != nil {
-		log.Fatalf("hash capture script: %v", err)
-	}
-	packHash, err := planner.HashFile(filepath.Join("builders", "common", "pack-bundle.sh"))
-	if err != nil {
-		log.Fatalf("hash pack-bundle script: %v", err)
-	}
-	commonHash := schemaEnvHash + ":" + captureHash + ":" + packHash
-	builderHashPHP = builderHashPHP + ":" + commonHash
-	builderHashExt = builderHashExt + ":" + commonHash
 
 	// Expand PHP matrix
 	phpCells := planner.ExpandPHPMatrix(cat.PHP)
@@ -134,13 +132,11 @@ func readBuilderOS(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("read %s: %w", path, err)
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "BUILDER_OS=") {
-			return strings.TrimPrefix(line, "BUILDER_OS="), nil
-		}
+	v := planner.ParseEnvValue(data, "BUILDER_OS")
+	if v == "" {
+		return "", fmt.Errorf("%s: BUILDER_OS not found", path)
 	}
-	return "", fmt.Errorf("%s: BUILDER_OS not found", path)
+	return v, nil
 }
 
 func filterExisting(ctx context.Context, cells []planner.MatrixCell, lf *lockfile.Lockfile, client *oci.Client) []planner.MatrixCell {

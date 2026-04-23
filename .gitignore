@@ -11,6 +11,14 @@ bin/
 dist/
 cmd/phpup/bundles.lock
 
+# Docker-wrapped build output (phpup build php|ext).
+# Leading slash anchors to repo root so we don't accidentally shadow
+# internal/build/ (the Go package) when adding new files to it.
+/build/
+
+# Default OCI-layout registry target (phpup build --registry flag).
+/out/
+
 # Dependencies
 vendor/
 node_modules/

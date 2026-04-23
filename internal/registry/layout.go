@@ -59,7 +59,7 @@ func (s *layoutStore) open() (layout.Path, error) {
 	return layout.FromPath(s.root)
 }
 
-func (s *layoutStore) Push(_ context.Context, ref Ref, body io.Reader, meta *Meta) error {
+func (s *layoutStore) Push(_ context.Context, ref Ref, body io.Reader, meta *Meta, ann Annotations) error {
 	if ref.Name == "" {
 		return errors.New("layout.Push: ref.Name required")
 	}
@@ -86,7 +86,15 @@ func (s *layoutStore) Push(_ context.Context, ref Ref, body io.Reader, meta *Met
 	// partial.Descriptor does not propagate manifest-level annotations into the
 	// index), while the manifest-level annotation keeps the round-trip
 	// self-describing for tools that inspect the OCI image directly.
-	annotations := map[string]string{annotationBundleName: ref.Name}
+	//
+	// Callers supply the desired annotation set via Annotations. For backward
+	// compatibility with PR 1 semantics, if the caller didn't set BundleName
+	// (or any annotation at all) we fall back to deriving it from ref.Name so
+	// Has/Fetch still find the manifest.
+	annotations := ann.asMap()
+	if annotations[annotationBundleName] == "" {
+		annotations[annotationBundleName] = ref.Name
+	}
 	annotated, ok := mutate.Annotations(img, annotations).(v1.Image)
 	if !ok {
 		return errors.New("layout.Push: mutate.Annotations did not return v1.Image")
@@ -100,6 +108,42 @@ func (s *layoutStore) Push(_ context.Context, ref Ref, body io.Reader, meta *Met
 		return fmt.Errorf("layout.Push: append image: %w", err)
 	}
 	return nil
+}
+
+// LookupBySpec walks the index for a manifest whose annotations match BOTH
+// the given bundle name and spec-hash. Returns (Ref, true, nil) on hit.
+// An absent layout is a valid miss (not an error) so callers can probe
+// empty caches without a pre-check. Any other open failure propagates.
+func (s *layoutStore) LookupBySpec(_ context.Context, name, specHash string) (Ref, bool, error) {
+	if name == "" || specHash == "" {
+		return Ref{}, false, errors.New("layout.LookupBySpec: name and specHash required")
+	}
+	p, err := s.open()
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return Ref{}, false, nil
+		}
+		return Ref{}, false, fmt.Errorf("layout.LookupBySpec: open %q: %w", s.root, err)
+	}
+	idx, err := p.ImageIndex()
+	if err != nil {
+		return Ref{}, false, fmt.Errorf("layout.LookupBySpec: index: %w", err)
+	}
+	manifest, err := idx.IndexManifest()
+	if err != nil {
+		return Ref{}, false, fmt.Errorf("layout.LookupBySpec: index manifest: %w", err)
+	}
+	for i := range manifest.Manifests {
+		m := &manifest.Manifests[i]
+		if m.Annotations[annotationBundleName] != name {
+			continue
+		}
+		if m.Annotations[annotationSpecHash] != specHash {
+			continue
+		}
+		return Ref{Name: name, Digest: m.Digest.String()}, true, nil
+	}
+	return Ref{}, false, nil
 }
 
 func (s *layoutStore) Has(_ context.Context, ref Ref) (bool, error) {

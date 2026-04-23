@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/buildrush/setup-php/internal/build"
 	"github.com/buildrush/setup-php/internal/cache"
 	"github.com/buildrush/setup-php/internal/catalog"
 	"github.com/buildrush/setup-php/internal/compat"
@@ -51,6 +52,15 @@ func resolveRegistry(cliFlag string) string {
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--version" {
 		fmt.Printf("phpup %s (%s) built %s\n", version.Version, version.Commit, version.BuildDate)
+		return
+	}
+
+	// `phpup build …` is dispatched before the setup-flow flag.Parse so the
+	// two argv universes never collide. build.Main uses its own FlagSet.
+	if len(os.Args) > 1 && os.Args[1] == "build" {
+		if err := build.Main(os.Args[2:]); err != nil {
+			log.Fatalf("%v", err)
+		}
 		return
 	}
 
