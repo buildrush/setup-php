@@ -13,6 +13,15 @@ import (
 	"github.com/buildrush/setup-php/internal/registry"
 )
 
+// linuxAptPreamble installs the minimal host-side packages needed for
+// the Ubuntu build containers to run the builder scripts. Shared
+// between build-php and build-ext; keep in sync with Makefile's
+// bundle-php / bundle-ext targets. Output is NOT silenced so apt
+// diagnostics (mirror outages, DNS, missing packages) stream through
+// to the user's stderr via DockerRun's default Stdout/Stderr wiring.
+const linuxAptPreamble = "apt-get update && " +
+	"apt-get install -y --no-install-recommends curl xz-utils ca-certificates && "
+
 // Main is the entry point for `phpup build …`. args is the tail after
 // the "build" subcommand token (so args[0] is "php" or "ext"). Returning
 // a nil error means the requested build (or cache hit) succeeded; a
@@ -95,7 +104,14 @@ func BuildPHP(ctx context.Context, args []string) error {
 		Platform: platform,
 		Mounts: []Mount{
 			{Host: opts.Repo, Container: "/workspace", ReadOnly: true},
-			{Host: outDir, Container: "/tmp/out", ReadOnly: false},
+			// Mount at /tmp (not /tmp/out) because builders/linux/build-php.sh
+			// invokes pack-bundle.sh with the hardcoded output path
+			// /tmp/bundle.tar.zst, and pack-bundle.sh writes meta.json as a
+			// sibling of the output tar. Mounting /tmp/out would leave both
+			// files in the container's ephemeral /tmp and lose them on exit.
+			// OUTPUT_DIR=/tmp/out still lives INSIDE the mount so the
+			// builder's INSTALL_ROOT staging tree is preserved unchanged.
+			{Host: outDir, Container: "/tmp", ReadOnly: false},
 		},
 		Env: map[string]string{
 			"PHP_VERSION": opts.Version,
@@ -103,19 +119,18 @@ func BuildPHP(ctx context.Context, args []string) error {
 			"OUTPUT_DIR":  "/tmp/out",
 			"WORKSPACE":   "/workspace",
 		},
-		Cmd: []string{"bash", "-c",
-			"apt-get update >/dev/null 2>&1 && " +
-				"apt-get install -y --no-install-recommends curl xz-utils ca-certificates >/dev/null 2>&1 && " +
-				"/workspace/builders/linux/build-php.sh"},
+		Cmd: []string{"bash", "-c", linuxAptPreamble + "/workspace/builders/linux/build-php.sh"},
 	}
 	if err := DockerRun(ctx, runOpts); err != nil {
 		return fmt.Errorf("phpup build php: docker: %w", err)
 	}
 
-	// 5. Read the bundle + meta from the mount dir.
+	// 5. Read the bundle + meta from the mount dir. Paths are constructed
+	// internally from os.MkdirTemp output, not user input; no filepath.Clean
+	// needed (and the linter's G304 is excluded project-wide).
 	bundlePath := filepath.Join(outDir, "bundle.tar.zst")
 	metaPath := filepath.Join(outDir, "meta.json")
-	bundle, err := os.Open(filepath.Clean(bundlePath))
+	bundle, err := os.Open(bundlePath)
 	if err != nil {
 		return fmt.Errorf("phpup build php: open bundle: %w", err)
 	}
@@ -140,7 +155,7 @@ func BuildPHP(ctx context.Context, args []string) error {
 // stub returns a recognisable error so Main's dispatch compiles and
 // callers see a clear "not yet" rather than an obscure panic.
 func BuildExt(_ context.Context, _ []string) error {
-	return errors.New("phpup build ext: implemented in PR2 Task 5")
+	return errors.New("phpup build ext: not yet supported in this build; will land in a subsequent release")
 }
 
 // phpOpts is the parsed flag set for `phpup build php`. Repo is resolved
@@ -162,8 +177,8 @@ func parsePHPFlags(args []string) (*phpOpts, error) {
 	fs := flag.NewFlagSet("phpup build php", flag.ContinueOnError)
 	version := fs.String("php", "", "PHP version, e.g. 8.4 (required)")
 	osFlag := fs.String("os", "jammy", "Ubuntu flavour: jammy (22.04) or noble (24.04)")
-	arch := fs.String("arch", "x86_64", "Target arch: x86_64 or aarch64")
-	ts := fs.String("ts", "nts", "Thread safety: nts or zts")
+	arch := fs.String("arch", "x86_64", "Target arch: x86_64 or aarch64 (amd64/arm64 aliases accepted)")
+	ts := fs.String("ts", "nts", "Thread safety: nts (zts not yet supported)")
 	registryFlag := fs.String("registry", "oci-layout:./out/oci-layout",
 		"Target registry URI (oci-layout:<path> or ghcr.io/<owner>)")
 	repo := fs.String("repo", ".", "Path to setup-php repo root")
@@ -173,6 +188,17 @@ func parsePHPFlags(args []string) (*phpOpts, error) {
 	if *version == "" {
 		return nil, errors.New("phpup build php: --php is required")
 	}
+	// ZTS differs the spec-hash (so a future ZTS builder gets its own
+	// cache key), but the current build-php.sh has no --enable-zts
+	// conditional — accepting zts here would silently cache an NTS
+	// artifact under a ZTS key. Reject until builder support lands.
+	if *ts != "nts" {
+		return nil, fmt.Errorf("phpup build php: --ts %q not yet supported (only nts)", *ts)
+	}
+	archNormalized, err := normalizeArch(*arch)
+	if err != nil {
+		return nil, fmt.Errorf("phpup build php: %w", err)
+	}
 	absRepo, err := filepath.Abs(*repo)
 	if err != nil {
 		return nil, fmt.Errorf("phpup build php: resolve repo path: %w", err)
@@ -180,7 +206,7 @@ func parsePHPFlags(args []string) (*phpOpts, error) {
 	return &phpOpts{
 		Version:  *version,
 		OS:       *osFlag,
-		Arch:     *arch,
+		Arch:     archNormalized,
 		TS:       *ts,
 		Registry: *registryFlag,
 		Repo:     absRepo,
@@ -203,15 +229,28 @@ func ubuntuImage(osFlag string) (string, error) {
 	}
 }
 
-// dockerPlatform maps the caller-facing arch name onto the docker
-// --platform value. The caller-facing names match the builder script's
-// ARCH env contract ("x86_64"/"aarch64"); the docker aliases ("amd64"/
-// "arm64") are accepted too for ergonomics.
-func dockerPlatform(arch string) (string, error) {
+// normalizeArch canonicalizes arch aliases to the forms used in the
+// planner/lockfile ("x86_64" / "aarch64"), so spec-hashes are stable
+// regardless of whether the caller used the docker-style ("amd64"/"arm64")
+// or the uname-style ("x86_64"/"aarch64") spelling.
+func normalizeArch(arch string) (string, error) {
 	switch arch {
 	case "x86_64", "amd64":
-		return "linux/amd64", nil
+		return "x86_64", nil
 	case "aarch64", "arm64":
+		return "aarch64", nil
+	default:
+		return "", fmt.Errorf("unknown arch %q (want x86_64 or aarch64)", arch)
+	}
+}
+
+// dockerPlatform maps the canonical arch name (as produced by
+// normalizeArch) onto the docker --platform value.
+func dockerPlatform(arch string) (string, error) {
+	switch arch {
+	case "x86_64":
+		return "linux/amd64", nil
+	case "aarch64":
 		return "linux/arm64", nil
 	default:
 		return "", fmt.Errorf("unknown arch %q (want x86_64|aarch64)", arch)
@@ -219,20 +258,21 @@ func dockerPlatform(arch string) (string, error) {
 }
 
 // parseMetaJSONFile reads the builder's meta.json sidecar into a
-// registry.Meta. Missing schema_version defaults to 1 to match
-// internal/registry/layout.go's legacy-bundle tolerance; callers should
-// not rely on this default — the builder writes the real version.
+// registry.Meta. The builder is the source of truth for schema_version
+// (pack-bundle.sh always writes the current SCHEMA_VERSION from
+// builders/common/bundle-schema-version.env); we do not fill a default
+// here. Callers that need legacy tolerance (e.g. remote Fetch reading an
+// older, pre-schema_version bundle from a registry) handle it there.
+// Path is constructed internally from os.MkdirTemp; no filepath.Clean
+// needed (G304 is excluded project-wide).
 func parseMetaJSONFile(path string) (*registry.Meta, error) {
-	data, err := os.ReadFile(filepath.Clean(path))
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 	var m registry.Meta
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, err
-	}
-	if m.SchemaVersion == 0 {
-		m.SchemaVersion = 1
 	}
 	return &m, nil
 }

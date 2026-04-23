@@ -7,9 +7,11 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildrush/setup-php/internal/registry"
 )
@@ -61,18 +63,19 @@ func seedLayout(t *testing.T, dir, bundleName, specHash string) string {
 
 // fakeRunner is a RunnerFunc that writes a valid bundle + meta.json into
 // the output mount so BuildPHP's read-push step can proceed without a
-// real docker invocation.
+// real docker invocation. Looks for the mount at /tmp (matching the
+// production mount contract — see BuildPHP's Mounts comment for why).
 func fakeRunner(bundleBytes []byte) RunnerFunc {
 	return func(_ context.Context, opts *DockerRunOpts) error {
 		var outHost string
 		for _, m := range opts.Mounts {
-			if m.Container == "/tmp/out" {
+			if m.Container == "/tmp" {
 				outHost = m.Host
 				break
 			}
 		}
 		if outHost == "" {
-			return errors.New("fakeRunner: no /tmp/out mount")
+			return errors.New("fakeRunner: no /tmp mount")
 		}
 		if err := os.WriteFile(filepath.Join(outHost, "bundle.tar.zst"), bundleBytes, 0o644); err != nil {
 			return err
@@ -213,6 +216,122 @@ func TestBuildPHP_UnknownArch_Errors(t *testing.T) {
 	}
 }
 
+// TestBuildPHP_ZTSNotSupported_Errors: --ts zts differs the spec-hash (so
+// a future ZTS builder gets its own cache key) but today's build-php.sh
+// has no --enable-zts path. Accepting zts would silently cache an NTS
+// artifact under a ZTS key — reject until builder support lands.
+func TestBuildPHP_ZTSNotSupported_Errors(t *testing.T) {
+	repo := t.TempDir()
+	writeRepoFixture(t, repo)
+	err := BuildPHP(context.Background(), []string{
+		"--php", "8.4", "--ts", "zts",
+		"--registry", "oci-layout:" + filepath.Join(t.TempDir(), "layout"),
+		"--repo", repo,
+	})
+	if err == nil || !strings.Contains(err.Error(), "zts") {
+		t.Errorf("BuildPHP err = %v, want zts rejection", err)
+	}
+}
+
+// TestBuildPHP_AmdAliasNormalizes verifies that --arch amd64 produces the
+// same spec-hash as --arch x86_64 — otherwise callers using the docker
+// spelling would get a distinct cache entry for the same build.
+func TestBuildPHP_AmdAliasNormalizes(t *testing.T) {
+	repo := t.TempDir()
+	writeRepoFixture(t, repo)
+	// Reference hash computed from the canonical spelling.
+	h1, err := ComputeSpecHash(&SpecHashInputs{
+		Kind: "php", Version: "8.4", OS: "linux", Arch: "x86_64", TS: "nts", Repo: repo,
+	})
+	if err != nil {
+		t.Fatalf("ComputeSpecHash: %v", err)
+	}
+	// Route through parsePHPFlags to get the normalized value.
+	opts, err := parsePHPFlags([]string{"--php", "8.4", "--arch", "amd64", "--repo", repo})
+	if err != nil {
+		t.Fatalf("parsePHPFlags: %v", err)
+	}
+	if opts.Arch != "x86_64" {
+		t.Fatalf("normalizeArch failure: Arch = %q, want x86_64", opts.Arch)
+	}
+	h2, err := ComputeSpecHash(&SpecHashInputs{
+		Kind: "php", Version: opts.Version, OS: "linux", Arch: opts.Arch, TS: opts.TS, Repo: repo,
+	})
+	if err != nil {
+		t.Fatalf("ComputeSpecHash (amd64): %v", err)
+	}
+	if h1 != h2 {
+		t.Fatalf("spec-hash differs: %q vs %q", h1, h2)
+	}
+}
+
+// TestBuildPHP_RealDockerSmoke exercises the real docker mount contract
+// end to end — unit tests that use fakeRunner write into the output host
+// dir directly, bypassing the container's filesystem. This test swaps
+// build-php.sh for a 3-line synthetic that emulates pack-bundle.sh's
+// output (writes /tmp/bundle.tar.zst + /tmp/meta.json) so we can verify
+// the mount actually captures those files without paying a 10-minute
+// PHP compile. Catches mount-path bugs (e.g. mounting /tmp/out instead
+// of /tmp) that unit tests cannot.
+func TestBuildPHP_RealDockerSmoke(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping real docker smoke under -short")
+	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skipf("docker not found in PATH: %v", err)
+	}
+	repo := t.TempDir()
+	writeRepoFixture(t, repo)
+	// Overwrite build-php.sh with a synthetic that emulates what real
+	// build-php.sh does: produce /tmp/bundle.tar.zst + /tmp/meta.json.
+	fakeBuilder := "#!/usr/bin/env bash\n" +
+		"set -euo pipefail\n" +
+		"mkdir -p /tmp\n" +
+		"echo 'synthetic bundle' > /tmp/bundle.tar.zst\n" +
+		`echo '{"schema_version":3,"kind":"php-core"}' > /tmp/meta.json` + "\n"
+	builderPath := filepath.Join(repo, "builders", "linux", "build-php.sh")
+	if err := os.WriteFile(builderPath, []byte(fakeBuilder), 0o755); err != nil {
+		t.Fatalf("write fake builder: %v", err)
+	}
+	// os.WriteFile preserves the mode of the pre-existing fixture file
+	// (0o644 from writeRepoFixture). Force +x so the container can execv.
+	if err := os.Chmod(builderPath, 0o755); err != nil {
+		t.Fatalf("chmod fake builder: %v", err)
+	}
+
+	layoutURI := "oci-layout:" + filepath.Join(t.TempDir(), "layout")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	err := BuildPHP(ctx, []string{
+		"--php", "8.4",
+		"--registry", layoutURI,
+		"--repo", repo,
+	})
+	if err != nil {
+		t.Fatalf("BuildPHP: %v", err)
+	}
+
+	// Verify the layout has the manifest at the expected spec-hash.
+	hash, err := ComputeSpecHash(&SpecHashInputs{
+		Kind: "php", Version: "8.4", OS: "linux", Arch: "x86_64", TS: "nts", Repo: repo,
+	})
+	if err != nil {
+		t.Fatalf("ComputeSpecHash: %v", err)
+	}
+	s, err := registry.Open(layoutURI)
+	if err != nil {
+		t.Fatalf("registry.Open: %v", err)
+	}
+	ref, hit, err := s.LookupBySpec(ctx, "php-core", hash)
+	if err != nil || !hit {
+		t.Fatalf("LookupBySpec after real-docker build: hit=%v err=%v", hit, err)
+	}
+	if ref.Digest == "" {
+		t.Fatal("pushed ref has empty digest after real-docker build")
+	}
+}
+
 func TestMain_UnknownKind_Errors(t *testing.T) {
 	err := Main([]string{"tool"})
 	if err == nil || !strings.Contains(err.Error(), "unknown kind") {
@@ -229,8 +348,8 @@ func TestMain_EmptyArgs_Errors(t *testing.T) {
 
 func TestMain_ExtDispatch_ReturnsStub(t *testing.T) {
 	err := Main([]string{"ext"})
-	if err == nil || !strings.Contains(err.Error(), "Task 5") {
-		t.Errorf("Main([]string{\"ext\"}) err = %v, want containing \"Task 5\"", err)
+	if err == nil || !strings.Contains(err.Error(), "not yet supported") {
+		t.Errorf("Main([]string{\"ext\"}) err = %v, want containing \"not yet supported\"", err)
 	}
 }
 
