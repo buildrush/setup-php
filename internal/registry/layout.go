@@ -124,20 +124,26 @@ func (s *layoutStore) Has(_ context.Context, ref Ref) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("layout.Has: parse index: %w", err)
 	}
-	digestOnlyMatch := false
+	fallback := false
 	for i := range manifest.Manifests {
 		m := &manifest.Manifests[i]
 		if m.Digest.String() != ref.Digest {
 			continue
 		}
-		if m.Annotations[annotationBundleName] == ref.Name {
+		ann, hasAnn := m.Annotations[annotationBundleName]
+		if hasAnn && ann == ref.Name {
 			return true, nil
 		}
-		digestOnlyMatch = true
+		// Only treat a digest-only match as a fallback candidate when the
+		// manifest has NO bundle-name annotation at all (e.g. it was
+		// populated by `oras copy` without our annotation). A manifest
+		// that carries the annotation but names a *different* bundle is
+		// an affirmative negative — we must not cross-link it.
+		if !hasAnn {
+			fallback = true
+		}
 	}
-	// Fallback for layouts populated by tools (e.g. `oras copy`) that don't
-	// set our bundle-name annotation.
-	return digestOnlyMatch, nil
+	return fallback, nil
 }
 
 func (s *layoutStore) Fetch(_ context.Context, ref Ref) (io.ReadCloser, *Meta, error) {
@@ -157,29 +163,31 @@ func (s *layoutStore) Fetch(_ context.Context, ref Ref) (io.ReadCloser, *Meta, e
 	var (
 		chosen        v1.Hash
 		found         bool
-		digestOnly    v1.Hash
-		digestOnlyHit bool
+		fallback      v1.Hash
+		fallbackFound bool
 	)
 	for i := range manifest.Manifests {
 		m := &manifest.Manifests[i]
 		if ref.Digest != "" && m.Digest.String() != ref.Digest {
 			continue
 		}
-		if m.Annotations[annotationBundleName] == ref.Name {
+		ann, hasAnn := m.Annotations[annotationBundleName]
+		if hasAnn && ann == ref.Name {
 			chosen = m.Digest
 			found = true
 			break
 		}
-		if ref.Digest != "" && m.Digest.String() == ref.Digest {
-			digestOnly = m.Digest
-			digestOnlyHit = true
+		// See Has: we only accept a digest-only fallback when the manifest
+		// carries no bundle-name annotation. An annotation that names a
+		// different bundle is an affirmative negative.
+		if ref.Digest != "" && !hasAnn {
+			fallback = m.Digest
+			fallbackFound = true
 		}
 	}
-	if !found {
-		if digestOnlyHit {
-			chosen = digestOnly
-			found = true
-		}
+	if !found && fallbackFound {
+		chosen = fallback
+		found = true
 	}
 	if !found {
 		return nil, nil, fmt.Errorf("layout.Fetch: %s not found in %q", ref, s.root)
@@ -197,14 +205,14 @@ func (s *layoutStore) Fetch(_ context.Context, ref Ref) (io.ReadCloser, *Meta, e
 		return nil, nil, fmt.Errorf("layout.Fetch: image %s has no layers", chosen)
 	}
 
-	bundle, err := layers[0].Uncompressed()
+	bundle, err := layers[0].Compressed()
 	if err != nil {
 		return nil, nil, fmt.Errorf("layout.Fetch: open bundle layer: %w", err)
 	}
 
 	meta := &Meta{SchemaVersion: 1}
 	if len(layers) >= 2 {
-		mrc, err := layers[1].Uncompressed()
+		mrc, err := layers[1].Compressed()
 		if err != nil {
 			_ = bundle.Close()
 			return nil, nil, fmt.Errorf("layout.Fetch: open meta layer: %w", err)

@@ -57,6 +57,11 @@ type Meta struct {
 // Fetch may return a nil *Meta when the backend has no sidecar metadata for
 // the ref; callers must tolerate that. Push accepts a nil meta to write a
 // bundle without a meta sidecar.
+//
+// Fetch returns the raw layer blob (compressed on the wire; callers
+// decompress as needed). This matches the behavior of internal/oci/client.go
+// so that a layout-backed store returns bytes byte-identical to what a
+// remote-backed store would return for the same manifest.
 type Store interface {
 	Kind() string
 	Fetch(ctx context.Context, ref Ref) (io.ReadCloser, *Meta, error)
