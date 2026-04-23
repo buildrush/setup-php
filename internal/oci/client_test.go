@@ -2,6 +2,8 @@ package oci
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -75,5 +77,34 @@ func TestNewClient_AcceptsOciLayoutURI(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Errorf("FetchAll(nil) returned %d results, want 0", len(results))
+	}
+}
+
+func TestFetch_UnknownKind_Errors(t *testing.T) {
+	c, err := NewClient("oci-layout:/tmp/nonexistent-for-fetch-kind-test", "")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	b := &ResolvedBundle{Key: "weird:thing", Kind: "unknown"}
+	_, err = c.Fetch(context.Background(), b)
+	if err == nil {
+		t.Fatal("Fetch with unknown kind: want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown bundle kind") {
+		t.Errorf("error = %q, want substring \"unknown bundle kind\"", err)
+	}
+}
+
+func TestEnsureTokenEnv_IsIdempotent(t *testing.T) {
+	// Cannot reliably assert what the env becomes on the first call (sync.Once
+	// may have been tripped by a prior test in this process), but we CAN assert
+	// that a second call with a different token does not change whatever is
+	// already there.
+	ensureTokenEnv("token-A")
+	before := os.Getenv("INPUT_GITHUB-TOKEN")
+	ensureTokenEnv("token-B")
+	after := os.Getenv("INPUT_GITHUB-TOKEN")
+	if before != after {
+		t.Fatalf("ensureTokenEnv mutated env on second call: before=%q after=%q", before, after)
 	}
 }

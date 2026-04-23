@@ -53,15 +53,17 @@ type ResolvedBundle struct {
 // oci-layout source do not need a different entry point.
 //
 // Token is honoured by the remote backend via env lookup
-// (INPUT_GITHUB-TOKEN / GITHUB_TOKEN). If the caller passes an explicit
-// token and the env is empty, we thread it through by setting
-// INPUT_GITHUB-TOKEN for this process. This matches the behaviour of the
-// pre-refactor code, which built an authn.Basic directly from the token
-// arg. No-op for the layout backend.
+// (INPUT_GITHUB-TOKEN / GITHUB_TOKEN). When token is non-empty and
+// INPUT_GITHUB-TOKEN is unset, NewClient writes the token into
+// INPUT_GITHUB-TOKEN for the remote backend's env-based auth. This write
+// happens at most once per process (via sync.Once) — a subsequent
+// NewClient call with a different token is a no-op. For production use
+// this is fine (phpup runs one binary with one token); if you need
+// multiple registries with different credentials in the same process,
+// plumb auth via registry.Open directly once that's supported (slated
+// for PR 2). No-op for the layout backend.
 func NewClient(registryURI, token string) (*Client, error) {
-	if token != "" {
-		setIfUnset("INPUT_GITHUB-TOKEN", token)
-	}
+	ensureTokenEnv(token)
 	s, err := registry.Open(registryURI)
 	if err != nil {
 		return nil, fmt.Errorf("oci.NewClient: %w", err)
@@ -69,10 +71,21 @@ func NewClient(registryURI, token string) (*Client, error) {
 	return &Client{registryURI: registryURI, token: token, store: s}, nil
 }
 
-func setIfUnset(key, value string) {
-	if os.Getenv(key) == "" {
-		_ = os.Setenv(key, value)
+var tokenEnvOnce sync.Once
+
+// ensureTokenEnv writes INPUT_GITHUB-TOKEN=token exactly once per process,
+// and only if the env var is not already set. Subsequent calls (even with
+// a different token) are no-ops — this matches the pre-refactor behaviour
+// where the first NewClient fixed the auth for the process lifetime.
+func ensureTokenEnv(token string) {
+	if token == "" {
+		return
 	}
+	tokenEnvOnce.Do(func() {
+		if os.Getenv("INPUT_GITHUB-TOKEN") == "" {
+			_ = os.Setenv("INPUT_GITHUB-TOKEN", token)
+		}
+	})
 }
 
 // FetchAll concurrently fetches every bundle in the slice. On the first error
@@ -111,6 +124,12 @@ func (c *Client) FetchAll(ctx context.Context, bundles []ResolvedBundle) ([]Fetc
 // package-local Metadata (defaulting SchemaVersion to 1 when absent, matching
 // the pre-refactor permissive behaviour for legacy bundles).
 func (c *Client) Fetch(ctx context.Context, b *ResolvedBundle) (*FetchResult, error) {
+	switch b.Kind {
+	case "php", "ext", "tool":
+		// ok
+	default:
+		return nil, fmt.Errorf("fetch %s: unknown bundle kind %q", b.Key, b.Kind)
+	}
 	ref := registry.Ref{Name: ociName(b), Digest: b.Digest}
 	rc, meta, err := c.store.Fetch(ctx, ref)
 	if err != nil {
