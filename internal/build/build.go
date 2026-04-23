@@ -21,8 +21,14 @@ import (
 // bundle-php / bundle-ext targets. Output is NOT silenced so apt
 // diagnostics (mirror outages, DNS, missing packages) stream through
 // to the user's stderr via DockerRun's default Stdout/Stderr wiring.
+//
+// "file" is required by builders/linux/build-php.sh's patchelf loop
+// (line ~135 does `file "$elf" | grep -q ELF`). GitHub-hosted runners
+// have file preinstalled; bare ubuntu:22.04 doesn't. Without file the
+// ELF check silently returns false, patchelf is skipped, and
+// capture-hermetic-libs later aborts with "no DT_RUNPATH/DT_RPATH".
 const linuxAptPreamble = "apt-get update && " +
-	"apt-get install -y --no-install-recommends curl xz-utils ca-certificates && "
+	"apt-get install -y --no-install-recommends curl xz-utils ca-certificates file && "
 
 // Main is the entry point for `phpup build …`. args is the tail after
 // the "build" subcommand token (so args[0] is "php", "ext", or "cell").
