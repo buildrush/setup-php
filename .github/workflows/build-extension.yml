@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: ''
+      php_core_digest:
+        description: 'OCI digest of prerequisite php-core bundle (sha256:...); Task 5 wires the consumer.'
+        required: false
+        type: string
+        default: ''
       push:
         required: false
         type: boolean

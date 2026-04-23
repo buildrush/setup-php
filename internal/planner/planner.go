@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -23,6 +24,14 @@ type MatrixCell struct {
 	Extension string `json:"extension,omitempty"`
 	ExtVer    string `json:"ext_version,omitempty"`
 	PHPAbi    string `json:"php_abi,omitempty"`
+
+	// CoreDigest is the OCI manifest digest of the prerequisite php-core
+	// bundle for this ext cell (e.g., "sha256:abc..."). Populated ONLY for
+	// ext cells; zero for php/tool cells. Surfaced in the emitted matrix
+	// JSON as `core_digest` so build-extension.yml can pass it to
+	// `phpup build ext --php-core-digest`. omitempty keeps the JSON
+	// backward-compatible — php/tool cells don't gain a noisy empty field.
+	CoreDigest string `json:"core_digest,omitempty"`
 }
 
 // Matrix is the GitHub Actions matrix JSON format.
@@ -60,7 +69,16 @@ func ExpandPHPMatrix(spec *catalog.PHPSpec) []MatrixCell {
 }
 
 // ExpandExtMatrix expands an extension's abi_matrix, applying excludes.
-func ExpandExtMatrix(spec *catalog.ExtensionSpec) []MatrixCell {
+//
+// coreDigestByKey maps a canonical PHP bundle key (matching
+// lockfile.PHPBundleKey — "php:<ver>:<os>:<arch>:<ts>") to the resolved OCI
+// digest of the prerequisite php-core bundle. The resolved digest (if any) is
+// stored on each ext cell's CoreDigest field. Pass nil if no digest context
+// is available; cells will have empty CoreDigest and a warning is logged per
+// unresolved cell. The zero-value behavior intentionally matches the existing
+// "missing ABI row" case (no silent skip) — so Task 5's consumer must treat
+// empty CoreDigest as a hard error, not as "fall back to tag-form".
+func ExpandExtMatrix(spec *catalog.ExtensionSpec, coreDigestByKey map[string]string) []MatrixCell {
 	if spec.Kind == catalog.ExtensionKindBundled {
 		return nil
 	}
@@ -74,13 +92,20 @@ func ExpandExtMatrix(spec *catalog.ExtensionSpec) []MatrixCell {
 						if isExcluded(spec.Exclude, osName, arch, php) {
 							continue
 						}
+						coreKey := fmt.Sprintf("php:%s:%s:%s:%s", php, osName, arch, ts)
+						digest := coreDigestByKey[coreKey]
+						if digest == "" && coreDigestByKey != nil {
+							log.Printf("WARN: ExpandExtMatrix: no core digest for ext=%s ext_ver=%s php=%s os=%s arch=%s ts=%s (key=%s); cell will have empty CoreDigest",
+								spec.Name, ver, php, osName, arch, ts, coreKey)
+						}
 						cells = append(cells, MatrixCell{
-							Extension: spec.Name,
-							ExtVer:    ver,
-							PHPAbi:    fmt.Sprintf("%s-%s", php, ts),
-							OS:        osName,
-							Arch:      arch,
-							TS:        ts,
+							Extension:  spec.Name,
+							ExtVer:     ver,
+							PHPAbi:     fmt.Sprintf("%s-%s", php, ts),
+							OS:         osName,
+							Arch:       arch,
+							TS:         ts,
+							CoreDigest: digest,
 						})
 					}
 				}
