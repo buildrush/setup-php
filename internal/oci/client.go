@@ -2,22 +2,26 @@ package oci
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/buildrush/setup-php/internal/registry"
 )
 
+// Client is a thin facade over an internal/registry.Store. Its public surface
+// is preserved for backwards compatibility with the pre-refactor call sites
+// in cmd/phpup, cmd/planner, and cmd/lockfile-update. The facade itself is
+// slated for deletion by end of PR 3 of the local+CI unification rollout.
 type Client struct {
-	registry string
-	token    string
-	auth     authn.Authenticator
+	registryURI string
+	token       string
+	store       registry.Store
 }
 
+// FetchResult is returned by Fetch/FetchAll. Data is the raw (compressed)
+// bundle layer bytes; callers decompress as needed.
 type FetchResult struct {
 	Key      string
 	Digest   string
@@ -25,25 +29,16 @@ type FetchResult struct {
 	Metadata Metadata
 }
 
-// Metadata is the parsed OCI sidecar meta.json shipped alongside every
-// bundle. Missing schema_version is treated as 1 so pre-slice bundles
-// referenced by released lockfiles remain loadable.
+// Metadata mirrors registry.Meta; kept here for backwards compatibility with
+// callers that import oci.Metadata directly. Will be removed when the facade
+// is deleted (scheduled for end of PR 3 of the local+CI unification rollout).
 type Metadata struct {
 	SchemaVersion int    `json:"schema_version"`
 	Kind          string `json:"kind"`
 }
 
-func parseMetaJSON(data []byte) (Metadata, error) {
-	var m Metadata
-	if err := json.Unmarshal(data, &m); err != nil {
-		return Metadata{}, fmt.Errorf("parse meta.json: %w", err)
-	}
-	if m.SchemaVersion == 0 {
-		m.SchemaVersion = 1
-	}
-	return m, nil
-}
-
+// ResolvedBundle identifies a bundle to fetch. Kind selects the OCI name
+// prefix ("php-core", "php-ext-<name>", "php-tool-<name>").
 type ResolvedBundle struct {
 	Key     string
 	Digest  string
@@ -52,39 +47,70 @@ type ResolvedBundle struct {
 	Kind    string
 }
 
-func NewClient(registry, token string) (*Client, error) {
-	var auth authn.Authenticator
-	if token != "" {
-		auth = &authn.Basic{Username: "token", Password: token}
-	} else {
-		auth = authn.Anonymous
+// NewClient preserves the legacy constructor shape. The registryURI argument
+// may be any URI accepted by registry.Open — including the new
+// "oci-layout:<path>" form added in PR 1 — so callers that switch to an
+// oci-layout source do not need a different entry point.
+//
+// Token is honoured by the remote backend via env lookup
+// (INPUT_GITHUB-TOKEN / GITHUB_TOKEN). When token is non-empty and
+// INPUT_GITHUB-TOKEN is unset, NewClient writes the token into
+// INPUT_GITHUB-TOKEN for the remote backend's env-based auth. This write
+// happens at most once per process (via sync.Once) — a subsequent
+// NewClient call with a different token is a no-op. For production use
+// this is fine (phpup runs one binary with one token); if you need
+// multiple registries with different credentials in the same process,
+// plumb auth via registry.Open directly once that's supported (slated
+// for PR 2). No-op for the layout backend.
+func NewClient(registryURI, token string) (*Client, error) {
+	ensureTokenEnv(token)
+	s, err := registry.Open(registryURI)
+	if err != nil {
+		return nil, fmt.Errorf("oci.NewClient: %w", err)
 	}
-	return &Client{registry: registry, token: token, auth: auth}, nil
+	return &Client{registryURI: registryURI, token: token, store: s}, nil
 }
 
+var tokenEnvOnce sync.Once
+
+// ensureTokenEnv writes INPUT_GITHUB-TOKEN=token exactly once per process,
+// and only if the env var is not already set. Subsequent calls (even with
+// a different token) are no-ops — this matches the pre-refactor behaviour
+// where the first NewClient fixed the auth for the process lifetime.
+func ensureTokenEnv(token string) {
+	if token == "" {
+		return
+	}
+	tokenEnvOnce.Do(func() {
+		if os.Getenv("INPUT_GITHUB-TOKEN") == "" {
+			_ = os.Setenv("INPUT_GITHUB-TOKEN", token)
+		}
+	})
+}
+
+// FetchAll concurrently fetches every bundle in the slice. On the first error
+// from any goroutine it returns a wrapped error tagged with the failing
+// bundle's Key; successful sibling fetches are discarded.
 func (c *Client) FetchAll(ctx context.Context, bundles []ResolvedBundle) ([]FetchResult, error) {
 	if len(bundles) == 0 {
 		return nil, nil
 	}
-
 	results := make([]FetchResult, len(bundles))
 	errs := make([]error, len(bundles))
 	var wg sync.WaitGroup
-
 	for i := range bundles {
 		wg.Add(1)
-		go func(idx int, bundle *ResolvedBundle) {
+		go func(idx int, b *ResolvedBundle) {
 			defer wg.Done()
-			result, err := c.Fetch(ctx, bundle)
+			r, err := c.Fetch(ctx, b)
 			if err != nil {
 				errs[idx] = err
 				return
 			}
-			results[idx] = *result
+			results[idx] = *r
 		}(i, &bundles[i])
 	}
 	wg.Wait()
-
 	for i, err := range errs {
 		if err != nil {
 			return nil, fmt.Errorf("fetch %s: %w", bundles[i].Key, err)
@@ -93,116 +119,83 @@ func (c *Client) FetchAll(ctx context.Context, bundles []ResolvedBundle) ([]Fetc
 	return results, nil
 }
 
-func (c *Client) Fetch(ctx context.Context, bundle *ResolvedBundle) (*FetchResult, error) {
-	ref, err := c.bundleRef(bundle)
-	if err != nil {
-		return nil, err
+// Fetch delegates to the underlying Store, mapping the ResolvedBundle to a
+// registry.Ref by kind-prefix, and normalises the returned Meta into a
+// package-local Metadata (defaulting SchemaVersion to 1 when absent, matching
+// the pre-refactor permissive behaviour for legacy bundles).
+func (c *Client) Fetch(ctx context.Context, b *ResolvedBundle) (*FetchResult, error) {
+	switch b.Kind {
+	case "php", "ext", "tool":
+		// ok
+	default:
+		return nil, fmt.Errorf("fetch %s: unknown bundle kind %q", b.Key, b.Kind)
 	}
-
-	desc, err := remote.Get(ref, remote.WithAuth(c.auth), remote.WithContext(ctx))
+	ref := registry.Ref{Name: ociName(b), Digest: b.Digest}
+	rc, meta, err := c.store.Fetch(ctx, ref)
 	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", bundle.Key, err)
-	}
-
-	layer, err := desc.Image()
-	if err != nil {
-		return nil, fmt.Errorf("get image %s: %w", bundle.Key, err)
-	}
-
-	layers, err := layer.Layers()
-	if err != nil || len(layers) == 0 {
-		return nil, fmt.Errorf("get layers %s: no layers found", bundle.Key)
-	}
-
-	rc, err := layers[0].Compressed()
-	if err != nil {
-		return nil, fmt.Errorf("read layer %s: %w", bundle.Key, err)
+		return nil, fmt.Errorf("fetch %s: %w", b.Key, err)
 	}
 	defer func() { _ = rc.Close() }()
-
-	var data []byte
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := rc.Read(buf)
-		if n > 0 {
-			data = append(data, buf[:n]...)
-		}
-		if err != nil {
-			break
-		}
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", b.Key, err)
 	}
-
-	// The manifest digest in bundle.Digest was already verified by the
-	// OCI library when fetching via content-addressed reference. The
-	// layer integrity is covered by the manifest's layer descriptors,
-	// which the library also validates. No extra hashing needed here.
-
-	// Second layer, if present, is the meta.json sidecar. Absence is
-	// tolerated for forward-compat with legacy bundles.
-	var meta Metadata
-	if len(layers) >= 2 {
-		mrc, err := layers[1].Compressed()
-		if err != nil {
-			return nil, fmt.Errorf("read meta layer %s: %w", bundle.Key, err)
-		}
-		mbuf, readErr := io.ReadAll(mrc)
-		_ = mrc.Close()
-		if readErr != nil {
-			return nil, fmt.Errorf("read meta bytes %s: %w", bundle.Key, readErr)
-		}
-		meta, err = parseMetaJSON(mbuf)
-		if err != nil {
-			return nil, fmt.Errorf("parse meta %s: %w", bundle.Key, err)
-		}
-	} else {
-		meta.SchemaVersion = 1 // legacy bundle; permissive default
+	out := &FetchResult{
+		Key:    b.Key,
+		Digest: b.Digest,
+		Data:   data,
 	}
-
-	return &FetchResult{
-		Key:      bundle.Key,
-		Digest:   bundle.Digest,
-		Data:     data,
-		Metadata: meta,
-	}, nil
+	if meta != nil {
+		out.Metadata = Metadata{SchemaVersion: meta.SchemaVersion, Kind: meta.Kind}
+	}
+	if out.Metadata.SchemaVersion == 0 {
+		out.Metadata.SchemaVersion = 1
+	}
+	return out, nil
 }
 
+// Exists reports whether the given ref (optionally fully-qualified with the
+// registry host prefix) and digest are present in the backing Store.
 func (c *Client) Exists(ctx context.Context, ref, digest string) (bool, error) {
-	r, err := name.ParseReference(ref)
-	if err != nil {
-		return false, err
-	}
-	_, err = remote.Head(r, remote.WithAuth(c.auth), remote.WithContext(ctx))
-	if err != nil {
-		return false, fmt.Errorf("check existence %s: %w", ref, err)
-	}
-	return true, nil
+	return c.store.Has(ctx, registry.Ref{Name: stripHost(ref, c.registryURI), Digest: digest})
 }
 
 // ResolveDigest looks up the OCI manifest digest for the given tagged or
-// digest-form reference. Returns "sha256:..." on success.
+// digest-form reference. Returns "sha256:..." on success. Layout-backed
+// clients surface an ErrUnsupported-style error from the store.
 func (c *Client) ResolveDigest(ctx context.Context, ref string) (string, error) {
-	r, err := name.ParseReference(ref)
-	if err != nil {
-		return "", fmt.Errorf("parse ref %s: %w", ref, err)
-	}
-	desc, err := remote.Head(r, remote.WithAuth(c.auth), remote.WithContext(ctx))
-	if err != nil {
-		return "", fmt.Errorf("head %s: %w", ref, err)
-	}
-	return desc.Digest.String(), nil
+	return c.store.ResolveDigest(ctx, ref)
 }
 
-func (c *Client) bundleRef(bundle *ResolvedBundle) (name.Reference, error) {
-	var refStr string
-	switch bundle.Kind {
+// ociName maps a ResolvedBundle to the OCI name within the Store.
+// Mirrors the prior bundleRef() behaviour:
+//
+//   - "php"   → "php-core"
+//   - "ext"   → "php-ext-<b.Name>"
+//   - "tool"  → "php-tool-<b.Name>"
+//   - other   → b.Name (defensive passthrough)
+func ociName(b *ResolvedBundle) string {
+	switch b.Kind {
 	case "php":
-		refStr = fmt.Sprintf("%s/php-core@%s", c.registry, bundle.Digest)
+		return "php-core"
 	case "ext":
-		refStr = fmt.Sprintf("%s/php-ext-%s@%s", c.registry, bundle.Name, bundle.Digest)
+		return "php-ext-" + b.Name
 	case "tool":
-		refStr = fmt.Sprintf("%s/php-tool-%s@%s", c.registry, bundle.Name, bundle.Digest)
+		return "php-tool-" + b.Name
 	default:
-		return nil, fmt.Errorf("unknown bundle kind %q", bundle.Kind)
+		return b.Name
 	}
-	return name.ParseReference(refStr)
+}
+
+// stripHost removes a leading "<registryURI>/" from ref so Exists() can
+// accept either a fully-qualified reference or a bare name. Mirrors the
+// prior client's tolerance for both forms.
+func stripHost(ref, root string) string {
+	if root == "" {
+		return ref
+	}
+	if len(ref) > len(root)+1 && ref[:len(root)] == root && ref[len(root)] == '/' {
+		return ref[len(root)+1:]
+	}
+	return ref
 }

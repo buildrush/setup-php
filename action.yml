@@ -45,6 +45,13 @@ inputs:
     description: 'GitHub token for authenticated registry access'
     required: false
     default: ${{ github.token }}
+  registry:
+    description: >
+      OCI artifact store used to fetch PHP and extension bundles.
+      Defaults to ghcr.io/buildrush. Set to oci-layout:<path> to
+      fetch from a local OCI-layout directory (used by local CI).
+    required: false
+    default: ""
 outputs:
   php-version:
     description: 'The installed PHP version'

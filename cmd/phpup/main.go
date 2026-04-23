@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -29,11 +30,33 @@ import (
 //go:embed bundles.lock
 var embeddedLockfile []byte
 
+// resolveRegistry picks the registry URI with precedence:
+//  1. --registry flag (cliFlag, passed in)
+//  2. INPUT_REGISTRY env var (GitHub Actions input convention)
+//  3. PHPUP_REGISTRY env var (local/CLI convention)
+//  4. default "ghcr.io/buildrush"
+func resolveRegistry(cliFlag string) string {
+	if cliFlag != "" {
+		return cliFlag
+	}
+	if v := os.Getenv("INPUT_REGISTRY"); v != "" {
+		return v
+	}
+	if v := os.Getenv("PHPUP_REGISTRY"); v != "" {
+		return v
+	}
+	return "ghcr.io/buildrush"
+}
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--version" {
 		fmt.Printf("phpup %s (%s) built %s\n", version.Version, version.Commit, version.BuildDate)
 		return
 	}
+
+	registryFlag := flag.String("registry", "",
+		"OCI artifact store (e.g., ghcr.io/buildrush or oci-layout:./out/oci-layout). Overrides INPUT_REGISTRY / PHPUP_REGISTRY; defaults to ghcr.io/buildrush.")
+	flag.Parse()
 
 	ctx := context.Background()
 
@@ -136,7 +159,7 @@ func main() {
 	if token == "" {
 		token = os.Getenv("GITHUB_TOKEN")
 	}
-	registry := "ghcr.io/buildrush"
+	registry := resolveRegistry(*registryFlag)
 	client, err := oci.NewClient(registry, token)
 	if err != nil {
 		log.Fatalf("create OCI client: %v", err)
