@@ -9,6 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/buildrush/setup-php/internal/registry"
 )
@@ -161,11 +164,319 @@ func BuildPHP(ctx context.Context, args []string) error {
 	return nil
 }
 
-// BuildExt is declared but not implemented yet; it lands in Task 5. The
-// stub returns a recognisable error so Main's dispatch compiles and
-// callers see a clear "not yet" rather than an obscure panic.
-func BuildExt(_ context.Context, _ []string) error {
-	return errors.New("phpup build ext: not yet supported in this build; will land in a subsequent release")
+// BuildExt runs the php-ext build end to end. args is everything after
+// "build ext" (flags). Returns nil on success, or an error with the
+// "phpup build ext: <reason>" prefix the CLI dispatcher expects.
+//
+// Unlike BuildPHP, the ext build needs a prerequisite php-core bundle —
+// the extension is dynamically linked against a specific PHP. Per spec,
+// builders/** stays unchanged, so instead of modifying fetch-core.sh we
+// spin up an ephemeral distribution:3 sidecar registry, copy the
+// prerequisite php-core@sha256 into it, and override REGISTRY for the
+// build container so fetch-core.sh pulls from the sidecar transparently.
+func BuildExt(ctx context.Context, args []string) error {
+	opts, err := parseExtFlags(args)
+	if err != nil {
+		return err
+	}
+
+	// 1. Spec-hash.
+	specHash, err := ComputeSpecHash(&SpecHashInputs{
+		Kind:    "ext",
+		Name:    opts.Name,
+		Version: opts.Version,
+		OS:      "linux",
+		Arch:    opts.Arch,
+		PHPABI:  opts.PHPABI,
+		TS:      tsFromPHPABI(opts.PHPABI),
+		Repo:    opts.Repo,
+	})
+	if err != nil {
+		return fmt.Errorf("phpup build ext: %w", err)
+	}
+
+	// 2. Open target store + cache-probe.
+	store, err := registry.Open(opts.Registry)
+	if err != nil {
+		return fmt.Errorf("phpup build ext: open registry: %w", err)
+	}
+	bundleName := "php-ext-" + opts.Name
+	// Remote backends return ErrUnsupported for LookupBySpec; treat that
+	// as a soft miss so callers without an oci-layout cache fall through
+	// to building. Hard errors from a layout backend still propagate.
+	ref, hit, err := store.LookupBySpec(ctx, bundleName, specHash)
+	if errors.Is(err, registry.ErrUnsupported) {
+		hit, err = false, nil
+	}
+	if err != nil {
+		return fmt.Errorf("phpup build ext: lookup by spec: %w", err)
+	}
+	if hit {
+		fmt.Printf("phpup build ext: cache hit %s (spec-hash %s)\n", ref.Digest, specHash)
+		return nil
+	}
+
+	// 3. Start sidecar + seed prerequisite core. The sidecar is tied to
+	// this invocation's lifetime; teardown is unconditional (including
+	// on error paths below) via defer.
+	lifecycle := currentSidecarLifecycle()
+	sc, stopSidecar, err := lifecycle.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("phpup build ext: start sidecar: %w", err)
+	}
+	defer func() {
+		// Fresh context with a generous timeout so teardown still runs
+		// if the caller's ctx has already been cancelled (which is the
+		// common case when the build itself failed). 30s is
+		// comfortably more than `docker rm -f` + `docker network rm`
+		// need under load.
+		stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = stopSidecar(stopCtx)
+	}()
+
+	// Core tag matches what fetch-core.sh constructs inside the build
+	// container: "<php-ver>-<os>-<arch>-<ts>". This MUST line up or the
+	// oras pull will miss the seeded image.
+	coreTag := coreTagForFetch(opts.PHPABI, opts.Arch)
+	coreRef := registry.Ref{Name: "php-core", Digest: opts.CoreDigest}
+	if err := lifecycle.SeedCore(ctx, sc, store, coreRef, "buildrush", coreTag); err != nil {
+		return fmt.Errorf("phpup build ext: seed core: %w", err)
+	}
+
+	// 4. Prepare output dir (default: <repo>/build/ext/<slug>/ ;
+	// --out-dir overrides verbatim).
+	outDir := resolveExtOutDir(opts)
+	if err := prepareOutDir(outDir); err != nil {
+		return fmt.Errorf("phpup build ext: %w", err)
+	}
+	absOutDir, err := filepath.Abs(outDir)
+	if err != nil {
+		return fmt.Errorf("phpup build ext: resolve out dir: %w", err)
+	}
+
+	// 5. Load build_deps.linux from catalog (build-ext.sh reads
+	// BUILD_DEPS env). Absent build_deps = empty = no-op in the
+	// builder script.
+	buildDeps, err := loadExtBuildDeps(filepath.Join(opts.Repo, "catalog", "extensions", opts.Name+".yaml"))
+	if err != nil {
+		return fmt.Errorf("phpup build ext: load build_deps: %w", err)
+	}
+
+	// 6. Run build container on the sidecar's network so
+	// fetch-core.sh can reach the sidecar by in-network hostname.
+	image, err := ubuntuImage(opts.OS)
+	if err != nil {
+		return fmt.Errorf("phpup build ext: %w", err)
+	}
+	platform, err := dockerPlatform(opts.Arch)
+	if err != nil {
+		return fmt.Errorf("phpup build ext: %w", err)
+	}
+	runOpts := &DockerRunOpts{
+		Image:    image,
+		Platform: platform,
+		Network:  sc.Network,
+		Mounts: []Mount{
+			{Host: opts.Repo, Container: "/workspace", ReadOnly: true},
+			// Mount at /tmp (not /tmp/out) because builders/linux/build-ext.sh
+			// calls pack-bundle.sh with the hardcoded output path
+			// /tmp/bundle.tar.zst — mirroring the php-core build. See
+			// BuildPHP for the full rationale.
+			{Host: absOutDir, Container: "/tmp", ReadOnly: false},
+		},
+		Env: map[string]string{
+			"EXT_NAME":    opts.Name,
+			"EXT_VERSION": opts.Version,
+			"PHP_ABI":     opts.PHPABI,
+			"ARCH":        opts.Arch,
+			"WORKSPACE":   "/workspace",
+			"OUTPUT_DIR":  "/tmp/ext-out",
+			// REGISTRY override: fetch-core.sh defaults to
+			// ghcr.io/buildrush but honours REGISTRY if set. We point
+			// it at the sidecar so the builder pulls the seeded
+			// php-core without any script change.
+			"REGISTRY":   sc.InNetworkHost + "/buildrush",
+			"BUILD_DEPS": buildDeps,
+		},
+		Cmd: []string{"bash", "-c", linuxAptPreamble + "/workspace/builders/linux/build-ext.sh"},
+	}
+	if err := DockerRun(ctx, runOpts); err != nil {
+		return fmt.Errorf("phpup build ext: docker: %w", err)
+	}
+
+	// 7. Read the bundle + meta from the mount dir.
+	bundlePath := filepath.Join(absOutDir, "bundle.tar.zst")
+	metaPath := filepath.Join(absOutDir, "meta.json")
+	bundle, err := os.Open(bundlePath)
+	if err != nil {
+		return fmt.Errorf("phpup build ext: open bundle: %w", err)
+	}
+	defer func() { _ = bundle.Close() }()
+	meta, err := parseMetaJSONFile(metaPath)
+	if err != nil {
+		return fmt.Errorf("phpup build ext: parse meta.json: %w", err)
+	}
+
+	// 8. Push to the store.
+	pushRef := registry.Ref{Name: bundleName}
+	ann := registry.Annotations{BundleName: bundleName, SpecHash: specHash}
+	if err := store.Push(ctx, pushRef, bundle, meta, ann); err != nil {
+		return fmt.Errorf("phpup build ext: push bundle: %w", err)
+	}
+
+	fmt.Printf("phpup build ext: built and pushed %s (spec-hash %s) to %s\n", bundleName, specHash, opts.Registry)
+	return nil
+}
+
+// extOpts is the parsed flag set for `phpup build ext`. Repo is
+// resolved to an absolute path during parsing so downstream code
+// (spec-hash, docker bind mount) can use it directly. CoreDigest
+// addresses the prerequisite php-core bundle that gets seeded into
+// the sidecar — the caller is responsible for resolving it (typically
+// via the lockfile or a prior BuildPHP invocation).
+type extOpts struct {
+	Name       string // "redis"
+	Version    string // "6.2.0"
+	PHPABI     string // "8.4-nts"
+	OS         string // "jammy" or "noble" (after normalisation)
+	Arch       string // "x86_64" or "aarch64" (after normalisation)
+	Registry   string
+	Repo       string
+	OutDir     string
+	CoreDigest string // "sha256:..." — required; resolved by caller
+}
+
+// parseExtFlags parses the flag tail for `phpup build ext`. The FlagSet
+// uses ContinueOnError so callers get back an error instead of a process
+// exit — makes the surface testable without os.Exit acrobatics.
+func parseExtFlags(args []string) (*extOpts, error) {
+	fs := flag.NewFlagSet("phpup build ext", flag.ContinueOnError)
+	extName := fs.String("ext", "", "Extension name, e.g. redis (required)")
+	extVer := fs.String("ext-version", "", "Extension version (required)")
+	phpAbi := fs.String("php-abi", "", "PHP ABI, e.g. 8.4-nts (required)")
+	osFlag := fs.String("os", "jammy", "Ubuntu flavour: jammy (22.04) or noble (24.04)")
+	arch := fs.String("arch", "x86_64", "Target arch: x86_64 or aarch64 (amd64/arm64 aliases accepted)")
+	registryFlag := fs.String("registry", "oci-layout:./out/oci-layout",
+		"Target registry URI (oci-layout:<path> or ghcr.io/<owner>)")
+	repo := fs.String("repo", ".", "Path to setup-php repo root")
+	outDir := fs.String("out-dir", "",
+		"Docker output directory (defaults to <repo>/build/ext/<name>-<version>-<php_abi>-<os>-<arch>/)")
+	coreDigest := fs.String("php-core-digest", "",
+		"Digest of the prerequisite php-core bundle (sha256:...). Required.")
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	if *extName == "" {
+		return nil, errors.New("phpup build ext: --ext is required")
+	}
+	if *extVer == "" {
+		return nil, errors.New("phpup build ext: --ext-version is required")
+	}
+	if *phpAbi == "" {
+		return nil, errors.New("phpup build ext: --php-abi is required")
+	}
+	if *coreDigest == "" {
+		return nil, errors.New("phpup build ext: --php-core-digest is required")
+	}
+
+	archNormalized, err := normalizeArch(*arch)
+	if err != nil {
+		return nil, fmt.Errorf("phpup build ext: %w", err)
+	}
+	absRepo, err := filepath.Abs(*repo)
+	if err != nil {
+		return nil, fmt.Errorf("phpup build ext: resolve repo path: %w", err)
+	}
+
+	return &extOpts{
+		Name:       *extName,
+		Version:    *extVer,
+		PHPABI:     *phpAbi,
+		OS:         *osFlag,
+		Arch:       archNormalized,
+		Registry:   *registryFlag,
+		Repo:       absRepo,
+		OutDir:     *outDir,
+		CoreDigest: *coreDigest,
+	}, nil
+}
+
+// resolveExtOutDir derives the project-relative build output directory
+// from the input tuple when the caller didn't pass --out-dir
+// explicitly. Mirrors Task 4's resolveOutDir shape but slots under
+// <repo>/build/ext/ instead of <repo>/build/php/:
+//
+//	<repo>/build/ext/<name>-<version>-<php_abi>-<os>-<arch>/
+//
+// Keying on the same tuple as the spec-hash makes the path
+// deterministic: repeated runs with the same inputs overwrite the
+// same dir instead of piling up random tempdirs.
+func resolveExtOutDir(opts *extOpts) string {
+	if opts.OutDir != "" {
+		return opts.OutDir
+	}
+	slug := opts.Name + "-" + opts.Version + "-" + opts.PHPABI + "-" + opts.OS + "-" + opts.Arch
+	return filepath.Join(opts.Repo, "build", "ext", slug)
+}
+
+// coreTagForFetch assembles the OCI tag fetch-core.sh constructs for
+// the prerequisite php-core. The format — "<php_ver>-<os>-<arch>-<ts>" —
+// is baked into builders/common/fetch-core.sh and must match exactly
+// or the sidecar pull inside the build container will miss. Example:
+// PHPABI="8.4-nts", arch="x86_64" → "8.4-linux-x86_64-nts".
+func coreTagForFetch(phpABI, arch string) string {
+	ts := tsFromPHPABI(phpABI)
+	ver := strings.TrimSuffix(phpABI, "-"+ts)
+	return ver + "-linux-" + arch + "-" + ts
+}
+
+// tsFromPHPABI extracts the thread-safety suffix from a PHPABI string
+// of the form "<version>-<ts>". Returns "nts" as a safe default if the
+// input is malformed — the spec-hash then diverges from a correct
+// invocation, guaranteeing a cache miss rather than silent cross-use.
+func tsFromPHPABI(phpABI string) string {
+	i := strings.LastIndex(phpABI, "-")
+	if i < 0 {
+		return "nts"
+	}
+	return phpABI[i+1:]
+}
+
+// loadExtBuildDeps reads catalog/extensions/<name>.yaml and returns the
+// .build_deps.linux list joined by single spaces (the BUILD_DEPS env
+// shape build-ext.sh expects). Mirrors the yq invocation in
+// build-extension.yml:
+//
+//	yq eval '.build_deps.linux // [] | join(" ")' catalog/extensions/<name>.yaml
+//
+// Absent or empty returns "" — the builder treats that as a no-op.
+// Reading YAML into map[string]any keeps us schema-agnostic so catalog
+// additions don't require Go changes.
+func loadExtBuildDeps(path string) (string, error) {
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return "", fmt.Errorf("read extension catalog: %w", err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return "", fmt.Errorf("parse extension catalog: %w", err)
+	}
+	bd, ok := doc["build_deps"].(map[string]any)
+	if !ok {
+		return "", nil
+	}
+	linux, ok := bd["linux"].([]any)
+	if !ok {
+		return "", nil
+	}
+	pkgs := make([]string, 0, len(linux))
+	for _, p := range linux {
+		if s, ok := p.(string); ok {
+			pkgs = append(pkgs, s)
+		}
+	}
+	return strings.Join(pkgs, " "), nil
 }
 
 // phpOpts is the parsed flag set for `phpup build php`. Repo is resolved

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -40,7 +41,11 @@ func writeRepoFixture(t *testing.T, dir string) {
 	mustWrite("builders/common/fetch-core.sh", "#!/bin/bash\n")
 	mustWrite("builders/common/builder-os.env", "BUILDER_OS=ubuntu-22.04\n")
 	mustWrite("catalog/php.yaml", "versions:\n  \"8.4\":\n    sources:\n      url: https://example.com/php-8.4.0.tar.xz\n")
-	mustWrite("catalog/extensions/redis.yaml", "name: redis\nversions:\n  - \"6.2.0\"\n")
+	// Extension catalog with a real build_deps.linux list so
+	// loadExtBuildDeps has something to parse. The shape matches
+	// catalog/extensions/amqp.yaml's production form (see
+	// .github/workflows/build-extension.yml's yq invocation).
+	mustWrite("catalog/extensions/redis.yaml", "name: redis\nversions:\n  - \"6.2.0\"\nbuild_deps:\n  linux:\n    - libssl-dev\n")
 }
 
 // seedLayout pushes a manifest into an oci-layout so BuildPHP's cache
@@ -65,7 +70,16 @@ func seedLayout(t *testing.T, dir, bundleName, specHash string) string {
 // the output mount so BuildPHP's read-push step can proceed without a
 // real docker invocation. Looks for the mount at /tmp (matching the
 // production mount contract — see BuildPHP's Mounts comment for why).
+// Defaults to kind=php-core; use fakeRunnerKind when the test needs a
+// different meta.json kind (e.g. "php-ext" for BuildExt).
 func fakeRunner(bundleBytes []byte) RunnerFunc {
+	return fakeRunnerKind(bundleBytes, "php-core")
+}
+
+// fakeRunnerKind is fakeRunner parameterised on the meta.json kind field
+// so BuildExt tests can produce a synthetic php-ext bundle without
+// tripping BuildPHP's schema-version assumption.
+func fakeRunnerKind(bundleBytes []byte, kind string) RunnerFunc {
 	return func(_ context.Context, opts *DockerRunOpts) error {
 		var outHost string
 		for _, m := range opts.Mounts {
@@ -80,13 +94,54 @@ func fakeRunner(bundleBytes []byte) RunnerFunc {
 		if err := os.WriteFile(filepath.Join(outHost, "bundle.tar.zst"), bundleBytes, 0o644); err != nil {
 			return err
 		}
-		meta := map[string]any{"schema_version": 3, "kind": "php-core"}
+		meta := map[string]any{"schema_version": 3, "kind": kind}
 		mjson, err := json.Marshal(meta)
 		if err != nil {
 			return err
 		}
 		return os.WriteFile(filepath.Join(outHost, "meta.json"), mjson, 0o644)
 	}
+}
+
+// fakeSidecar is a SidecarLifecycle that doesn't touch docker. Start
+// returns a placeholder *Sidecar and a no-op stop; SeedCore records
+// the call for assertions. All counts are atomic so tests can safely
+// inspect them after concurrent dispatch (even though BuildExt itself
+// is single-goroutine).
+type fakeSidecar struct {
+	startCalls  atomic.Int32
+	seedCalls   atomic.Int32
+	stopCalls   atomic.Int32
+	recordedRef registry.Ref
+	recordedTag string
+	recordedOwn string
+}
+
+// Start implements SidecarLifecycle; returns a synthetic sidecar with
+// placeholder Network/hostnames that pass through DockerRunOpts without
+// ever being dialled.
+func (f *fakeSidecar) Start(_ context.Context) (*Sidecar, func(context.Context) error, error) {
+	f.startCalls.Add(1)
+	sc := &Sidecar{
+		Name:          "fake-sidecar",
+		Network:       "fake-net",
+		InNetworkHost: "fake-sidecar:5000",
+		HostHost:      "127.0.0.1:0",
+	}
+	return sc, func(context.Context) error {
+		f.stopCalls.Add(1)
+		return nil
+	}, nil
+}
+
+// SeedCore implements SidecarLifecycle; records the ref/tag so tests
+// can assert the right core was requested and swallows all I/O.
+func (f *fakeSidecar) SeedCore(_ context.Context, _ *Sidecar, _ registry.Store, ref registry.Ref, owner, tag string) error {
+	f.seedCalls.Add(1)
+	f.recordedRef = ref
+	f.recordedTag = tag
+	f.recordedOwn = owner
+	return nil
 }
 
 func TestBuildPHP_CacheHit_ShortCircuitsWithoutRunning(t *testing.T) {
@@ -384,10 +439,304 @@ func TestMain_EmptyArgs_Errors(t *testing.T) {
 	}
 }
 
-func TestMain_ExtDispatch_ReturnsStub(t *testing.T) {
+// TestMain_ExtDispatch_RoutesToBuildExt verifies that `phpup build ext`
+// routes through to BuildExt's flag parsing — calling with no flags
+// trips the --ext required error, which is BuildExt's first validation
+// step. Confirms the Main switch does not fall through to an unrelated
+// branch.
+func TestMain_ExtDispatch_RoutesToBuildExt(t *testing.T) {
 	err := Main([]string{"ext"})
-	if err == nil || !strings.Contains(err.Error(), "not yet supported") {
-		t.Errorf("Main([]string{\"ext\"}) err = %v, want containing \"not yet supported\"", err)
+	if err == nil || !strings.Contains(err.Error(), "--ext is required") {
+		t.Errorf("Main([]string{\"ext\"}) err = %v, want containing \"--ext is required\"", err)
+	}
+}
+
+// TestBuildExt_CacheHit_ShortCircuits seeds the layout with a
+// php-ext-redis manifest annotated with the expected spec-hash and
+// verifies BuildExt returns "cache hit" without starting the sidecar
+// or invoking the runner.
+func TestBuildExt_CacheHit_ShortCircuits(t *testing.T) {
+	repo := t.TempDir()
+	writeRepoFixture(t, repo)
+	layoutDir := filepath.Join(t.TempDir(), "layout")
+
+	hash, err := ComputeSpecHash(&SpecHashInputs{
+		Kind: "ext", Name: "redis", Version: "6.2.0",
+		OS: "linux", Arch: "x86_64", PHPABI: "8.4-nts", TS: "nts",
+		Repo: repo,
+	})
+	if err != nil {
+		t.Fatalf("ComputeSpecHash: %v", err)
+	}
+	layoutURI := seedLayout(t, layoutDir, "php-ext-redis", hash)
+
+	var runnerCalled bool
+	restoreRunner := SetRunner(func(_ context.Context, _ *DockerRunOpts) error {
+		runnerCalled = true
+		return errors.New("runner should not be called on cache hit")
+	})
+	defer restoreRunner()
+
+	fs := &fakeSidecar{}
+	restoreSidecar := SetSidecarLifecycle(fs)
+	defer restoreSidecar()
+
+	out := captureStdout(t, func() {
+		err = BuildExt(context.Background(), []string{
+			"--ext", "redis",
+			"--ext-version", "6.2.0",
+			"--php-abi", "8.4-nts",
+			"--php-core-digest", "sha256:" + strings.Repeat("0", 64),
+			"--registry", layoutURI,
+			"--repo", repo,
+			"--out-dir", t.TempDir(),
+		})
+	})
+	if err != nil {
+		t.Fatalf("BuildExt: %v", err)
+	}
+	if runnerCalled {
+		t.Error("runner was called on cache hit")
+	}
+	if fs.startCalls.Load() != 0 {
+		t.Errorf("sidecar.Start called %d times on cache hit, want 0", fs.startCalls.Load())
+	}
+	if !strings.Contains(out, "cache hit") {
+		t.Errorf("stdout = %q, want contains \"cache hit\"", out)
+	}
+}
+
+// TestBuildExt_CacheMiss_StartsSidecarSeedsCorePushes is the integration
+// cousin of TestBuildPHP_CacheMiss_InvokesRunnerThenPushes: verifies
+// that on an empty layout, BuildExt (a) starts the sidecar, (b) seeds
+// the prerequisite core with the expected digest+tag, (c) runs the
+// build, (d) pushes the resulting bundle. All via fakes — no real
+// docker, no real registry.
+func TestBuildExt_CacheMiss_StartsSidecarSeedsCorePushes(t *testing.T) {
+	repo := t.TempDir()
+	writeRepoFixture(t, repo)
+	layoutDir := filepath.Join(t.TempDir(), "layout")
+	layoutURI := "oci-layout:" + layoutDir
+
+	restoreRunner := SetRunner(fakeRunnerKind([]byte("synthetic-ext-bundle"), "php-ext"))
+	defer restoreRunner()
+
+	fs := &fakeSidecar{}
+	restoreSidecar := SetSidecarLifecycle(fs)
+	defer restoreSidecar()
+
+	coreDigest := "sha256:" + strings.Repeat("a", 64)
+	err := BuildExt(context.Background(), []string{
+		"--ext", "redis",
+		"--ext-version", "6.2.0",
+		"--php-abi", "8.4-nts",
+		"--php-core-digest", coreDigest,
+		"--registry", layoutURI,
+		"--repo", repo,
+		"--out-dir", t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("BuildExt: %v", err)
+	}
+
+	// Sidecar was started, seeded once, and stopped.
+	if fs.startCalls.Load() != 1 {
+		t.Errorf("startCalls = %d, want 1", fs.startCalls.Load())
+	}
+	if fs.seedCalls.Load() != 1 {
+		t.Errorf("seedCalls = %d, want 1", fs.seedCalls.Load())
+	}
+	if fs.stopCalls.Load() != 1 {
+		t.Errorf("stopCalls = %d, want 1", fs.stopCalls.Load())
+	}
+	// SeedCore received the right ref and tag.
+	if fs.recordedRef.Name != "php-core" || fs.recordedRef.Digest != coreDigest {
+		t.Errorf("recordedRef = %+v, want {Name:php-core Digest:%s}", fs.recordedRef, coreDigest)
+	}
+	wantTag := "8.4-linux-x86_64-nts"
+	if fs.recordedTag != wantTag {
+		t.Errorf("recordedTag = %q, want %q", fs.recordedTag, wantTag)
+	}
+	if fs.recordedOwn != "buildrush" {
+		t.Errorf("recordedOwn = %q, want buildrush", fs.recordedOwn)
+	}
+
+	// Pushed bundle is discoverable via LookupBySpec.
+	hash, err := ComputeSpecHash(&SpecHashInputs{
+		Kind: "ext", Name: "redis", Version: "6.2.0",
+		OS: "linux", Arch: "x86_64", PHPABI: "8.4-nts", TS: "nts",
+		Repo: repo,
+	})
+	if err != nil {
+		t.Fatalf("ComputeSpecHash: %v", err)
+	}
+	s, _ := registry.Open(layoutURI)
+	ref, hit, err := s.LookupBySpec(context.Background(), "php-ext-redis", hash)
+	if err != nil || !hit {
+		t.Fatalf("LookupBySpec after build: hit=%v err=%v", hit, err)
+	}
+	if ref.Digest == "" {
+		t.Error("pushed ref has empty digest")
+	}
+}
+
+// TestBuildExt_RunnerError_Propagates verifies the build-container
+// exit code surfaces as an error with the expected prefix. Also
+// doubles as a teardown probe: fakeSidecar.stopCalls MUST still be 1
+// after the error path exits, confirming the defer fires even on
+// failure.
+func TestBuildExt_RunnerError_Propagates(t *testing.T) {
+	repo := t.TempDir()
+	writeRepoFixture(t, repo)
+	layoutURI := "oci-layout:" + filepath.Join(t.TempDir(), "layout")
+
+	restoreRunner := SetRunner(func(_ context.Context, _ *DockerRunOpts) error {
+		return errors.New("boom")
+	})
+	defer restoreRunner()
+
+	fs := &fakeSidecar{}
+	restoreSidecar := SetSidecarLifecycle(fs)
+	defer restoreSidecar()
+
+	err := BuildExt(context.Background(), []string{
+		"--ext", "redis",
+		"--ext-version", "6.2.0",
+		"--php-abi", "8.4-nts",
+		"--php-core-digest", "sha256:" + strings.Repeat("b", 64),
+		"--registry", layoutURI,
+		"--repo", repo,
+		"--out-dir", t.TempDir(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("BuildExt err = %v, want containing \"boom\"", err)
+	}
+	if fs.stopCalls.Load() != 1 {
+		t.Errorf("stopCalls after error = %d, want 1 (teardown defer must run)", fs.stopCalls.Load())
+	}
+}
+
+// TestBuildExt_MissingFlags_Errors sweeps through each required flag
+// and verifies parseExtFlags rejects the omission with a clear message.
+func TestBuildExt_MissingFlags_Errors(t *testing.T) {
+	cases := []struct {
+		name    string
+		args    []string
+		wantMsg string
+	}{
+		{"no ext", []string{"--ext-version", "1", "--php-abi", "8.4-nts", "--php-core-digest", "sha256:x"}, "--ext is required"},
+		{"no ext-version", []string{"--ext", "redis", "--php-abi", "8.4-nts", "--php-core-digest", "sha256:x"}, "--ext-version is required"},
+		{"no php-abi", []string{"--ext", "redis", "--ext-version", "1", "--php-core-digest", "sha256:x"}, "--php-abi is required"},
+		{"no php-core-digest", []string{"--ext", "redis", "--ext-version", "1", "--php-abi", "8.4-nts"}, "--php-core-digest is required"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := BuildExt(context.Background(), tc.args)
+			if err == nil || !strings.Contains(err.Error(), tc.wantMsg) {
+				t.Errorf("BuildExt err = %v, want containing %q", err, tc.wantMsg)
+			}
+		})
+	}
+}
+
+// TestBuildExt_UnknownArch_Errors ensures the arch normalisation
+// rejects bogus inputs before we ever touch the sidecar or runner.
+func TestBuildExt_UnknownArch_Errors(t *testing.T) {
+	repo := t.TempDir()
+	writeRepoFixture(t, repo)
+	err := BuildExt(context.Background(), []string{
+		"--ext", "redis", "--ext-version", "6.2.0",
+		"--php-abi", "8.4-nts", "--php-core-digest", "sha256:x",
+		"--arch", "bogus",
+		"--registry", "oci-layout:" + filepath.Join(t.TempDir(), "layout"),
+		"--repo", repo,
+		"--out-dir", t.TempDir(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "unknown arch") {
+		t.Errorf("BuildExt err = %v, want unknown arch", err)
+	}
+}
+
+// TestResolveExtOutDir_DefaultShape asserts the derived default path
+// when --out-dir is not supplied. Shape is load-bearing because it
+// participates in the gitignore contract (build/ is ignored), mirroring
+// resolveOutDir (php).
+func TestResolveExtOutDir_DefaultShape(t *testing.T) {
+	repo := t.TempDir()
+	opts := &extOpts{
+		Name: "redis", Version: "6.2.0", PHPABI: "8.4-nts",
+		OS: "jammy", Arch: "x86_64",
+		Repo: repo,
+	}
+	got := resolveExtOutDir(opts)
+	want := filepath.Join(repo, "build", "ext", "redis-6.2.0-8.4-nts-jammy-x86_64")
+	if got != want {
+		t.Errorf("resolveExtOutDir = %q, want %q", got, want)
+	}
+}
+
+// TestResolveExtOutDir_ExplicitOverride asserts --out-dir is honored
+// verbatim (pass-through, no derivation).
+func TestResolveExtOutDir_ExplicitOverride(t *testing.T) {
+	opts := &extOpts{OutDir: "/custom/path"}
+	if got := resolveExtOutDir(opts); got != "/custom/path" {
+		t.Errorf("resolveExtOutDir with --out-dir = %q, want /custom/path", got)
+	}
+}
+
+// TestCoreTagForFetch_MatchesFetchCoreShellLogic pins the tag shape
+// phpup emits against the shell logic in builders/common/fetch-core.sh
+// (which constructs TAG="${PHP_VER}-${OS}-${ARCH}-${PHP_TS}"). If this
+// diverges, the build container's oras pull will miss the seeded image.
+func TestCoreTagForFetch_MatchesFetchCoreShellLogic(t *testing.T) {
+	cases := []struct {
+		phpABI, arch, want string
+	}{
+		{"8.4-nts", "x86_64", "8.4-linux-x86_64-nts"},
+		{"8.3-nts", "aarch64", "8.3-linux-aarch64-nts"},
+		{"8.2-nts", "x86_64", "8.2-linux-x86_64-nts"},
+	}
+	for _, tc := range cases {
+		if got := coreTagForFetch(tc.phpABI, tc.arch); got != tc.want {
+			t.Errorf("coreTagForFetch(%q, %q) = %q, want %q", tc.phpABI, tc.arch, got, tc.want)
+		}
+	}
+}
+
+// TestLoadExtBuildDeps_JoinsLinuxList verifies loadExtBuildDeps returns
+// the space-joined list that build-ext.sh's BUILD_DEPS env expects —
+// matching the yq invocation in build-extension.yml.
+func TestLoadExtBuildDeps_JoinsLinuxList(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "amqp.yaml")
+	const body = "name: amqp\nbuild_deps:\n  linux:\n    - libfoo-dev\n    - libbar-dev\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write yaml: %v", err)
+	}
+	got, err := loadExtBuildDeps(path)
+	if err != nil {
+		t.Fatalf("loadExtBuildDeps: %v", err)
+	}
+	if got != "libfoo-dev libbar-dev" {
+		t.Errorf("got %q, want %q", got, "libfoo-dev libbar-dev")
+	}
+}
+
+// TestLoadExtBuildDeps_AbsentSection_ReturnsEmpty exercises the
+// no-build-deps path (e.g. catalog/extensions/redis.yaml originally).
+// Must return "" (not error) so build-ext.sh treats it as a no-op.
+func TestLoadExtBuildDeps_AbsentSection_ReturnsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "x.yaml")
+	if err := os.WriteFile(path, []byte("name: x\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := loadExtBuildDeps(path)
+	if err != nil {
+		t.Fatalf("loadExtBuildDeps: %v", err)
+	}
+	if got != "" {
+		t.Errorf("got %q, want empty", got)
 	}
 }
 
