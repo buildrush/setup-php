@@ -49,12 +49,45 @@ jobs:
           curl -sSfLO "https://github.com/oras-project/oras/releases/download/v1.3.1/oras_1.3.1_linux_${ORAS_ARCH}.tar.gz"
           tar -xzf "oras_1.3.1_linux_${ORAS_ARCH}.tar.gz" -C /usr/local/bin oras
 
-      - name: Build PHP
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+
+      - name: Build phpup
+        run: make bin/phpup
+
+      # Run the PHP-core build via phpup. phpup docker-wraps
+      # builders/linux/build-php.sh unchanged and writes the resulting
+      # bundle.tar.zst + meta.json + bundle.tar.zst.sha256 into a
+      # project-relative output dir. The subsequent "Stage bundle for
+      # publish" step copies them to /tmp/ so "Push to GHCR",
+      # "Sign bundle", "Smoke test", and "Upload bundle artifact" keep
+      # reading from the same paths they did before this rewiring —
+      # preserving the digest job-output contract byte-for-byte.
+      - name: Build PHP core via phpup
         env:
           PHP_VERSION: ${{ inputs.version }}
+          OS: ${{ inputs.os }}
           ARCH: ${{ inputs.arch }}
-          WORKSPACE: ${{ github.workspace }}
-        run: ./builders/linux/build-php.sh
+          TS: ${{ inputs.ts }}
+          PHPUP_OUT_DIR: ${{ github.workspace }}/build/php/${{ inputs.version }}-${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.ts }}
+        run: |
+          ./bin/phpup build php \
+            --php "$PHP_VERSION" \
+            --os "$OS" \
+            --arch "$ARCH" \
+            --ts "$TS" \
+            --registry oci-layout:./out/oci-layout \
+            --repo . \
+            --out-dir "$PHPUP_OUT_DIR"
+
+      - name: Stage bundle for publish
+        env:
+          PHPUP_OUT_DIR: ${{ github.workspace }}/build/php/${{ inputs.version }}-${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.ts }}
+        run: |
+          cp "$PHPUP_OUT_DIR/bundle.tar.zst"        /tmp/bundle.tar.zst
+          cp "$PHPUP_OUT_DIR/bundle.tar.zst.sha256" /tmp/bundle.tar.zst.sha256
+          cp "$PHPUP_OUT_DIR/meta.json"             /tmp/meta.json
 
       - name: Push to GHCR
         id: push
