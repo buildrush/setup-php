@@ -3,6 +3,7 @@ package registry
 import (
 	"bytes"
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -105,17 +106,54 @@ func TestLayoutStore_LookupBySpec_WrongHashIsMiss(t *testing.T) {
 	}
 }
 
-func TestRemoteStore_LookupBySpec_AlwaysMiss(t *testing.T) {
+func TestRemoteStore_LookupBySpec_ReturnsUnsupported(t *testing.T) {
 	host := startTestRegistry(t)
-	s, err := Open(host + "/buildrush")
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
+	s, _ := Open(host + "/buildrush")
 	_, hit, err := s.LookupBySpec(context.Background(), "php-core", "sha256:abc")
-	if err != nil {
-		t.Fatalf("LookupBySpec: %v", err)
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("LookupBySpec on remote: err = %v, want ErrUnsupported", err)
 	}
 	if hit {
-		t.Fatal("remote LookupBySpec should always miss in PR 1/2 scope")
+		t.Fatal("hit should be false even when returning ErrUnsupported")
+	}
+}
+
+func TestLayoutStore_LookupBySpec_EmptyInput_Errors(t *testing.T) {
+	s, _ := openLayout(filepath.Join(t.TempDir(), "layout"))
+	// Pre-populate so "empty match" would succeed if the guard were absent.
+	_ = s.Push(context.Background(), Ref{Name: "php-core"},
+		bytes.NewReader([]byte("x")), nil, Annotations{BundleName: "php-core"})
+
+	cases := []struct {
+		name, sh string
+	}{
+		{"", ""},
+		{"php-core", ""},
+		{"", "sha256:abc"},
+	}
+	for _, c := range cases {
+		_, hit, err := s.LookupBySpec(context.Background(), c.name, c.sh)
+		if err == nil {
+			t.Errorf("LookupBySpec(%q, %q): want error, got nil (hit=%v)", c.name, c.sh, hit)
+		}
+		if hit {
+			t.Errorf("LookupBySpec(%q, %q): hit=true on empty input", c.name, c.sh)
+		}
+	}
+}
+
+func TestLayoutStore_Push_EmptyAnnotationsFallsBackToRefName(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openLayout(filepath.Join(t.TempDir(), "layout"))
+	if err := s.Push(ctx, Ref{Name: "php-core"},
+		bytes.NewReader([]byte("x")), nil, Annotations{}); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	got, err := s.list(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "php-core" {
+		t.Fatalf("list = %+v; want single php-core entry derived from ref.Name fallback", got)
 	}
 }

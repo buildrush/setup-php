@@ -21,6 +21,9 @@ type Annotations struct {
 
 // asMap returns the OCI annotation map for the Annotations value.
 // Empty fields are omitted so we don't write empty-string annotations.
+// The returned map is always non-nil and writable — callers can mutate
+// it in place (e.g. the layout backend's back-compat fallback writes
+// BundleName from ref.Name when the Annotations value is zero).
 func (a Annotations) asMap() map[string]string {
 	m := map[string]string{}
 	if a.BundleName != "" {

@@ -75,6 +75,9 @@ type Store interface {
 	// on hit, (zero, false, nil) when absent, (zero, false, err) on
 	// backend error. Used by the build subcommand's cache probe to
 	// short-circuit redundant rebuilds.
+	//
+	// Callers with an `Annotations` value already in scope should pass
+	// `ann.BundleName` and `ann.SpecHash` positionally.
 	LookupBySpec(ctx context.Context, name, specHash string) (Ref, bool, error)
 	ResolveDigest(ctx context.Context, name string) (string, error)
 }

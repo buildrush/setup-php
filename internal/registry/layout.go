@@ -115,6 +115,9 @@ func (s *layoutStore) Push(_ context.Context, ref Ref, body io.Reader, meta *Met
 // An absent layout is a valid miss (not an error) so callers can probe
 // empty caches without a pre-check. Any other open failure propagates.
 func (s *layoutStore) LookupBySpec(_ context.Context, name, specHash string) (Ref, bool, error) {
+	if name == "" || specHash == "" {
+		return Ref{}, false, errors.New("layout.LookupBySpec: name and specHash required")
+	}
 	p, err := s.open()
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
