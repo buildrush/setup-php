@@ -88,6 +88,11 @@ func TestOpen_URIFormDispatch(t *testing.T) {
 			uri:      "ghcr.io/weird_path",
 			wantKind: "remote",
 		},
+		{
+			name:     "host with port succeeds as remote",
+			uri:      "127.0.0.1:5000/foo",
+			wantKind: "remote",
+		},
 	}
 
 	for _, tc := range cases {

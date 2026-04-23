@@ -3,6 +3,7 @@ package registry
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http/httptest"
 	"net/url"
@@ -148,8 +149,23 @@ func TestRemoteStore_PushReturnsUnsupported(t *testing.T) {
 	host := startTestRegistry(t)
 	s, _ := Open(host + "/buildrush")
 	err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader([]byte("x")), nil)
-	if err != ErrUnsupported {
+	if !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("Push err = %v, want ErrUnsupported", err)
+	}
+}
+
+func TestRemoteStore_HasEmptyDigest_FalseNoError(t *testing.T) {
+	// Symmetry with layoutStore.Has: a probe with empty digest is a legal
+	// "not present" query across both backends (see Store.Has docstring).
+	ctx := context.Background()
+	host := startTestRegistry(t)
+	s, _ := Open(host + "/buildrush")
+	has, err := s.Has(ctx, Ref{Name: "php-core"}) // Digest intentionally empty
+	if err != nil {
+		t.Fatalf("Has empty-digest: err = %v, want nil (symmetry with layout backend)", err)
+	}
+	if has {
+		t.Fatal("Has empty-digest returned true on empty registry")
 	}
 }
 

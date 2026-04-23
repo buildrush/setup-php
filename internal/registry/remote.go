@@ -55,11 +55,22 @@ func (s *remoteStore) refFor(r Ref) (name.Reference, error) {
 }
 
 func (s *remoteStore) Has(ctx context.Context, ref Ref) (bool, error) {
+	// Symmetry with layoutStore.Has: an empty-digest probe is a legal
+	// "not present" query. Fetch still rejects empty Digest as an error
+	// because you can't fetch "nothing".
+	if ref.Digest == "" {
+		return false, nil
+	}
 	r, err := s.refFor(ref)
 	if err != nil {
 		return false, fmt.Errorf("remote.Has %s: %w", ref, err)
 	}
 	if _, err := remote.Head(r, remote.WithAuth(s.auth), remote.WithContext(ctx)); err != nil {
+		// NOTE: Some registries (notably GHCR) return 401 Unauthorized for
+		// blobs in private repos when the caller is anonymous, to avoid leaking
+		// existence of private content. That will propagate as an error here.
+		// If/when private-repo probes become a real use case (Task 6/7), consider
+		// treating (terr.StatusCode == 401 && auth == anonymous) as "not present".
 		var terr *transport.Error
 		if errors.As(err, &terr) && terr.StatusCode == 404 {
 			return false, nil
