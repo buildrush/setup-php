@@ -97,7 +97,9 @@ func Open(uri string) (Store, error) {
 
 // looksLikeRemote returns true when the URI's head segment (up to the first
 // "/") is a plausible registry host: it must contain at least one "." and be
-// composed exclusively of ASCII letters, digits, dots, and hyphens.
+// composed exclusively of ASCII letters, digits, dots, hyphens, and colons
+// (colons appear in host[:port] forms like "127.0.0.1:5000" used by the
+// in-process test registry).
 func looksLikeRemote(uri string) bool {
 	head := uri
 	if i := strings.IndexByte(uri, '/'); i >= 0 {
@@ -111,7 +113,7 @@ func looksLikeRemote(uri string) bool {
 		case r >= 'a' && r <= 'z':
 		case r >= 'A' && r <= 'Z':
 		case r >= '0' && r <= '9':
-		case r == '.' || r == '-':
+		case r == '.' || r == '-' || r == ':':
 		default:
 			return false
 		}
