@@ -76,6 +76,12 @@ func main() {
 
 	var resolved []resolvedEntry
 
+	// coreDigestByKey accumulates freshly-resolved PHP-core digests keyed by
+	// lockfile.PHPBundleKey so ExpandExtMatrix can stamp each ext cell's
+	// CoreDigest. lockfile-update is a digest-resolution pass — unresolved
+	// cores will warn during ext expansion.
+	coreDigestByKey := make(map[string]string)
+
 	// PHP core cells.
 	phpCells := planner.ExpandPHPMatrix(cat.PHP)
 	for i := range phpCells {
@@ -95,6 +101,7 @@ func main() {
 		}
 		key := lockfile.PHPBundleKey(c.Version, c.OS, c.Arch, c.TS)
 		resolved = append(resolved, resolvedEntry{Key: key, Digest: digest, SpecHash: c.SpecHash})
+		coreDigestByKey[key] = digest
 	}
 
 	// Extensions.
@@ -106,7 +113,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("ext yaml %s: %v", ext.Name, err)
 		}
-		cells := planner.ExpandExtMatrix(ext)
+		cells := planner.ExpandExtMatrix(ext, coreDigestByKey)
 		for i := range cells {
 			c := &cells[i]
 			c.SpecHash = planner.ComputeSpecHash(c, extYAML, builderHashExt, builderOS)

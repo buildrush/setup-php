@@ -3,6 +3,7 @@ package planner
 import (
 	"bytes"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,7 +112,7 @@ func TestExpandExtMatrixWithExclude(t *testing.T) {
 
 	// Without exclude: 1×2×2×1 = 4 per version = 4
 	// With exclude: -1 (windows+aarch64) = 3
-	cells := ExpandExtMatrix(spec)
+	cells := ExpandExtMatrix(spec, nil)
 	if len(cells) != 3 {
 		t.Fatalf("len(cells) = %d, want 3", len(cells))
 	}
@@ -120,6 +121,145 @@ func TestExpandExtMatrixWithExclude(t *testing.T) {
 		if c.OS == "windows" && c.Arch == "aarch64" {
 			t.Error("excluded combination (windows, aarch64) should not appear")
 		}
+	}
+}
+
+func TestExpandExtMatrix_PopulatesCoreDigest(t *testing.T) {
+	spec := &catalog.ExtensionSpec{
+		Name:     "redis",
+		Kind:     catalog.ExtensionKindPECL,
+		Versions: []string{"6.2.0"},
+		ABIMatrix: catalog.ABIMatrix{
+			PHP:  []string{"8.3", "8.4"},
+			OS:   []string{"linux"},
+			Arch: []string{"x86_64", "aarch64"},
+			TS:   []string{"nts"},
+		},
+	}
+	// 2 PHP × 1 OS × 2 arch × 1 TS = 4 cells; synthetic digests for each.
+	coreDigests := map[string]string{
+		"php:8.3:linux:x86_64:nts":  "sha256:aaa83x",
+		"php:8.3:linux:aarch64:nts": "sha256:aaa83a",
+		"php:8.4:linux:x86_64:nts":  "sha256:bbb84x",
+		"php:8.4:linux:aarch64:nts": "sha256:bbb84a",
+	}
+
+	cells := ExpandExtMatrix(spec, coreDigests)
+	if len(cells) != 4 {
+		t.Fatalf("len(cells) = %d, want 4", len(cells))
+	}
+	for _, c := range cells {
+		phpMinor := strings.TrimSuffix(c.PHPAbi, "-"+c.TS)
+		wantKey := "php:" + phpMinor + ":" + c.OS + ":" + c.Arch + ":" + c.TS
+		want := coreDigests[wantKey]
+		if c.CoreDigest != want {
+			t.Errorf("cell %+v: CoreDigest = %q, want %q (key %q)", c, c.CoreDigest, want, wantKey)
+		}
+	}
+}
+
+func TestExpandExtMatrix_MissingCoreDigest_EmptyAndWarns(t *testing.T) {
+	spec := &catalog.ExtensionSpec{
+		Name:     "redis",
+		Kind:     catalog.ExtensionKindPECL,
+		Versions: []string{"6.2.0"},
+		ABIMatrix: catalog.ABIMatrix{
+			PHP:  []string{"8.4"},
+			OS:   []string{"linux"},
+			Arch: []string{"x86_64"},
+			TS:   []string{"nts"},
+		},
+	}
+
+	// Redirect log output to capture the warning.
+	var buf bytes.Buffer
+	oldOutput := log.Writer()
+	oldFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(oldOutput)
+		log.SetFlags(oldFlags)
+	})
+
+	cells := ExpandExtMatrix(spec, map[string]string{}) // empty, non-nil
+	if len(cells) != 1 {
+		t.Fatalf("len(cells) = %d, want 1 (cell must not be silently skipped)", len(cells))
+	}
+	if cells[0].CoreDigest != "" {
+		t.Errorf("cell CoreDigest = %q, want empty string when no digest is available", cells[0].CoreDigest)
+	}
+	if !strings.Contains(buf.String(), "WARN: ExpandExtMatrix: no core digest") {
+		t.Errorf("expected WARN log when core digest missing; got: %q", buf.String())
+	}
+}
+
+func TestExpandExtMatrix_NilDigestMap_NoWarn(t *testing.T) {
+	// Nil map = "no digest context available at all"; suppress warnings so
+	// callers that don't need digest resolution (e.g., isolated tests) don't
+	// spam logs. Cells still come out with empty CoreDigest.
+	spec := &catalog.ExtensionSpec{
+		Name:     "redis",
+		Kind:     catalog.ExtensionKindPECL,
+		Versions: []string{"6.2.0"},
+		ABIMatrix: catalog.ABIMatrix{
+			PHP:  []string{"8.4"},
+			OS:   []string{"linux"},
+			Arch: []string{"x86_64"},
+			TS:   []string{"nts"},
+		},
+	}
+	var buf bytes.Buffer
+	oldOutput := log.Writer()
+	oldFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(oldOutput)
+		log.SetFlags(oldFlags)
+	})
+	cells := ExpandExtMatrix(spec, nil)
+	if len(cells) != 1 {
+		t.Fatalf("len(cells) = %d, want 1", len(cells))
+	}
+	if cells[0].CoreDigest != "" {
+		t.Errorf("cell CoreDigest = %q, want empty string", cells[0].CoreDigest)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("expected no warning with nil digest map; got: %q", buf.String())
+	}
+}
+
+func TestMatrixCell_JSON_OmitsEmptyCoreDigest(t *testing.T) {
+	// A php cell has CoreDigest == ""; JSON output must not include
+	// "core_digest" — keeps php/tool matrix bytes unchanged.
+	cell := MatrixCell{Version: "8.4", OS: "linux", Arch: "x86_64", TS: "nts"}
+	data, err := json.Marshal(cell)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(data), "core_digest") {
+		t.Errorf("php cell JSON must not contain core_digest when empty; got: %s", data)
+	}
+}
+
+func TestMatrixCell_JSON_IncludesCoreDigestForExt(t *testing.T) {
+	cell := MatrixCell{
+		Extension:  "redis",
+		ExtVer:     "6.2.0",
+		PHPAbi:     "8.4-nts",
+		OS:         "linux",
+		Arch:       "x86_64",
+		TS:         "nts",
+		CoreDigest: "sha256:abcdef",
+	}
+	data, err := json.Marshal(cell)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	s := string(data)
+	if !strings.Contains(s, `"core_digest":"sha256:abcdef"`) {
+		t.Errorf("ext cell JSON must contain core_digest field; got: %s", s)
 	}
 }
 

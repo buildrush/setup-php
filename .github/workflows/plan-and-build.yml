@@ -58,6 +58,7 @@ jobs:
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
       spec_hash: ${{ matrix.spec_hash }}
+      php_core_digest: ${{ matrix.core_digest }}
       push: ${{ inputs.push }}
 
   update-lock:

@@ -26,20 +26,33 @@ import (
 var ErrUnsupported = errors.New("registry: operation not supported by this backend")
 
 // Ref identifies a bundle within a Store by its logical Name and, optionally,
-// its content-addressed Digest (in the usual "sha256:..." form).
+// its content-addressed Digest (in the usual "sha256:..." form) or its
+// human-readable Tag.
+//
+// Digest is used by Fetch/Has/LookupBySpec on every backend — those operations
+// are content-addressed regardless of publication channel. Tag is a
+// publication-time concern: the remote backend needs it for Push because OCI
+// registries are tag-addressed for writes (the registry computes the digest
+// from the manifest; callers cannot supply one). The layout backend ignores
+// Tag because its Push writes by index annotation, not by tag.
 type Ref struct {
 	Name   string
 	Digest string
+	Tag    string
 }
 
-// String renders the Ref as "name@digest" when a Digest is present, or just
-// "name" otherwise. It is suitable for logs and error messages; it is not a
-// canonical OCI reference.
+// String renders the Ref as "name@digest" when a Digest is present,
+// "name:tag" when only a Tag is present, or just "name" otherwise. It is
+// suitable for logs and error messages; it is not a canonical OCI reference.
 func (r Ref) String() string {
-	if r.Digest == "" {
+	switch {
+	case r.Digest != "":
+		return r.Name + "@" + r.Digest
+	case r.Tag != "":
+		return r.Name + ":" + r.Tag
+	default:
 		return r.Name
 	}
-	return r.Name + "@" + r.Digest
 }
 
 // Meta describes bundle metadata persisted alongside the payload. Fields are

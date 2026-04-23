@@ -126,3 +126,21 @@ func TestRefString_EmptyDigest(t *testing.T) {
 		t.Errorf("Ref.String() = %q, want %q", got, "php-core")
 	}
 }
+
+func TestRefString_WithTag(t *testing.T) {
+	r := Ref{Name: "php-core", Tag: "8.4-linux-x86_64-nts"}
+	if got := r.String(); got != "php-core:8.4-linux-x86_64-nts" {
+		t.Errorf("Ref.String() = %q, want %q", got, "php-core:8.4-linux-x86_64-nts")
+	}
+}
+
+// TestRefString_DigestPreferredOverTag documents the precedence: when both
+// Digest and Tag are set (e.g. a Ref that was pushed by Tag and then had its
+// digest resolved), String() renders by digest. Callers logging a Push target
+// should log ref.Tag separately if they want to preserve "what we asked for".
+func TestRefString_DigestPreferredOverTag(t *testing.T) {
+	r := Ref{Name: "php-core", Digest: "sha256:abc", Tag: "x.y.z"}
+	if got := r.String(); got != "php-core@sha256:abc" {
+		t.Errorf("Ref.String() = %q, want %q", got, "php-core@sha256:abc")
+	}
+}

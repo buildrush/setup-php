@@ -97,11 +97,46 @@ func currentSidecarLifecycle() SidecarLifecycle {
 // network; SeedCore pushes the prerequisite bundle via remote.Write.
 type defaultSidecarLifecycle struct{}
 
+// sidecarLabel marks every container and network this lifecycle
+// creates so sweepStaleSidecars can reliably clean up zombies from
+// prior runs without touching unrelated docker state.
+const sidecarLabel = "buildrush.phpup.sidecar=1"
+
+// sweepStaleSidecars removes any containers or networks from prior runs
+// that didn't clean up after themselves (e.g. outer timeout killed the
+// process before the defer). Scoped by label so unrelated docker state
+// is untouched. Errors are ignored — if docker can't list or remove the
+// resources, the subsequent Start will either succeed (the zombies didn't
+// collide) or fail with its own clear error.
+func sweepStaleSidecars(ctx context.Context) {
+	// Best-effort; failures are not actionable from the caller's
+	// perspective and would just add noise on first-ever-run (no
+	// prior label to match).
+
+	// Containers first (they hold the network in use, so must go before the network).
+	if out, err := execDocker(ctx, "ps", "-aq", "--filter", "label="+sidecarLabel); err == nil {
+		for _, id := range strings.Fields(string(out)) {
+			_, _ = execDocker(ctx, "rm", "-f", id)
+		}
+	}
+	// Then networks.
+	if out, err := execDocker(ctx, "network", "ls", "-q", "--filter", "label="+sidecarLabel); err == nil {
+		for _, id := range strings.Fields(string(out)) {
+			_, _ = execDocker(ctx, "network", "rm", id)
+		}
+	}
+}
+
 // Start spins up a distribution:3 container on a fresh network and
 // waits for its /v2/ endpoint to become reachable. Returns the
 // *Sidecar and a stop function the caller MUST defer to tear down
 // both the container and the network.
 func (defaultSidecarLifecycle) Start(ctx context.Context) (*Sidecar, func(context.Context) error, error) {
+	// Opportunistic: clean up any zombie sidecars from prior runs that
+	// aborted before their deferred stop (panic, outer timeout,
+	// SIGKILL). Scoped by label so unrelated docker state is untouched.
+	sweepStaleSidecars(ctx)
+
 	// Ephemeral unique names to avoid collision across concurrent
 	// runs. Timestamp in UTC so the name is deterministic at the
 	// nanosecond level; strip the "." from the fractional-second
@@ -110,7 +145,7 @@ func (defaultSidecarLifecycle) Start(ctx context.Context) (*Sidecar, func(contex
 	network := "phpup-build-" + tag
 	containerName := "phpup-sidecar-" + tag
 
-	if err := dockerCmdCombined(ctx, "network", "create", network); err != nil {
+	if err := dockerCmdCombined(ctx, "network", "create", "--label", sidecarLabel, network); err != nil {
 		return nil, nil, fmt.Errorf("sidecar: create network: %w", err)
 	}
 
@@ -122,6 +157,7 @@ func (defaultSidecarLifecycle) Start(ctx context.Context) (*Sidecar, func(contex
 		"run", "-d", "--rm",
 		"--name", containerName,
 		"--network", network,
+		"--label", sidecarLabel,
 		"--publish", "127.0.0.1::5000",
 		"distribution/distribution:3",
 	)

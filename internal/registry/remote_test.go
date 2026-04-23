@@ -3,7 +3,6 @@ package registry
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"net/http/httptest"
 	"net/url"
@@ -144,13 +143,178 @@ func TestRemoteStore_HasMissingRef_FalseNoError(t *testing.T) {
 	}
 }
 
-func TestRemoteStore_PushReturnsUnsupported(t *testing.T) {
+// TestRemoteStore_Push_RoundTrip exercises the full Push→ResolveDigest→Fetch
+// path against the in-process test registry. It asserts the bundle bytes and
+// the Meta sidecar survive a round-trip, proving remote.Push emits an OCI
+// image shape that the existing Fetch path can consume.
+func TestRemoteStore_Push_RoundTrip(t *testing.T) {
+	ctx := context.Background()
+	host := startTestRegistry(t)
+	s, err := Open(host + "/buildrush")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	payload := []byte("roundtrip-payload")
+	meta := &Meta{SchemaVersion: 2, Kind: "php-core"}
+	if err := s.Push(ctx,
+		Ref{Name: "php-core", Tag: "roundtrip-tag"},
+		bytes.NewReader(payload), meta,
+		Annotations{BundleName: "php-core", SpecHash: "sha256:abc"}); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+
+	digest, err := s.ResolveDigest(ctx, host+"/buildrush/php-core:roundtrip-tag")
+	if err != nil {
+		t.Fatalf("ResolveDigest: %v", err)
+	}
+
+	rc, gotMeta, err := s.Fetch(ctx, Ref{Name: "php-core", Digest: digest})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	defer rc.Close()
+	gotBytes, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !bytes.Equal(gotBytes, payload) {
+		t.Errorf("payload = %q, want %q", gotBytes, payload)
+	}
+	if gotMeta == nil || gotMeta.SchemaVersion != 2 || gotMeta.Kind != "php-core" {
+		t.Errorf("meta = %+v, want SchemaVersion:2 Kind:php-core", gotMeta)
+	}
+}
+
+// TestRemoteStore_Push_RequiresTag guards the design invariant: remote
+// registries are tag-addressed for writes, so Push must refuse a digest-only
+// (or empty) Ref with an error mentioning Tag.
+func TestRemoteStore_Push_RequiresTag(t *testing.T) {
 	ctx := context.Background()
 	host := startTestRegistry(t)
 	s, _ := Open(host + "/buildrush")
-	err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader([]byte("x")), nil, Annotations{BundleName: "php-core"})
-	if !errors.Is(err, ErrUnsupported) {
-		t.Fatalf("Push err = %v, want ErrUnsupported", err)
+
+	err := s.Push(ctx, Ref{Name: "php-core"}, // intentionally no Tag
+		bytes.NewReader([]byte("x")), nil, Annotations{BundleName: "php-core"})
+	if err == nil {
+		t.Fatal("Push with empty Tag err = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "Tag") {
+		t.Errorf("Push err = %q, want mention of Tag", err)
+	}
+}
+
+// TestRemoteStore_Push_ArtifactTypeAnnotation_PhpExt verifies the manifest
+// annotation matches what `oras push --artifact-type application/vnd.buildrush.php-ext.v1`
+// emits for php-ext-* bundles (see .github/workflows/build-extension.yml).
+func TestRemoteStore_Push_ArtifactTypeAnnotation_PhpExt(t *testing.T) {
+	ctx := context.Background()
+	host := startTestRegistry(t)
+	s, _ := Open(host + "/buildrush")
+
+	ref := Ref{Name: "php-ext-redis", Tag: "6.2.0-8.4-nts-linux-x86_64"}
+	if err := s.Push(ctx, ref,
+		bytes.NewReader([]byte("x")), nil,
+		Annotations{BundleName: "php-ext-redis"}); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+
+	target, err := name.ParseReference(host + "/buildrush/" + ref.Name + ":" + ref.Tag)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	desc, err := remote.Get(target)
+	if err != nil {
+		t.Fatalf("remote.Get: %v", err)
+	}
+	img, err := desc.Image()
+	if err != nil {
+		t.Fatalf("image: %v", err)
+	}
+	mf, err := img.Manifest()
+	if err != nil {
+		t.Fatalf("manifest: %v", err)
+	}
+	if got := mf.Annotations["org.opencontainers.artifact.type"]; got != "application/vnd.buildrush.php-ext.v1" {
+		t.Errorf("artifact.type = %q, want %q", got, "application/vnd.buildrush.php-ext.v1")
+	}
+}
+
+// TestRemoteStore_Push_ArtifactTypeAnnotation_PhpCore mirrors the php-ext
+// assertion for the php-core artifact type (build-php-core.yml).
+func TestRemoteStore_Push_ArtifactTypeAnnotation_PhpCore(t *testing.T) {
+	ctx := context.Background()
+	host := startTestRegistry(t)
+	s, _ := Open(host + "/buildrush")
+
+	ref := Ref{Name: "php-core", Tag: "8.4-linux-x86_64-nts"}
+	if err := s.Push(ctx, ref,
+		bytes.NewReader([]byte("x")), nil,
+		Annotations{BundleName: "php-core"}); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+
+	target, err := name.ParseReference(host + "/buildrush/" + ref.Name + ":" + ref.Tag)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	desc, err := remote.Get(target)
+	if err != nil {
+		t.Fatalf("remote.Get: %v", err)
+	}
+	img, err := desc.Image()
+	if err != nil {
+		t.Fatalf("image: %v", err)
+	}
+	mf, err := img.Manifest()
+	if err != nil {
+		t.Fatalf("manifest: %v", err)
+	}
+	if got := mf.Annotations["org.opencontainers.artifact.type"]; got != "application/vnd.buildrush.php-core.v1" {
+		t.Errorf("artifact.type = %q, want %q", got, "application/vnd.buildrush.php-core.v1")
+	}
+}
+
+// TestRemoteStore_Push_LayerMediaTypes verifies the bundle and meta layer
+// media types are byte-identical to what `oras push` writes: the bundle at
+// application/vnd.oci.image.layer.v1.tar+zstd and the meta sidecar at
+// application/vnd.buildrush.meta.v1+json.
+func TestRemoteStore_Push_LayerMediaTypes(t *testing.T) {
+	ctx := context.Background()
+	host := startTestRegistry(t)
+	s, _ := Open(host + "/buildrush")
+
+	ref := Ref{Name: "php-core", Tag: "media-types"}
+	if err := s.Push(ctx, ref,
+		bytes.NewReader([]byte("bundle-bytes")), &Meta{SchemaVersion: 2, Kind: "php-core"},
+		Annotations{BundleName: "php-core"}); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+
+	target, err := name.ParseReference(host + "/buildrush/" + ref.Name + ":" + ref.Tag)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	desc, err := remote.Get(target)
+	if err != nil {
+		t.Fatalf("remote.Get: %v", err)
+	}
+	img, err := desc.Image()
+	if err != nil {
+		t.Fatalf("image: %v", err)
+	}
+	mf, err := img.Manifest()
+	if err != nil {
+		t.Fatalf("manifest: %v", err)
+	}
+	if len(mf.Layers) != 2 {
+		t.Fatalf("len(layers) = %d, want 2", len(mf.Layers))
+	}
+	if got := mf.Layers[0].MediaType; got != "application/vnd.oci.image.layer.v1.tar+zstd" {
+		t.Errorf("layers[0].MediaType = %q, want %q", got, "application/vnd.oci.image.layer.v1.tar+zstd")
+	}
+	if got := mf.Layers[1].MediaType; got != "application/vnd.buildrush.meta.v1+json" {
+		t.Errorf("layers[1].MediaType = %q, want %q", got, "application/vnd.buildrush.meta.v1+json")
 	}
 }
 
