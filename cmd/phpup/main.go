@@ -553,19 +553,34 @@ func installRuntimeDeps(goos string, resolved []resolve.ResolvedBundle, cat *cat
 	return installer(pkgs)
 }
 
+// aptArgv returns the argv that the apt-get invocation should use. If euid
+// is 0 (running as root — typical inside a bare docker container),
+// the sudo prefix is omitted because sudo may not be installed. For any
+// other euid, the sudo prefix is preserved — matches the historical
+// behaviour on a GitHub-hosted runner where phpup runs as the runner user.
+func aptArgv(euid int, op string, extra ...string) []string {
+	args := append([]string{"apt-get", op}, extra...)
+	if euid == 0 {
+		return args
+	}
+	return append([]string{"sudo"}, args...)
+}
+
 // aptInstaller is the production installer used when not testing.
-// Runs `sudo apt-get update -qq` then `sudo apt-get install -y -qq --no-install-recommends <pkgs...>`.
+// Runs `apt-get update -qq` then `apt-get install -y -qq --no-install-recommends <pkgs...>`,
+// prefixing with sudo when euid != 0 (see aptArgv).
 // Update failure is a ::warning:: (transient mirror issues); install failure is a hard error.
 func aptInstaller(pkgs []string) error {
 	log.Printf("installRuntimeDeps: apt-get install %s", strings.Join(pkgs, " "))
-	upd := exec.Command("sudo", "apt-get", "update", "-qq")
+	uargs := aptArgv(os.Geteuid(), "update", "-qq")
+	upd := exec.Command(uargs[0], uargs[1:]...) //nolint:gosec // G204: argv composed from compile-time constants in aptArgv (apt-get + sudo literals)
 	upd.Stdout = os.Stdout
 	upd.Stderr = os.Stderr
 	if err := upd.Run(); err != nil {
 		log.Printf("::warning::apt-get update failed (%v); proceeding to install", err)
 	}
-	args := append([]string{"apt-get", "install", "-y", "-qq", "--no-install-recommends"}, pkgs...)
-	inst := exec.Command("sudo", args...) //nolint:gosec // G204: args built from catalog-provided package names (compile-time constant, non-user-controlled)
+	iargs := aptArgv(os.Geteuid(), "install", append([]string{"-y", "-qq", "--no-install-recommends"}, pkgs...)...)
+	inst := exec.Command(iargs[0], iargs[1:]...) //nolint:gosec // G204: args built from catalog-provided package names (compile-time constant, non-user-controlled)
 	inst.Stdout = os.Stdout
 	inst.Stderr = os.Stderr
 	if err := inst.Run(); err != nil {
