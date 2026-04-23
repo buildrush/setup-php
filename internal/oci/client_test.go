@@ -10,8 +10,8 @@ func TestNewClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
-	if c.registry != "ghcr.io/buildrush" {
-		t.Errorf("registry = %q, want ghcr.io/buildrush", c.registry)
+	if c.registryURI != "ghcr.io/buildrush" {
+		t.Errorf("registryURI = %q, want ghcr.io/buildrush", c.registryURI)
 	}
 }
 
@@ -56,5 +56,24 @@ func TestParseMetaJSON_MissingSchemaVersion_DefaultsToOne(t *testing.T) {
 func TestParseMetaJSON_MalformedJSON_ReturnsError(t *testing.T) {
 	if _, err := parseMetaJSON([]byte("{not json")); err == nil {
 		t.Fatal("expected error on malformed JSON, got nil")
+	}
+}
+
+func TestNewClient_AcceptsOciLayoutURI(t *testing.T) {
+	c, err := NewClient("oci-layout:/tmp/nonexistent-oci-layout", "")
+	if err != nil {
+		t.Fatalf("NewClient(oci-layout:) err = %v, want nil", err)
+	}
+	if c == nil {
+		t.Fatal("NewClient returned nil")
+	}
+	// FetchAll(nil) should return (nil, nil) on any backend — verifies the
+	// delegation path is wired up without needing a real bundle on disk.
+	results, err := c.FetchAll(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("FetchAll(nil) on layout-backed client: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("FetchAll(nil) returned %d results, want 0", len(results))
 	}
 }
