@@ -237,3 +237,70 @@ func TestSidecar_LifecycleAndSeed_Real(t *testing.T) {
 		t.Errorf("pulled bundle = %q, want %q", got, bundlePayload)
 	}
 }
+
+// TestSidecar_SweepsZombiesOnStart_Real seeds a fake zombie container
+// + network labeled as prior-run sidecars, then calls Start and asserts
+// the zombie is swept as a side effect. Guards against leaked state
+// from runs killed by an outer signal/timeout before defer stop().
+// Skipped under -short and when docker is absent.
+func TestSidecar_SweepsZombiesOnStart_Real(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping real docker test under -short")
+	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skipf("docker not found: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// Step 1: create a FAKE zombie: a container + network labeled as a
+	// sidecar but never properly torn down.
+	zombieName := "phpup-sidecar-zombie-" + strings.ReplaceAll(time.Now().UTC().Format("20060102T150405.000000000"), ".", "")
+	zombieNet := "phpup-build-zombie-" + strings.ReplaceAll(time.Now().UTC().Format("20060102T150405.000000000"), ".", "")
+
+	if _, err := execDocker(ctx, "network", "create", "--label", "buildrush.phpup.sidecar=1", zombieNet); err != nil {
+		t.Fatalf("seed zombie network: %v", err)
+	}
+	// Use a tiny image; we don't care about the registry functionality here.
+	if _, err := execDocker(ctx, "run", "-d", "--name", zombieName,
+		"--network", zombieNet,
+		"--label", "buildrush.phpup.sidecar=1",
+		"alpine:3", "sleep", "300"); err != nil {
+		// Cleanup before failing.
+		_, _ = execDocker(ctx, "network", "rm", zombieNet)
+		t.Fatalf("seed zombie container: %v", err)
+	}
+
+	// Step 2: verify zombie exists.
+	outBefore, _ := execDocker(ctx, "ps", "-aq", "--filter", "name="+zombieName)
+	if strings.TrimSpace(string(outBefore)) == "" {
+		_, _ = execDocker(ctx, "rm", "-f", zombieName)
+		_, _ = execDocker(ctx, "network", "rm", zombieNet)
+		t.Fatal("zombie container not created")
+	}
+
+	// Step 3: Start a fresh sidecar — should sweep the zombie as a side effect.
+	sc, stop, err := defaultSidecarLifecycle{}.Start(ctx)
+	if err != nil {
+		// Cleanup any remaining zombies.
+		_, _ = execDocker(ctx, "rm", "-f", zombieName)
+		_, _ = execDocker(ctx, "network", "rm", zombieNet)
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() { _ = stop(context.Background()) }()
+
+	// Step 4: verify the zombie container is gone.
+	outAfter, _ := execDocker(ctx, "ps", "-aq", "--filter", "name="+zombieName)
+	if strings.TrimSpace(string(outAfter)) != "" {
+		// Force cleanup.
+		_, _ = execDocker(ctx, "rm", "-f", zombieName)
+		_, _ = execDocker(ctx, "network", "rm", zombieNet)
+		t.Errorf("zombie container %s was NOT swept by Start", zombieName)
+	}
+
+	// Sanity: the new sidecar's name is different from the zombie.
+	if sc.Name == zombieName {
+		t.Errorf("new sidecar collided with zombie name: %s", sc.Name)
+	}
+}
