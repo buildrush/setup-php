@@ -560,15 +560,34 @@ func resolveOutDir(opts *phpOpts) string {
 	return filepath.Join(opts.Repo, "build", "php", slug)
 }
 
-// prepareOutDir wipes any previous content at path (so stale files from an
-// aborted earlier run don't masquerade as fresh output) and creates a
-// clean directory.
+// prepareOutDir wipes any previous content at path (so stale files from
+// an aborted earlier run don't masquerade as fresh output) and creates
+// a clean directory with mode 1777. The 1777 mode matches traditional
+// /tmp semantics — necessary because this directory is bind-mounted
+// into the build container at /tmp, and container-internal unprivileged
+// users (notably apt-key, which drops to _apt) need write access.
+// Without this, apt-key cannot create its temporary config files and
+// `apt-get update` fails with "Couldn't create temporary file" on
+// hosts where Docker doesn't transparently map uids (e.g., GitHub
+// Actions linux runners, non-Docker-Desktop setups).
 func prepareOutDir(path string) error {
 	if err := os.RemoveAll(path); err != nil {
 		return fmt.Errorf("clean out dir: %w", err)
 	}
+	// MkdirAll at a conservative 0o750 first (keeps gosec G301 quiet for
+	// the creation step), then Chmod up to 1777 below. MkdirAll also
+	// respects umask and never sets sticky/setuid/setgid bits, so a
+	// separate Chmod is required regardless.
 	if err := os.MkdirAll(path, 0o750); err != nil {
 		return fmt.Errorf("create out dir: %w", err)
+	}
+	// 1777 is a genuine requirement of the docker bind-mount use case
+	// (see comment above); gosec G301 flags world-writable as suspicious
+	// but the /tmp-style bind mount is exactly the intended use — this
+	// directory IS a /tmp replacement for a container.
+	//nolint:gosec // G301: world-writable is required for /tmp-style docker bind mount; see func comment.
+	if err := os.Chmod(path, 0o1777); err != nil {
+		return fmt.Errorf("chmod out dir to 1777: %w", err)
 	}
 	return nil
 }
