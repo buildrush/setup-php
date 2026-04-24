@@ -208,8 +208,8 @@ compat-golden-refresh.yml (on schedule + workflow_dispatch):
         download artifacts into test/compat/testdata/golden/v2/
         if git diff --quiet: exit 0 (record "no drift")
         else:
-            create branch `chore/compat-golden-refresh-<date>`
-            open PR via peter-evans/create-pull-request
+            force-push to single rolling branch `chore/compat-golden-refresh`
+            open PR via peter-evans/create-pull-request (delete-branch: true)
             body = "Per-fixture key-level deltas:\n ..."
 ```
 
