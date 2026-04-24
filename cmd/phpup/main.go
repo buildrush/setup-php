@@ -166,7 +166,7 @@ func main() {
 			"yaml":      {Name: "yaml", Kind: catalog.ExtensionKindPECL, Versions: []string{"2.3.0"}, RuntimeDeps: map[string][]string{"linux": {"libyaml-0-2"}}},
 			"memcached": {Name: "memcached", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.4.0"}, RuntimeDeps: map[string][]string{"linux": {"libmemcached11", "libsasl2-2"}}},
 			"amqp":      {Name: "amqp", Kind: catalog.ExtensionKindPECL, Versions: []string{"2.2.0"}, RuntimeDeps: map[string][]string{"linux": {"librabbitmq4"}}},
-			"event":     {Name: "event", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.1.4"}, RuntimeDeps: map[string][]string{"linux": {"libevent-2.1-7", "libevent-openssl-2.1-7"}}},
+			"event":     {Name: "event", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.1.4"}, RuntimeDeps: map[string][]string{"linux": {"libevent-2.1-7", "libevent-extra-2.1-7", "libevent-openssl-2.1-7"}}},
 			"rdkafka":   {Name: "rdkafka", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.0.5"}, RuntimeDeps: map[string][]string{"linux": {"librdkafka1"}}},
 			"protobuf":  {Name: "protobuf", Kind: catalog.ExtensionKindPECL, Versions: []string{"5.34.1"}},
 			"imagick":   {Name: "imagick", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.8.1"}, RuntimeDeps: map[string][]string{"linux": {"libfontconfig1", "libx11-6", "libxext6", "liblcms2-2", "liblqr-1-0", "libfftw3-double3", "libbz2-1.0"}}},
