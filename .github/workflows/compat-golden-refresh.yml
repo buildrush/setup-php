@@ -26,6 +26,18 @@ permissions:
   contents: write
   pull-requests: write
 
+# Serialize refresh runs on the shared `chore/compat-golden-refresh`
+# branch. Without this, a Monday cron firing while a PR-trigger run
+# from a workflow-file edit is still in-flight would race on
+# peter-evans/create-pull-request — both fighting over the same
+# branch would either force-push each other's commits or open
+# duplicate PRs. cancel-in-progress=false lets the earlier run
+# finish cleanly before the newer one starts, which is the correct
+# posture for a side-effecting (PR-opening) workflow.
+concurrency:
+  group: compat-golden-refresh
+  cancel-in-progress: false
+
 env:
   # Pinned v2 SHA. MUST match `## Pinning` in docs/compat-matrix.md.
   # The sanity-check job reads the markdown and refuses to run if the

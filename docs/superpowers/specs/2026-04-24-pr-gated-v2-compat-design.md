@@ -181,7 +181,10 @@ compat-report (if: always() && needs.pipeline.result != 'skipped'):
     if deviations found:
         render markdown body (§7 template) + post-or-update sticky comment
     else if existing sticky comment present:
-        delete it (prior red PR is now green — clear stale state)
+        rewrite its body to "✅ Compat-diff cleared" marker (prior
+        red PR is now green — clear state by replacing the body, not
+        by deleting the comment, so the PR's discussion retains an
+        audit trail of when the gate flipped)
     else:
         no-op
 ```
@@ -190,8 +193,8 @@ The `compat-report` job is pull-request-scoped (gated on
 `github.event_name == 'pull_request'`); it doesn't run on push-to-main
 because there is no PR to comment on. Its gate is
 `always() && needs.pipeline.result != 'skipped'` so it runs whether
-`pipeline` passed or failed, deleting stale comments when deviations
-clear between pushes.
+`pipeline` passed or failed, rewriting stale deviation comments to
+the cleared marker when deviations clear between pushes.
 
 ### Refresh-time (weekly + on-demand)
 
@@ -291,10 +294,11 @@ refreshed: <commit date of test/compat/testdata/golden/v2/>.
 
 The comment is deterministic: re-running a failing PR re-posts the
 same content (sticky-key match). A PR that moves from red→green on the
-compat gate has its comment **deleted** by the `compat-report` job (it
-runs `if: always()` on every pipeline completion, not only on
-failure; see §5 data flow), so the PR no longer carries stale
-deviation text.
+compat gate has its comment **replaced** with a "✅ Compat-diff
+cleared" body by the `compat-report` job (it runs `if: always()` on
+every pipeline completion, not only on failure; see §5 data flow),
+so the PR no longer carries stale deviation text while retaining
+an audit trail of the comment lifecycle.
 
 ## Failure policy
 
@@ -341,8 +345,10 @@ brainstorm).
     ini-value default), observe the `compat-report` job posts a
     correctly-formatted sticky comment.
   - Push a follow-up commit removing the deviation, observe the same
-    `compat-report` job **deletes** the sticky comment (no stale
-    "deviations detected" text left behind on a now-green PR).
+    `compat-report` job **rewrites** the sticky comment body to the
+    "✅ Compat-diff cleared" marker (no stale "deviations detected"
+    text left behind on a now-green PR; the comment history itself
+    is preserved for audit).
   - Dispatch `compat-golden-refresh` workflow manually, observe the
     drift PR opens with reasonable body (or exits cleanly on no drift).
 
