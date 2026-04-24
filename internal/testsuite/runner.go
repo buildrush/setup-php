@@ -384,7 +384,14 @@ func buildCellMounts(opts *testOpts, _, _, _ string) ([]build.Mount, map[string]
 	mounts = append(mounts,
 		build.Mount{Host: compatMatrix, Container: "/compat-matrix.md", ReadOnly: true},
 	)
-	goldenDir := filepath.Join(opts.AbsRepo, "test", "compat", "testdata", "golden")
+	// Goldens live under a version-namespaced subdirectory
+	// (test/compat/testdata/golden/v2/<fixture>.json) so future alternate
+	// sources can coexist (e.g. golden/v3/ when a new upstream baseline
+	// is pinned). The container mount flattens that namespace to /golden
+	// so runFixture can read /golden/<fixture>.json without knowing the
+	// version subpath convention. See internal/testsuite/testcell.go
+	// shouldRunCompat for the consumer path.
+	goldenDir := filepath.Join(opts.AbsRepo, "test", "compat", "testdata", "golden", "v2")
 	if _, err := os.Stat(goldenDir); err == nil {
 		mounts = append(mounts,
 			build.Mount{Host: goldenDir, Container: "/golden", ReadOnly: true},

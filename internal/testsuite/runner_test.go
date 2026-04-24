@@ -232,7 +232,7 @@ func TestBuildCellMounts_MountsCompatMatrix(t *testing.T) {
 
 	// writeTestsuiteFixture already wrote docs/compat-matrix.md.
 	matrixPath := filepath.Join(dir, "docs", "compat-matrix.md")
-	goldenDir := filepath.Join(dir, "test", "compat", "testdata", "golden")
+	goldenDir := filepath.Join(dir, "test", "compat", "testdata", "golden", "v2")
 	if err := os.MkdirAll(goldenDir, 0o755); err != nil {
 		t.Fatalf("mkdir golden: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestBuildCellMounts_MountsCompatMatrix(t *testing.T) {
 		t.Errorf("buildCellMounts did not mount docs/compat-matrix.md -> /compat-matrix.md (ro); mounts=%+v", mounts)
 	}
 	if !sawGoldens {
-		t.Errorf("buildCellMounts did not mount test/compat/testdata/golden -> /golden (ro); mounts=%+v", mounts)
+		t.Errorf("buildCellMounts did not mount test/compat/testdata/golden/v2 -> /golden (ro); mounts=%+v", mounts)
 	}
 }
 
