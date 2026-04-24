@@ -38,7 +38,11 @@ const LinuxAptPreamble = "apt-get update && " +
 	// Arch detection: uname -m on linux returns x86_64 or aarch64; oras
 	// releases use amd64/arm64. One shell line keeps the preamble terse.
 	"ARCH_ORAS=$(uname -m); case \"$ARCH_ORAS\" in x86_64) ORAS_ARCH=amd64 ;; aarch64) ORAS_ARCH=arm64 ;; esac; " +
-	"curl -sSfL https://github.com/oras-project/oras/releases/download/v" + orasVersion +
+	// GitHub releases CDN occasionally 502s transiently. curl's --retry
+	// covers 408/429/5xx + timeouts; 5 attempts × 2s delay ≈ 30s of
+	// resilience before giving up, enough to ride out a brief outage
+	// without letting a flaky hop fail the whole pipeline cell.
+	"curl -sSfL --retry 5 --retry-delay 2 https://github.com/oras-project/oras/releases/download/v" + orasVersion +
 	"/oras_" + orasVersion + "_linux_${ORAS_ARCH}.tar.gz | tar -xz -C /usr/local/bin oras && "
 
 // LinuxExtAptPreamble extends LinuxAptPreamble with PHP's runtime shared-

@@ -13,7 +13,7 @@ PHP_SRC_DIR="${PHP_SRC_DIR:-/tmp/php-src}"
 
 # Resolve minor version (e.g. "8.4") to latest patch version (e.g. "8.4.20")
 if [[ "$PHP_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
-  RESOLVED=$(curl -sSf "https://www.php.net/releases/index.php?json&version=${PHP_VERSION}" | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+  RESOLVED=$(curl -sSf --retry 5 --retry-delay 2 "https://www.php.net/releases/index.php?json&version=${PHP_VERSION}" | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
   if [ -z "$RESOLVED" ]; then
     echo "Error: could not resolve PHP ${PHP_VERSION} to a patch version"
     exit 1
@@ -62,7 +62,7 @@ echo "::endgroup::"
 # Download PHP source
 PHP_URL="https://www.php.net/distributions/php-${PHP_VERSION}.tar.xz"
 echo "Downloading ${PHP_URL}"
-curl -sSfL -o /tmp/php.tar.xz "$PHP_URL"
+curl -sSfL --retry 5 --retry-delay 2 -o /tmp/php.tar.xz "$PHP_URL"
 
 # Extract source
 mkdir -p "$PHP_SRC_DIR"
@@ -155,7 +155,7 @@ echo "PHP ${PHP_VERSION} built successfully"
 
 # Ensure yq is present (GitHub runners ship it; local Docker image may not).
 if ! command -v yq >/dev/null 2>&1; then
-    curl -sSfL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(dpkg --print-architecture)
+    curl -sSfL --retry 5 --retry-delay 2 -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(dpkg --print-architecture)
     chmod +x /usr/local/bin/yq
 fi
 

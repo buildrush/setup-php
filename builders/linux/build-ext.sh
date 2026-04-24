@@ -50,7 +50,7 @@ export PATH="/usr/local/bin:$PATH"
 # Download extension source from PECL
 PECL_URL="https://pecl.php.net/get/${EXT_NAME}-${EXT_VERSION}.tgz"
 echo "Downloading ${PECL_URL}"
-curl -sSfL -o /tmp/ext.tgz "$PECL_URL"
+curl -sSfL --retry 5 --retry-delay 2 -o /tmp/ext.tgz "$PECL_URL"
 
 # Extract
 mkdir -p /tmp/ext-src
@@ -92,7 +92,7 @@ patchelf --set-rpath '$ORIGIN/hermetic' "$SO_FILE"
 echo "Extension ${EXT_NAME}.so built at ${SO_FILE}"
 
 if ! command -v yq >/dev/null 2>&1; then
-    curl -sSfL -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(dpkg --print-architecture)
+    curl -sSfL --retry 5 --retry-delay 2 -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_$(dpkg --print-architecture)
     chmod +x /usr/local/bin/yq
 fi
 
