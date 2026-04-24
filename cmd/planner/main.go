@@ -93,12 +93,11 @@ func main() {
 
 	// Build a map of already-published php-core digests keyed by
 	// lockfile.PHPBundleKey (matches the key format ExpandExtMatrix builds
-	// internally). Used to populate ext cells' CoreDigest field so Task 5's
-	// build-extension job can pin the core by digest. Cells whose core is
-	// being rebuilt in the same run won't have an entry here yet — the
-	// workflow orchestrator (plan-and-build.yml) serializes build-ext
-	// after build-php so the lockfile can be refreshed before ext builds
-	// consume the value; this field is plumbing-only in Task 4.
+	// internally). Used to populate ext cells' CoreDigest field so the ext
+	// builder can pin the core by digest. Cells whose core is being rebuilt
+	// in the same run get CoreDigest plumbed from the within-run
+	// build-php → build-ext ordering (see ci.yml::pipeline); legacy
+	// planner-driven workflows kept this as a lockfile lookup only.
 	coreDigestByKey := make(map[string]string, len(lf.Bundles))
 	for key, entry := range lf.Bundles {
 		if strings.HasPrefix(key, "php:") {

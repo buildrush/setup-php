@@ -1,6 +1,7 @@
 # test/compat/fixtures.yaml
-# Each fixture feeds a matrix cell in compat-harness.yml. Field names match
-# shivammathur/setup-php@v2 inputs (php-version, extensions, ini-values, coverage).
+# Each fixture is exercised by `phpup test` via ci.yml::pipeline (one cell
+# per OS × ARCH × PHP). Field names match shivammathur/setup-php@v2 inputs
+# (php-version, extensions, ini-values, coverage).
 # Keep this sorted by 'name' so matrix iteration order is deterministic.
 
 fixtures:

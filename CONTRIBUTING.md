@@ -23,7 +23,7 @@ make check  # verify everything works
 2. Make changes
 3. Run `make check` — must pass before committing
 4. Commit with conventional messages (`feat:`, `fix:`, `chore:`, etc.)
-5. Open a PR — CI runs `ci-lint.yml` automatically
+5. Open a PR — CI runs `ci.yml` automatically (lint + unit tests + 16-cell pipeline)
 
 ## CI writes to your PR branch
 
@@ -33,7 +33,7 @@ Practical implications:
 
 - **Don't force-push while CI is in flight.** The bot pushes with `--force-with-lease`; it will refuse to overwrite a newer tip, and the pipeline will fail the run. Wait for a green CI run before rebasing, then `git pull --rebase` to pick up the bot's commit.
 - **Fork PRs are blocked from auto-publishing.** GitHub does not grant fork PRs write access to the head ref or packages. A maintainer must label the PR `safe-to-build` and re-run the pipeline.
-- **Declined PRs leave no trace on main.** Orphan bundles accumulate on GHCR under the PR branch's lifetime and are reaped by `gc-bundles.yml` on a quarterly schedule.
+- **Declined PRs leave no trace on main.** Orphan bundles accumulate on GHCR under the PR branch's lifetime; run `go run ./cmd/gc-bundles --org buildrush --min-age-days 30` periodically (or when GHCR quota pressure warrants) to reap them.
 
 See `docs/superpowers/specs/2026-04-20-bundle-schema-and-rollout-design.md` for the full rollout design.
 

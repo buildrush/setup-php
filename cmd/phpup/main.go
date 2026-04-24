@@ -66,9 +66,10 @@ func main() {
 	}
 
 	// `phpup test …` is dispatched the same way as `phpup build …`: its
-	// own FlagSet, its own argv universe. Used by maintainers to run the
-	// compat-harness fixtures locally against a registry (oci-layout or
-	// remote). See internal/testsuite.Main for the flag surface.
+	// own FlagSet, its own argv universe. Used by ci.yml::pipeline (via
+	// `make ci-cell`) to exercise the fixture matrix against a registry
+	// (oci-layout or remote). See internal/testsuite.Main for the flag
+	// surface.
 	if len(os.Args) > 1 && os.Args[1] == "test" {
 		if err := testsuite.Main(os.Args[2:]); err != nil {
 			log.Fatalf("%v", err)

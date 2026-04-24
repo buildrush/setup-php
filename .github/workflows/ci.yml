@@ -28,6 +28,8 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
+      - name: go vet
+        run: go vet ./...
       - name: Install node deps
         run: npm ci
       - name: ESLint
@@ -113,9 +115,9 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Publish to GHCR (gated)
+    name: Publish to GHCR
     needs: pipeline
-    if: github.ref == 'refs/heads/main' && vars.PHPUP_NEW_CI_PUBLISH == '1'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -156,6 +158,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No lockfile changes to commit."
           else
-            git commit -m "chore: update bundles.lock (new ci.yml)"
+            git commit -m "chore: update bundles.lock"
             git push
           fi
