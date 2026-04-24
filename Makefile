@@ -122,6 +122,10 @@ bundle-ext: $(PHPUP_BIN)
 # OS, ARCH, PHP; REGISTRY defaults to the local OCI layout used by
 # bundle-php/bundle-ext. Exercised end-to-end via `make ci`.
 #
+# Set FORCE=1 to skip the spec-hash cache-probe and rebuild php-core + every
+# ext from source even when a matching bundle is already in REGISTRY. Used
+# by security-rebuild and manual workflow_dispatch invocations.
+#
 # The cell container is always linux/<ARCH>, so phpup must be cross-compiled
 # to match — a darwin/arm64 host binary or a linux/amd64 host binary running
 # an aarch64 cell would trip `exec format error`. We resolve the right
@@ -133,6 +137,7 @@ ci-cell:
 	  aarch64|arm64)  phpup_linux_bin="bin/phpup-linux-arm64" ;; \
 	  *) echo "ci-cell: unknown ARCH=$(ARCH), want x86_64 or aarch64" >&2; exit 2 ;; \
 	esac; \
+	force_flag=""; [ -n "$(FORCE)" ] && force_flag="--force"; \
 	$(MAKE) "$$phpup_linux_bin" && \
 	$(MAKE) $(PHPUP_BIN) && \
 	$(PHPUP_BIN) build cell \
@@ -140,7 +145,7 @@ ci-cell:
 	    --arch $(ARCH) \
 	    --php $(PHP) \
 	    --registry $(or $(REGISTRY),oci-layout:./out/oci-layout) \
-	    --repo . && \
+	    --repo . $$force_flag && \
 	$(PHPUP_BIN) test \
 	    --os $(OS) \
 	    --arch $(ARCH) \

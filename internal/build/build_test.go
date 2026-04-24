@@ -183,6 +183,55 @@ func TestBuildPHP_CacheHit_ShortCircuitsWithoutRunning(t *testing.T) {
 	}
 }
 
+// TestBuildPHP_Force_BypassesCacheHit verifies that --force makes BuildPHP
+// skip the LookupBySpec cache probe and actually invoke the runner even
+// when an identically-spec-hashed bundle is already in the target layout.
+// Regression test for the security-rebuild path: without --force, a
+// published bundle with matching spec-hash short-circuits the build and
+// the rebuild is effectively a no-op.
+func TestBuildPHP_Force_BypassesCacheHit(t *testing.T) {
+	repo := t.TempDir()
+	writeRepoFixture(t, repo)
+	layoutDir := filepath.Join(t.TempDir(), "layout")
+
+	hash, err := ComputeSpecHash(&SpecHashInputs{
+		Kind: "php", Version: "8.4", OS: "linux", Arch: "x86_64", TS: "nts", Repo: repo,
+	})
+	if err != nil {
+		t.Fatalf("ComputeSpecHash: %v", err)
+	}
+	layoutURI := seedLayout(t, layoutDir, "php-core", hash)
+
+	var called bool
+	restore := SetRunner(func(ctx context.Context, opts *DockerRunOpts) error {
+		called = true
+		return fakeRunner([]byte("synthetic-bundle"))(ctx, opts)
+	})
+	defer restore()
+
+	out := captureStdout(t, func() {
+		err = BuildPHP(context.Background(), []string{
+			"--php", "8.4",
+			"--registry", layoutURI,
+			"--repo", repo,
+			"--out-dir", t.TempDir(),
+			"--force",
+		})
+	})
+	if err != nil {
+		t.Fatalf("BuildPHP --force: %v", err)
+	}
+	if !called {
+		t.Error("runner was NOT called under --force even though cache was populated")
+	}
+	if !strings.Contains(out, "--force, skipping cache-probe") {
+		t.Errorf("stdout = %q, want contains \"--force, skipping cache-probe\"", out)
+	}
+	if strings.Contains(out, "cache hit") {
+		t.Errorf("stdout = %q, must NOT contain \"cache hit\" under --force", out)
+	}
+}
+
 func TestBuildPHP_CacheMiss_InvokesRunnerThenPushes(t *testing.T) {
 	repo := t.TempDir()
 	writeRepoFixture(t, repo)

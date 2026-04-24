@@ -4,6 +4,12 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Bypass the spec-hash cache-probe and rebuild every bundle from source. Used by security-rebuild and manual full-rebuild dispatches; leave unchecked for a routine run."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -100,7 +106,13 @@ jobs:
       - name: Run ci-cell (build + test)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: make ci-cell OS=${{ matrix.os }} ARCH=${{ matrix.arch }} PHP=${{ matrix.php }}
+          # workflow_dispatch threads `inputs.force` through so a manual
+          # full-rebuild run (or a security-rebuild trigger) bypasses the
+          # spec-hash cache-probe in `phpup build cell`. Empty string for
+          # every other event type — make ci-cell treats empty FORCE as
+          # "do the normal cache-probe".
+          FORCE: ${{ inputs.force && '1' || '' }}
+        run: make ci-cell OS=${{ matrix.os }} ARCH=${{ matrix.arch }} PHP=${{ matrix.php }} FORCE="$FORCE"
       - name: Upload oci-layout artifact (main only)
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4

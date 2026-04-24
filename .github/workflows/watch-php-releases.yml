@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   check:
@@ -28,8 +29,20 @@ jobs:
           git add .state/php-versions.json
           git commit -m "chore: observed new PHP release"
           git push
-      - name: Dispatch rebuild
+      - name: Dispatch ci.yml for rebuild
         if: steps.poll.outputs.changed == 'true'
-        uses: peter-evans/repository-dispatch@v4
+        uses: actions/github-script@v7
         with:
-          event-type: php-release-detected
+          # force=false — a new upstream PHP release alone doesn't
+          # invalidate existing bundles. The .state/ commit above is the
+          # canonical signal; this dispatch just lets the pipeline rerun
+          # over the latest main (catalog update lands separately).
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ci.yml',
+              ref: 'main',
+              inputs: { force: 'false' },
+            });
+            core.info('Dispatched ci.yml on main after observing new PHP release');
