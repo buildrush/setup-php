@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -18,12 +19,17 @@ import (
 	"github.com/buildrush/setup-php/internal/cache"
 	"github.com/buildrush/setup-php/internal/catalog"
 	"github.com/buildrush/setup-php/internal/compat"
+	"github.com/buildrush/setup-php/internal/compatdiff"
 	"github.com/buildrush/setup-php/internal/compose"
 	"github.com/buildrush/setup-php/internal/env"
 	"github.com/buildrush/setup-php/internal/extract"
+	"github.com/buildrush/setup-php/internal/gcbundles"
+	"github.com/buildrush/setup-php/internal/hermeticaudit"
 	"github.com/buildrush/setup-php/internal/lockfile"
+	"github.com/buildrush/setup-php/internal/lockfileupdate"
 	"github.com/buildrush/setup-php/internal/oci"
 	"github.com/buildrush/setup-php/internal/plan"
+	"github.com/buildrush/setup-php/internal/planner"
 	"github.com/buildrush/setup-php/internal/resolve"
 	"github.com/buildrush/setup-php/internal/testsuite"
 	"github.com/buildrush/setup-php/internal/version"
@@ -72,6 +78,62 @@ func main() {
 	// surface.
 	if len(os.Args) > 1 && os.Args[1] == "test" {
 		if err := testsuite.Main(os.Args[2:]); err != nil {
+			log.Fatalf("%v", err)
+		}
+		return
+	}
+
+	// `phpup compat-diff …` compares our probe output to shivammathur's
+	// v2 probe output, filtering through the compat-matrix allowlist.
+	// Preserves the retired cmd/compat-diff exit convention: 0 = match,
+	// 1 = unexplained deviation(s), 2 = malformed input / usage error.
+	if len(os.Args) > 1 && os.Args[1] == "compat-diff" {
+		os.Exit(int(compatdiff.Main(os.Args[2:])))
+	}
+
+	// `phpup lockfile-update …` regenerates bundles.lock from the current
+	// catalog and the state of GHCR. Invoked by ci.yml::publish after a
+	// main-branch bundle rebuild; same flag surface + behaviour as the
+	// retired cmd/lockfile-update binary.
+	if len(os.Args) > 1 && os.Args[1] == "lockfile-update" {
+		if err := lockfileupdate.Main(os.Args[2:]); err != nil {
+			log.Fatalf("%v", err)
+		}
+		return
+	}
+
+	// `phpup gc-bundles …` prunes unreferenced GHCR bundles via the
+	// `gh` CLI (dry-run by default; --confirm to actually delete).
+	// Same flag surface as the retired cmd/gc-bundles binary.
+	if len(os.Args) > 1 && os.Args[1] == "gc-bundles" {
+		if err := gcbundles.Main(os.Args[2:]); err != nil {
+			log.Fatalf("%v", err)
+		}
+		return
+	}
+
+	// `phpup hermetic-audit …` verifies a built bundle's ELF shared-lib
+	// closure against an OS runner image. Preserves the pre-refactor
+	// cmd/hermetic-audit exit convention: 0 = clean, 1 = findings, 2 = error.
+	if len(os.Args) > 1 && os.Args[1] == "hermetic-audit" {
+		err := hermeticaudit.Main(os.Args[2:])
+		switch {
+		case err == nil:
+			return
+		case errors.Is(err, hermeticaudit.ErrFindings):
+			os.Exit(1)
+		default:
+			fmt.Fprintf(os.Stderr, "::error::phpup hermetic-audit: %v\n", err)
+			os.Exit(2)
+		}
+	}
+
+	// `phpup plan …` drives the matrix planner that generates the per-cell
+	// build matrices (consumed by older workflow orchestrators and by
+	// maintainers debugging catalog/lockfile interaction locally). Same
+	// flags as the retired cmd/planner binary; byte-identical output.
+	if len(os.Args) > 1 && os.Args[1] == "plan" {
+		if err := planner.Main(os.Args[2:]); err != nil {
 			log.Fatalf("%v", err)
 		}
 		return

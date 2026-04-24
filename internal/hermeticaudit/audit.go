@@ -1,13 +1,15 @@
-// Package main implements hermetic-audit, which verifies a built bundle's ELF
-// files resolve all their shared-library dependencies when loaded on a given
-// runner OS. Uses ldd inside a Docker image matching --expected-runner-os so
-// the audit reflects the apt reality of the target runner, not the CI host.
-package main
+// Package hermeticaudit implements `phpup hermetic-audit`, which verifies
+// a built bundle's ELF files resolve all their shared-library dependencies
+// when loaded on a given runner OS. Uses ldd inside a Docker image matching
+// --expected-runner-os so the audit reflects the apt reality of the target
+// runner, not the CI host.
+package hermeticaudit
 
 import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -23,27 +25,36 @@ type metaSidecar struct {
 	Kind         string   `json:"kind"`
 }
 
-func main() {
-	bundlePath := flag.String("bundle", "", "path to extracted bundle directory")
-	runnerOS := flag.String("expected-runner-os", "", "e.g. ubuntu-22.04 or ubuntu-24.04")
-	format := flag.String("format", "human", "human|json")
-	flag.Parse()
+// ErrFindings is returned by Main when the audit found unresolvable or
+// mis-captured libraries. Callers handle this as a non-zero exit; other
+// error values indicate a usage or I/O failure. Matches the pre-refactor
+// cmd/hermetic-audit exit convention: 0 = clean, 1 = findings, 2 = error.
+var ErrFindings = errors.New("hermetic-audit: findings present")
+
+// Main is the entry point for `phpup hermetic-audit`. args is everything
+// after the subcommand token. Output is byte-identical to the previous
+// cmd/hermetic-audit binary for the same inputs.
+func Main(args []string) error {
+	fs := flag.NewFlagSet("phpup hermetic-audit", flag.ContinueOnError)
+	bundlePath := fs.String("bundle", "", "path to extracted bundle directory")
+	runnerOS := fs.String("expected-runner-os", "", "e.g. ubuntu-22.04 or ubuntu-24.04")
+	format := fs.String("format", "human", "human|json")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	if *bundlePath == "" || *runnerOS == "" {
-		fmt.Fprintln(os.Stderr, "usage: hermetic-audit --bundle <dir> --expected-runner-os <os>")
-		os.Exit(2)
+		return fmt.Errorf("usage: phpup hermetic-audit --bundle <dir> --expected-runner-os <os>")
 	}
 
 	meta, err := readMeta(filepath.Join(*bundlePath, "meta.json"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "::error::hermetic-audit: %v\n", err)
-		os.Exit(2)
+		return err
 	}
 
 	elves, err := findELFs(*bundlePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "::error::hermetic-audit: find ELFs: %v\n", err)
-		os.Exit(2)
+		return fmt.Errorf("find ELFs: %w", err)
 	}
 
 	var report auditReport
@@ -52,8 +63,7 @@ func main() {
 	for _, elf := range elves {
 		missing, err := lddInDocker(elf, *runnerOS)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "::error::hermetic-audit: ldd %s: %v\n", elf, err)
-			os.Exit(2)
+			return fmt.Errorf("ldd %s: %w", elf, err)
 		}
 		unexplained, captureBugs := classifyMissing(missing, meta.HermeticLibs)
 		for _, u := range unexplained {
@@ -74,8 +84,9 @@ func main() {
 	}
 
 	if len(report.Unexplained) > 0 || len(report.CaptureBugs) > 0 {
-		os.Exit(1)
+		return ErrFindings
 	}
+	return nil
 }
 
 type findingEntry struct {

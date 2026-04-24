@@ -1,10 +1,12 @@
-// Command gc-bundles prunes unreferenced GHCR bundles.
+// Package gcbundles implements `phpup gc-bundles`, which prunes
+// unreferenced GHCR bundles.
 //
 // Runs in two modes:
 //
 //	--dry-run (default): list candidate versions without deleting.
-//	--confirm: actually delete the candidates. Guarded behind a workflow
-//	           dispatch input; local dev should stick to --dry-run.
+//	--confirm: actually delete the candidates. Local dev should stick
+//	           to --dry-run; operators invoke --confirm after reviewing
+//	           the dry-run output.
 //
 // A version is a candidate for pruning when it is:
 //   - a container manifest under ghcr.io/<org>/php-core or
@@ -15,27 +17,29 @@
 //
 // Released-tag lockfile references are load-bearing for product-vision §16
 // reproducibility and must never be pruned.
-package main
+package gcbundles
 
 import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
 )
 
-func main() {
-	org := flag.String("org", "buildrush", "GHCR organization to scan")
-	minAgeDays := flag.Int("min-age-days", 30, "minimum age before a version is prunable")
-	confirm := flag.Bool("confirm", false, "actually delete (default is dry-run)")
-	flag.Parse()
-
-	if err := run(*org, *minAgeDays, *confirm, os.Stdout); err != nil {
-		log.Fatalf("gc-bundles: %v", err)
+// Main is the entry point for `phpup gc-bundles`. args is everything after
+// the subcommand token. Byte-identical stdout to the previous cmd/gc-bundles
+// binary for the same inputs.
+func Main(args []string) error {
+	fs := flag.NewFlagSet("phpup gc-bundles", flag.ContinueOnError)
+	org := fs.String("org", "buildrush", "GHCR organization to scan")
+	minAgeDays := fs.Int("min-age-days", 30, "minimum age before a version is prunable")
+	confirm := fs.Bool("confirm", false, "actually delete (default is dry-run)")
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
+	return run(*org, *minAgeDays, *confirm, os.Stdout)
 }
 
 // run is the testable core. It writes a human-readable report to w —

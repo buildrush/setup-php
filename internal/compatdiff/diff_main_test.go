@@ -1,5 +1,4 @@
-// cmd/compat-diff/main_test.go
-package main
+package compatdiff
 
 import (
 	"os"
@@ -9,20 +8,47 @@ import (
 	"testing"
 )
 
+// buildBinary builds the phpup binary (which now hosts compat-diff as a
+// subcommand) into a t.TempDir(). Tests then invoke `<phpup> compat-diff …`
+// to exercise the full dispatch path, matching the pre-consolidation
+// integration-test shape.
 func buildBinary(t *testing.T) string {
 	t.Helper()
-	bin := t.TempDir() + "/compat-diff"
-	cmd := exec.Command("go", "build", "-o", bin, ".")
+	// Resolve repo root from this file's package: internal/compatdiff/ → two
+	// levels up. Avoids hard-coding CWD expectations that flake under `go
+	// test ./…` vs. running from the package dir.
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(wd, "..", ".."))
+	// Ensure the embedded lockfile is present so `go build ./cmd/phpup`
+	// succeeds (same prepare step the repo Makefile does).
+	src := filepath.Join(repoRoot, "bundles.lock")
+	dst := filepath.Join(repoRoot, "cmd", "phpup", "bundles.lock")
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		data, err := os.ReadFile(filepath.Clean(src))
+		if err != nil {
+			t.Fatalf("read bundles.lock: %v", err)
+		}
+		if err := os.WriteFile(dst, data, 0o600); err != nil {
+			t.Fatalf("write cmd/phpup/bundles.lock: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Remove(dst) })
+	}
+	bin := t.TempDir() + "/phpup"
+	cmd := exec.Command("go", "build", "-o", bin, "./cmd/phpup")
+	cmd.Dir = repoRoot
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("build: %v: %s", err, out)
+		t.Fatalf("build phpup: %v: %s", err, out)
 	}
 	return bin
 }
 
 func TestMissingFlagsExits2(t *testing.T) {
 	bin := buildBinary(t)
-	cmd := exec.Command(bin)
+	cmd := exec.Command(bin, "compat-diff")
 	out, err := cmd.CombinedOutput()
 	ee, ok := err.(*exec.ExitError)
 	if !ok {
@@ -38,7 +64,7 @@ func TestMissingFlagsExits2(t *testing.T) {
 
 func runCLI(t *testing.T, bin string, args ...string) (output string, exitCode int) {
 	t.Helper()
-	cmd := exec.Command(bin, args...)
+	cmd := exec.Command(bin, append([]string{"compat-diff"}, args...)...)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		return string(out), 0

@@ -39,7 +39,6 @@ jobs:
 
           cp bundles.lock cmd/phpup/bundles.lock
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o dist/phpup-linux-amd64 ./cmd/phpup
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o dist/planner-linux-amd64 ./cmd/planner
           rm -f cmd/phpup/bundles.lock
 
           (cd dist && sha256sum -- * > sha256sums.txt)

@@ -57,9 +57,9 @@ func ExtensionYAMLFromFile(path string) ([]byte, error) {
 // the given key, or "" if the key is absent. Lines are split on "\n"; the
 // first line matching "<key>=<value>" (after trimming) wins. Blank lines and
 // lines starting with "#" are ignored. Values are not unquoted — callers that
-// need quote handling must do it themselves. This mirrors the parser that
-// lived inline in cmd/planner/main.go for BUILDER_OS and is deliberately
-// minimal; extend only with a test-driven reason.
+// need quote handling must do it themselves. This parser is deliberately
+// minimal (it only needs to extract BUILDER_OS for the planner's spec-hash);
+// extend only with a test-driven reason.
 func ParseEnvValue(data []byte, key string) string {
 	prefix := key + "="
 	for _, line := range strings.Split(string(data), "\n") {

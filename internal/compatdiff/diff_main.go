@@ -1,5 +1,5 @@
 // cmd/compat-diff/main.go
-package main
+package compatdiff
 
 import (
 	"flag"
@@ -78,10 +78,28 @@ func run(args cliArgs, stdout, stderr *os.File) int {
 	return exitDiff
 }
 
-func main() {
-	args, code := parseFlags(os.Args[1:], os.Stderr)
+// ExitCode is returned by Main so the phpup dispatcher can preserve the
+// pre-refactor cmd/compat-diff exit convention:
+//
+//	0 = match (no deviations)
+//	1 = deviation(s) found
+//	2 = usage / I/O / malformed-input error
+type ExitCode int
+
+const (
+	ExitMatch     ExitCode = exitMatch
+	ExitDiff      ExitCode = exitDiff
+	ExitMalformed ExitCode = exitMalformed
+)
+
+// Main is the entry point for `phpup compat-diff`. args is everything after
+// the subcommand token. Returns an ExitCode the phpup dispatcher converts to
+// os.Exit; byte-identical stdout/stderr to the retired cmd/compat-diff
+// binary for the same inputs.
+func Main(args []string) ExitCode {
+	parsed, code := parseFlags(args, os.Stderr)
 	if code != 0 {
-		os.Exit(code)
+		return ExitCode(code)
 	}
-	os.Exit(run(args, os.Stdout, os.Stderr))
+	return ExitCode(run(parsed, os.Stdout, os.Stderr))
 }

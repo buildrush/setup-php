@@ -69,19 +69,18 @@ test: cmd/phpup/bundles.lock
 test-node:
 	npm test
 
-# Build all binaries (native platform)
+# Build phpup (native platform). The planner, lockfile-update, gc-bundles,
+# hermetic-audit, and compat-diff tools now live as subcommands under phpup
+# (see `phpup --help`); no separate binaries to cross-compile.
 build: cmd/phpup/bundles.lock
 	go build -o bin/phpup ./cmd/phpup
-	go build -o bin/planner ./cmd/planner
 
-# Cross-compile for Linux
+# Cross-compile phpup for Linux
 build-linux-amd64:
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/phpup-linux-amd64 ./cmd/phpup
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/planner-linux-amd64 ./cmd/planner
 
 build-linux-arm64:
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bin/phpup-linux-arm64 ./cmd/phpup
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o bin/planner-linux-arm64 ./cmd/planner
 
 # Build a PHP core bundle locally via phpup (docker-wrapped under the hood).
 # Invocation:
@@ -180,5 +179,5 @@ clean:
 	rm -rf bin/ dist/
 
 # Dry-run the GC tool locally (requires gh auth login + network access).
-gc-bundles-dry-run:
-	go run ./cmd/gc-bundles --org buildrush --min-age-days 30
+gc-bundles-dry-run: $(PHPUP_BIN)
+	$(PHPUP_BIN) gc-bundles --org buildrush --min-age-days 30
