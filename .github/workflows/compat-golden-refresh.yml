@@ -125,14 +125,23 @@ jobs:
       - name: Detect drift
         id: drift
         run: |
-          if git diff --quiet test/compat/testdata/golden/v2/; then
+          # Use `git status --porcelain` rather than `git diff --quiet`
+          # because the latter ignores untracked files — on the initial
+          # capture (goldens dir previously empty) every JSON is a new
+          # file, not a modification to a tracked one. The porcelain
+          # output is non-empty iff anything under the path differs
+          # from HEAD, covering adds, modifications, and deletions.
+          if [ -z "$(git status --porcelain test/compat/testdata/golden/v2/)" ]; then
             echo "drift=false" >> "$GITHUB_OUTPUT"
             echo "No v2 drift detected." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "drift=true" >> "$GITHUB_OUTPUT"
             {
-              echo "### Per-fixture golden diffs";
-              git diff --stat test/compat/testdata/golden/v2/
+              echo "### Per-fixture golden changes"
+              git status --porcelain test/compat/testdata/golden/v2/
+              echo
+              echo "### Per-fixture diff stats (modifications only)"
+              git diff --stat test/compat/testdata/golden/v2/ || true
             } >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Open drift PR
