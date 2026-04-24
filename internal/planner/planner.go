@@ -28,7 +28,7 @@ type MatrixCell struct {
 	// CoreDigest is the OCI manifest digest of the prerequisite php-core
 	// bundle for this ext cell (e.g., "sha256:abc..."). Populated ONLY for
 	// ext cells; zero for php/tool cells. Surfaced in the emitted matrix
-	// JSON as `core_digest` so build-extension.yml can pass it to
+	// JSON as `core_digest` so downstream callers can pass it to
 	// `phpup build ext --php-core-digest`. omitempty keeps the JSON
 	// backward-compatible — php/tool cells don't gain a noisy empty field.
 	CoreDigest string `json:"core_digest,omitempty"`

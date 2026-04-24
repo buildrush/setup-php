@@ -42,8 +42,7 @@ All code changes MUST pass `make check` before committing. This runs:
 
 - Use conventional commit messages (feat:, fix:, chore:, docs:, test:, refactor:).
 - No "Co-Authored-By" or AI attribution in commit messages or PR descriptions.
-- Verify `make check` passes before every commit AND before every push. `make check` now includes the docker-backed `local-ci` smoke that exercises the currently-published bundles on both jammy and noble runners (~3-5 min cold); use `make check-fast` during rapid iteration, then `make check` before the push.
-- **Exception — builder/catalog bootstrap**: commits that change `builders/linux/*.sh`, `builders/common/*.sh`, `builders/common/*.env`, or `catalog/**` invalidate the published bundles by design. `local-ci` on such a commit exercises the OLD bundles (not what the commit produces) and will fail until the pipeline rebuilds and publishes. In that case: run `make check-fast` before pushing, note the pending rebuild in the commit message, and re-run full `make check` after the pipeline's bot-committed lockfile lands to confirm the fix.
+- Verify `make check` passes before every commit AND before every push. For deeper validation that mirrors one cell of CI's `pipeline` matrix (builds php-core + extensions + runs fixtures inside bare-ubuntu docker), run `make ci-cell OS=<jammy|noble> ARCH=<x86_64|aarch64> PHP=<8.1-8.4>` — takes ~15–30 min per cell, use when CI fails and you need to reproduce it locally per the "CI failures" rule below.
 
 ## CI failures: reproduce locally first
 
@@ -64,7 +63,7 @@ Why: CI cycle times are 15–60 minutes; local iterations are seconds to minutes
 - Target overall test coverage of 80% or higher per package. Do not let coverage regress.
 - Go tests: `go test -race ./...`
 - Smoke tests: `test/smoke/run.sh` for bundle verification.
-- Integration tests: `.github/workflows/integration-test.yml` (CI only).
+- CI pipeline cell (build + fixture): `make ci-cell OS=<jammy|noble> ARCH=<x86_64|aarch64> PHP=<8.1-8.4>`.
 - Local bundle builds: `make bundle-php` and `make bundle-ext` (requires Docker).
 
 ## Release Engineering

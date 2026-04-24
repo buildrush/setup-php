@@ -1,6 +1,6 @@
-.PHONY: check check-fast fmt fmt-check vet lint tidy tidy-check test test-node build clean \
+.PHONY: check fmt fmt-check vet lint tidy tidy-check test test-node build clean \
         build-linux-amd64 build-linux-arm64 bundle-php bundle-ext gc-bundles-dry-run \
-        local-ci ci-cell ci
+        ci-cell ci
 
 # Path to the native phpup binary used by bundle-php / bundle-ext. Overridable
 # so CI / power users can point at a pre-built binary.
@@ -19,29 +19,12 @@ $(PHPUP_BIN): cmd/phpup/bundles.lock
 	@mkdir -p $(dir $(PHPUP_BIN))
 	go build -o $(PHPUP_BIN) ./cmd/phpup
 
-# Full pre-push check: static analysis + tests + builds + a docker smoke that
-# exercises the published bundles on both jammy and noble runners. Takes ~5
-# minutes when the bundle caches are cold. Use check-fast for rapid iteration
-# during development; use check before every push.
-check: fmt-check vet lint tidy-check test test-node build local-ci
+# Pre-push check: static analysis + tests + builds. Run before every commit
+# and push. For a full CI cell smoke (build php-core + exts + run fixtures
+# inside bare-ubuntu docker) use `make ci-cell OS=… ARCH=… PHP=…`, which
+# reproduces one cell of the `ci.yml::pipeline` matrix locally.
+check: fmt-check vet lint tidy-check test test-node build
 	@rm -f cmd/phpup/bundles.lock
-
-# Fast check: skip the docker-based local-ci. Keep PR-authors productive during
-# rapid iteration; real gate is the full `check` target before push.
-check-fast: fmt-check vet lint tidy-check test test-node build
-	@rm -f cmd/phpup/bundles.lock
-
-# Docker-based smoke that mirrors the compat-harness: pulls published bundles,
-# composes them into a mock /opt/buildrush tree, and loads PHP + a multi-ext
-# fixture in both ubuntu:22.04 and ubuntu:24.04 containers. Catches cross-OS
-# runtime-dep / rpath regressions locally in ~3-5 min instead of a 30-min CI
-# cycle. Skipped gracefully if docker is unavailable.
-local-ci:
-	@if ! command -v docker >/dev/null 2>&1; then \
-		echo "local-ci: docker not found, skipping (fix: install Docker to run this check)"; \
-		exit 0; \
-	fi
-	@./test/smoke/local-ci.sh
 
 # Format all code
 fmt:
@@ -134,11 +117,11 @@ bundle-ext: $(PHPUP_BIN)
 		--registry $(or $(REGISTRY),oci-layout:./out/oci-layout) \
 		--repo .
 
-# Run one compat-harness cell via `phpup test`: loads the published (or local
-# OCI-layout) bundles for the requested OS/ARCH/PHP inside docker and exercises
-# every matching row in test/compat/fixtures.yaml. Caller supplies OS, ARCH,
-# PHP; REGISTRY defaults to the local OCI layout used by bundle-php/bundle-ext.
-# Exercised end-to-end via `make ci` and from test/smoke/local-ci.sh.
+# Run one `ci.yml::pipeline` cell via `phpup test`: loads the published (or
+# local OCI-layout) bundles for the requested OS/ARCH/PHP inside docker and
+# exercises every matching row in test/compat/fixtures.yaml. Caller supplies
+# OS, ARCH, PHP; REGISTRY defaults to the local OCI layout used by
+# bundle-php/bundle-ext. Exercised end-to-end via `make ci`.
 #
 # The cell container is always linux/<ARCH>, so phpup must be cross-compiled
 # to match — a darwin/arm64 host binary or a linux/amd64 host binary running

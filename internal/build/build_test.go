@@ -43,8 +43,8 @@ func writeRepoFixture(t *testing.T, dir string) {
 	mustWrite("catalog/php.yaml", "versions:\n  \"8.4\":\n    sources:\n      url: https://example.com/php-8.4.0.tar.xz\n")
 	// Extension catalog with a real build_deps.linux list so
 	// loadExtBuildDeps has something to parse. The shape matches
-	// catalog/extensions/amqp.yaml's production form (see
-	// .github/workflows/build-extension.yml's yq invocation).
+	// catalog/extensions/amqp.yaml's production form — same yq-compatible
+	// keys the pre-unification workflows parsed.
 	mustWrite("catalog/extensions/redis.yaml", "name: redis\nversions:\n  - \"6.2.0\"\nbuild_deps:\n  linux:\n    - libssl-dev\n")
 }
 
@@ -704,8 +704,7 @@ func TestCoreTagForFetch_MatchesFetchCoreShellLogic(t *testing.T) {
 }
 
 // TestLoadExtBuildDeps_JoinsLinuxList verifies loadExtBuildDeps returns
-// the space-joined list that build-ext.sh's BUILD_DEPS env expects —
-// matching the yq invocation in build-extension.yml.
+// the space-joined list that build-ext.sh's BUILD_DEPS env expects.
 func TestLoadExtBuildDeps_JoinsLinuxList(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "amqp.yaml")

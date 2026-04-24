@@ -206,7 +206,7 @@ func TestRemoteStore_Push_RequiresTag(t *testing.T) {
 
 // TestRemoteStore_Push_ArtifactTypeAnnotation_PhpExt verifies the manifest
 // annotation matches what `oras push --artifact-type application/vnd.buildrush.php-ext.v1`
-// emits for php-ext-* bundles (see .github/workflows/build-extension.yml).
+// would emit for php-ext-* bundles.
 func TestRemoteStore_Push_ArtifactTypeAnnotation_PhpExt(t *testing.T) {
 	ctx := context.Background()
 	host := startTestRegistry(t)
@@ -241,7 +241,7 @@ func TestRemoteStore_Push_ArtifactTypeAnnotation_PhpExt(t *testing.T) {
 }
 
 // TestRemoteStore_Push_ArtifactTypeAnnotation_PhpCore mirrors the php-ext
-// assertion for the php-core artifact type (build-php-core.yml).
+// assertion for the php-core artifact type.
 func TestRemoteStore_Push_ArtifactTypeAnnotation_PhpCore(t *testing.T) {
 	ctx := context.Background()
 	host := startTestRegistry(t)

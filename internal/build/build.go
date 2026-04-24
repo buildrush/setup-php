@@ -34,7 +34,7 @@ const orasVersion = "1.3.1"
 const LinuxAptPreamble = "apt-get update && " +
 	"apt-get install -y --no-install-recommends curl xz-utils ca-certificates file jq zstd && " +
 	// fetch-core.sh (called by build-ext.sh) shells out to `oras pull`.
-	// Install the same oras version the existing build-extension.yml uses.
+	// Pin oras to the version fetch-core.sh expects on PATH (see orasVersion).
 	// Arch detection: uname -m on linux returns x86_64 or aarch64; oras
 	// releases use amd64/arm64. One shell line keeps the preamble terse.
 	"ARCH_ORAS=$(uname -m); case \"$ARCH_ORAS\" in x86_64) ORAS_ARCH=amd64 ;; aarch64) ORAS_ARCH=arm64 ;; esac; " +
@@ -680,8 +680,7 @@ func tsFromPHPABI(phpABI string) string {
 
 // loadExtBuildDeps reads catalog/extensions/<name>.yaml and returns the
 // .build_deps.linux list joined by single spaces (the BUILD_DEPS env
-// shape build-ext.sh expects). Mirrors the yq invocation in
-// build-extension.yml:
+// shape build-ext.sh expects). Equivalent to:
 //
 //	yq eval '.build_deps.linux // [] | join(" ")' catalog/extensions/<name>.yaml
 //
@@ -822,11 +821,10 @@ func UbuntuImage(osFlag string) (string, error) {
 	case "noble", "ubuntu-24.04":
 		return "ubuntu:24.04", nil
 	case "linux":
-		// Legacy catalog abi_matrix uses "os: linux" as the family axis
-		// (POSIX family; actual runner flavor comes separately). The old
-		// build-php-core.yml / build-extension.yml workflows pass this
-		// value straight through to phpup build. Default to jammy for
-		// back-compat; callers that need noble pass "noble" explicitly.
+		// The catalog abi_matrix uses "os: linux" as the family axis
+		// (POSIX family; actual runner flavor comes separately), and some
+		// upstream callers still pass that family label straight through.
+		// Default to jammy; callers that need noble pass "noble" explicitly.
 		return "ubuntu:22.04", nil
 	default:
 		return "", fmt.Errorf("unknown os %q (want jammy|noble|linux)", osFlag)

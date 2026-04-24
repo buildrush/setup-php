@@ -38,8 +38,9 @@ func main() {
 	}
 }
 
-// run is the testable core. It writes a human-readable report to w; the
-// dry-run report doubles as the artifact uploaded by gc-bundles.yml.
+// run is the testable core. It writes a human-readable report to w —
+// invoke on-demand (e.g. `go run ./cmd/gc-bundles --org buildrush
+// --min-age-days 30`) when GHCR quota pressure warrants a sweep.
 func run(org string, minAgeDays int, confirm bool, w *os.File) error {
 	runner := NewGHRunner()
 

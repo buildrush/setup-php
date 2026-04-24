@@ -78,15 +78,16 @@ Details, deliberate deviations, and deferred behavioral quirks are catalogued in
 
 ## How we verify v2 compatibility
 
-Every pull request and push to `main` triggers the
-[`compat-harness` workflow](.github/workflows/compat-harness.yml), which runs
-a fixture matrix through both `buildrush/setup-php` and
-`shivammathur/setup-php@v2` (pinned by SHA in
-[`docs/compat-matrix.md`](docs/compat-matrix.md)) and diffs the resulting PHP
-environments. Any deviation that is not listed in the allowlist block of
-`docs/compat-matrix.md` fails the check. See the spec
-[`docs/superpowers/specs/2026-04-20-compat-harness-design.md`](docs/superpowers/specs/2026-04-20-compat-harness-design.md)
-for the full design.
+Every pull request and push to `main` runs the
+[`ci.yml`](.github/workflows/ci.yml) pipeline, which builds each
+OS × ARCH × PHP cell and executes the fixture matrix in
+[`test/compat/fixtures.yaml`](test/compat/fixtures.yaml) via `phpup test`.
+The fixtures use v2-shaped inputs (`php-version`, `extensions`,
+`ini-values`, `coverage`), so any drift from v2 semantics surfaces as a
+fixture failure. A side-by-side diff against `shivammathur/setup-php@v2`
+can be reproduced on demand with `go run ./cmd/compat-diff`; the pinned
+v2 SHA and the accepted-deviation allowlist live in
+[`docs/compat-matrix.md`](docs/compat-matrix.md).
 
 ## Contributing
 

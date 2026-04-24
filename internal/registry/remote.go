@@ -146,14 +146,14 @@ func (s *remoteStore) Fetch(ctx context.Context, ref Ref) (io.ReadCloser, *Meta,
 // Digest-only Refs are a Fetch/Has concept; for Push the caller must provide
 // a Tag.
 //
-// Media-type choices mirror the existing `oras push` command in
-// .github/workflows/build-php-core.yml + build-extension.yml: layer 0 is the
-// bundle at application/vnd.oci.image.layer.v1.tar+zstd, layer 1 (when meta
-// is non-nil) is the meta sidecar at application/vnd.buildrush.meta.v1+json,
+// Media-type choices match the historical `oras push` layout the pre-
+// unification workflows emitted: layer 0 is the bundle at
+// application/vnd.oci.image.layer.v1.tar+zstd, layer 1 (when meta is
+// non-nil) is the meta sidecar at application/vnd.buildrush.meta.v1+json,
 // and the manifest carries the OCI artifact-type annotation
 // (org.opencontainers.artifact.type) that matches --artifact-type. Keeping
-// this byte-identical with the CI path lets cosign + downstream OCI tooling
-// treat remoteStore-pushed bundles exactly like oras-pushed ones.
+// this byte-identical with the old path lets cosign + downstream OCI
+// tooling treat remoteStore-pushed bundles exactly like oras-pushed ones.
 func (s *remoteStore) Push(ctx context.Context, ref Ref, body io.Reader, meta *Meta, ann Annotations) error {
 	if ref.Name == "" {
 		return errors.New("remote.Push: ref.Name required")
