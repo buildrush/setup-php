@@ -284,12 +284,17 @@ func runCell(ctx context.Context, opts *testOpts, set *FixtureSet, cellOS, cellA
 	// preinstalled. Wrap the test-cell invocation with the same apt
 	// preamble that build-ext uses so probe.sh's `php -v` has its
 	// shared libs available (libreadline, libpq, libssl, libxml2, etc.).
-	cellCmd := strings.Join([]string{"/usr/local/bin/phpup", "internal", "test-cell",
+	cellCmdParts := []string{
+		"/usr/local/bin/phpup", "internal", "test-cell",
 		"--os", cellOS, "--arch", cellArch, "--php", cellPHP,
 		"--fixtures", "/test-compat/fixtures.yaml",
 		"--probe", "/test-compat/probe.sh",
 		"--registry", "oci-layout:/registry",
-	}, " ")
+		"--compat-matrix", "/compat-matrix.md",
+		"--golden-dir", "/golden",
+		"--deviations", "/deviations/" + cellOS + "-" + cellArch + "-" + cellPHP + ".json",
+	}
+	cellCmd := strings.Join(cellCmdParts, " ")
 	runOpts := &build.DockerRunOpts{
 		Image:    image,
 		Platform: platform,
@@ -317,6 +322,7 @@ func runCell(ctx context.Context, opts *testOpts, set *FixtureSet, cellOS, cellA
 //   - lockfile override    → /tmp/bundles-override.lock (read-only)
 //   - docs/compat-matrix.md → /compat-matrix.md (read-only; REQUIRED, errors if missing)
 //   - goldens dir          → /golden (read-only; OPTIONAL, silently skipped if dir absent)
+//   - deviations dir        → /deviations (read-write; CI compat-report consumes)
 //
 // Env is minimal: PHPUP_REGISTRY=oci-layout:/registry so the inner
 // phpup invocation inherits the right registry without needing to pass
@@ -384,6 +390,18 @@ func buildCellMounts(opts *testOpts, _, _, _ string) ([]build.Mount, map[string]
 			build.Mount{Host: goldenDir, Container: "/golden", ReadOnly: true},
 		)
 	}
+
+	// Deviations output directory: RW mount so runFixture can write per-cell
+	// artifact JSONs that ci.yml::compat-report consumes via upload-artifact.
+	// Directory is created here (not lazily inside the container) so the
+	// bind mount has a valid host path before `docker run`.
+	deviationsDir := filepath.Join(opts.AbsRepo, ".cache", "phpup-test", "deviations")
+	if err := os.MkdirAll(deviationsDir, 0o750); err != nil {
+		return nil, nil, fmt.Errorf("mkdir deviations: %w", err)
+	}
+	mounts = append(mounts,
+		build.Mount{Host: deviationsDir, Container: "/deviations", ReadOnly: false},
+	)
 
 	return mounts, env, nil
 }

@@ -283,9 +283,13 @@ func TestBuildCellMounts_MissingCompatMatrix(t *testing.T) {
 }
 
 // TestBuildCellMounts_GoldensDirOptional asserts that an absent
-// goldens directory is NOT an error — it's the degraded mode that
-// a fresh checkout (pre-refresh-workflow) sits in. Compat-diff
-// skips later in runFixture when the golden file is missing.
+// goldens directory is NOT an error from buildCellMounts — it's the
+// degraded mode that a fresh checkout (pre-refresh-workflow) sits in.
+// Note: on a canonical-cell run, opted-in fixtures whose per-fixture
+// golden file is missing are a HARD error at the runFixture level
+// (step 6), not a silent skip. This test only covers the mount-
+// construction layer; the per-fixture error is covered in
+// testcell_compat_test.go.
 func TestBuildCellMounts_GoldensDirOptional(t *testing.T) {
 	dir := t.TempDir()
 	fakeBinary := writeTestsuiteFixture(t, dir)
