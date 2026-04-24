@@ -152,14 +152,16 @@ jobs:
           commit-message: "chore: refresh v2 compat goldens"
           branch: chore/compat-golden-refresh
           delete-branch: true
-          # github.ref_name expands to `main` on the scheduled-cron path
-          # and to the dispatch-target branch on `workflow_dispatch` — so
-          # the PR targets the correct base in both flows. In particular
-          # this is what makes the Task 10 initial-capture flow work:
-          # dispatching against feat/pr-gated-v2-compat opens a PR
-          # against that branch (not main), so the captured goldens
-          # land on the feature branch before it merges.
-          base: ${{ github.ref_name }}
+          # Base branch picker by event type:
+          #   - schedule / workflow_dispatch: github.ref_name is the
+          #     branch the workflow is running against (`main` for
+          #     scheduled runs; maintainer-chosen ref for dispatch).
+          #   - pull_request: github.ref_name is the synthetic
+          #     `<pr-number>/merge` ref (not a real branch) — we need
+          #     github.head_ref, which is the PR's source branch.
+          # This ternary keeps a single rolling drift PR targeting
+          # whatever branch the workflow fired from.
+          base: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
           title: "chore: refresh v2 compat goldens"
           body: |
             Weekly (or on-demand) refresh of the pinned v2 compat probes.
