@@ -3,7 +3,7 @@ package registry
 // annotationSpecHash is the OCI-annotation key where the build spec-hash
 // lives on the manifest. annotationBundleName is defined in layout.go.
 const (
-	annotationSpecHash = "io.buildrush.bundle.spec-hash"
+	annotationSpecHash  = "io.buildrush.bundle.spec-hash"
 	annotationBundleKey = "io.buildrush.bundle.key"
 )
 

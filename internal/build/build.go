@@ -335,7 +335,7 @@ func BuildExt(ctx context.Context, args []string) error {
 			// ghcr.io/buildrush but honours REGISTRY if set. We point
 			// it at the sidecar so the builder pulls the seeded
 			// php-core without any script change.
-			"REGISTRY":                 sc.InNetworkHost + "/buildrush",
+			"REGISTRY":                  sc.InNetworkHost + "/buildrush",
 			"PHPUP_REGISTRY_PLAIN_HTTP": "1", // sidecar is HTTP-only; fetch-core.sh adds --plain-http
 			"BUILD_DEPS":                buildDeps,
 		},

@@ -69,6 +69,12 @@ linters:
       - builtin$
       - examples$
       - node_modules
+      # phpup build's docker output dir: contains extracted third-party
+      # source trees (e.g. swoole's test fixtures include Go files) that
+      # aren't part of this codebase and should never be linted.
+      - build/
+      - out/
+      - .cache/
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
@@ -88,3 +94,6 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - build/
+      - out/
+      - .cache/
