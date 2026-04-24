@@ -19,6 +19,9 @@ cmd/phpup/bundles.lock
 # Default OCI-layout registry target (phpup build --registry flag).
 /out/
 
+# phpup test's synthesized lockfile overrides + other scratch artifacts.
+/.cache/
+
 # Dependencies
 vendor/
 node_modules/
