@@ -48,7 +48,7 @@ func TestLayoutStore_RoundTrip(t *testing.T) {
 	}
 
 	// Walk the index to find the just-pushed digest, then assert Has and Fetch.
-	got, err := s.list(ctx)
+	got, err := s.List(ctx)
 	if err != nil {
 		t.Fatalf("list after Push: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestLayoutStore_TolerateMissingMeta(t *testing.T) {
 	if err := s.Push(ctx, Ref{Name: "php-core"}, bytes.NewReader(payload), nil, Annotations{BundleName: "php-core"}); err != nil {
 		t.Fatalf("Push nil meta: %v", err)
 	}
-	got, err := s.list(ctx)
+	got, err := s.List(ctx)
 	if err != nil || len(got) != 1 {
 		t.Fatalf("list: %v / %d", err, len(got))
 	}

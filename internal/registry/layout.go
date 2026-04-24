@@ -284,24 +284,34 @@ func (s *layoutStore) ResolveDigest(_ context.Context, reference string) (string
 	return "", fmt.Errorf("layout.ResolveDigest: not supported on layout backend (reference=%q)", reference)
 }
 
-// list walks the index and returns one Ref per manifest. Intended for tests
-// only — callers in production should track their own refs or use a remote
-// backend that can advertise them.
-func (s *layoutStore) list(_ context.Context) ([]Ref, error) {
+// List walks the index and returns one Ref per manifest. Ref.Name is
+// recovered from the annotationBundleName annotation (possibly empty for
+// manifests written by other tools, e.g. `oras copy`); Ref.Digest is the
+// manifest digest. An absent layout is not an error — it is a valid empty
+// listing so callers can probe un-seeded paths without a pre-check.
+//
+// Introduced in PR 4 (phpup push) so the push source walk can iterate a
+// source layout's index and promote every manifest to a destination Store.
+// This is a concrete method on *layoutStore rather than a Store-interface
+// addition so the blast radius stays minimal: remoteStore cannot implement
+// an anonymous index walk without either a custom API (deferred to PR 6)
+// or a pre-known tag list, so the push dispatcher type-asserts for this
+// method and refuses a remote source.
+func (s *layoutStore) List(_ context.Context) ([]Ref, error) {
 	p, err := layout.FromPath(s.root)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("layout.list: open %q: %w", s.root, err)
+		return nil, fmt.Errorf("layout.List: open %q: %w", s.root, err)
 	}
 	idx, err := p.ImageIndex()
 	if err != nil {
-		return nil, fmt.Errorf("layout.list: load index: %w", err)
+		return nil, fmt.Errorf("layout.List: load index: %w", err)
 	}
 	manifest, err := idx.IndexManifest()
 	if err != nil {
-		return nil, fmt.Errorf("layout.list: parse index: %w", err)
+		return nil, fmt.Errorf("layout.List: parse index: %w", err)
 	}
 	if len(manifest.Manifests) == 0 {
 		return nil, nil
@@ -315,6 +325,53 @@ func (s *layoutStore) list(_ context.Context) ([]Ref, error) {
 		})
 	}
 	return refs, nil
+}
+
+// ListKeyed walks the layout index and returns per-manifest entries
+// including the io.buildrush.bundle.key annotation (canonical lockfile
+// key, e.g. "php:8.4:linux:x86_64:nts"). Used by phpup test to
+// synthesize a lockfile override pointing at local-layout digests.
+// Manifests without a bundle-key annotation are filtered out.
+func (s *layoutStore) ListKeyed(_ context.Context) ([]KeyedRef, error) {
+	p, err := layout.FromPath(s.root)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("layout.ListKeyed: open %q: %w", s.root, err)
+	}
+	idx, err := p.ImageIndex()
+	if err != nil {
+		return nil, fmt.Errorf("layout.ListKeyed: load index: %w", err)
+	}
+	manifest, err := idx.IndexManifest()
+	if err != nil {
+		return nil, fmt.Errorf("layout.ListKeyed: parse index: %w", err)
+	}
+	out := make([]KeyedRef, 0, len(manifest.Manifests))
+	for i := range manifest.Manifests {
+		m := &manifest.Manifests[i]
+		key := m.Annotations[annotationBundleKey]
+		if key == "" {
+			continue
+		}
+		out = append(out, KeyedRef{
+			Key:      key,
+			Name:     m.Annotations[annotationBundleName],
+			Digest:   m.Digest.String(),
+			SpecHash: m.Annotations[annotationSpecHash],
+		})
+	}
+	return out, nil
+}
+
+// KeyedRef bundles a manifest's lockfile key with its digest + metadata,
+// produced by layoutStore.ListKeyed. See ListKeyed for the use case.
+type KeyedRef struct {
+	Key      string
+	Name     string
+	Digest   string
+	SpecHash string
 }
 
 var _ Store = (*layoutStore)(nil)

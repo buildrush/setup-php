@@ -76,6 +76,19 @@ func main() {
 		return
 	}
 
+	// `phpup push --from oci-layout:<path> --to ghcr.io/<owner>` promotes
+	// every manifest in a local oci-layout to a remote registry. Lives
+	// at the top level (rather than under `phpup internal`) because the
+	// local-CI pipeline's publish job invokes it directly — see
+	// .github/workflows/** for the usage contract. build.PushMain uses
+	// its own FlagSet; no collision with the setup-flow flag.Parse below.
+	if len(os.Args) > 1 && os.Args[1] == "push" {
+		if err := build.PushMain(os.Args[2:]); err != nil {
+			log.Fatalf("%v", err)
+		}
+		return
+	}
+
 	// `phpup internal <subcmd> …` is the maintainer-only umbrella for
 	// commands that are driven by the outer tooling rather than by end
 	// users. Currently only "test-cell" (the inner, container-side part
@@ -110,10 +123,22 @@ func main() {
 			p.PHPVersion, p.Extensions, p.OS, p.Arch, p.ThreadSafety, p.Coverage)
 	}
 
-	// 2. Load embedded lockfile
-	lf, err := lockfile.Parse(embeddedLockfile)
+	// 2. Load lockfile — PHPUP_LOCKFILE env overrides the embedded copy.
+	// Used by `phpup test`'s inner test-cell to point at a lockfile
+	// derived from the local oci-layout (where bundle digests differ
+	// from what GHCR-published bundles carry). Empty env = production
+	// path, which uses the embedded bundles.lock.
+	lockBytes := embeddedLockfile
+	if override := os.Getenv("PHPUP_LOCKFILE"); override != "" {
+		data, err := os.ReadFile(filepath.Clean(override))
+		if err != nil {
+			log.Fatalf("read PHPUP_LOCKFILE %q: %v", override, err)
+		}
+		lockBytes = data
+	}
+	lf, err := lockfile.Parse(lockBytes)
 	if err != nil {
-		log.Fatalf("parse embedded lockfile: %v", err)
+		log.Fatalf("parse lockfile: %v", err)
 	}
 
 	// 3. Build minimal catalog for resolution. The runtime keys the Versions
@@ -141,7 +166,7 @@ func main() {
 			"yaml":      {Name: "yaml", Kind: catalog.ExtensionKindPECL, Versions: []string{"2.3.0"}, RuntimeDeps: map[string][]string{"linux": {"libyaml-0-2"}}},
 			"memcached": {Name: "memcached", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.4.0"}, RuntimeDeps: map[string][]string{"linux": {"libmemcached11", "libsasl2-2"}}},
 			"amqp":      {Name: "amqp", Kind: catalog.ExtensionKindPECL, Versions: []string{"2.2.0"}, RuntimeDeps: map[string][]string{"linux": {"librabbitmq4"}}},
-			"event":     {Name: "event", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.1.4"}, RuntimeDeps: map[string][]string{"linux": {"libevent-2.1-7", "libevent-openssl-2.1-7"}}},
+			"event":     {Name: "event", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.1.4"}, RuntimeDeps: map[string][]string{"linux": {"libevent-2.1-7", "libevent-extra-2.1-7", "libevent-openssl-2.1-7"}}},
 			"rdkafka":   {Name: "rdkafka", Kind: catalog.ExtensionKindPECL, Versions: []string{"6.0.5"}, RuntimeDeps: map[string][]string{"linux": {"librdkafka1"}}},
 			"protobuf":  {Name: "protobuf", Kind: catalog.ExtensionKindPECL, Versions: []string{"5.34.1"}},
 			"imagick":   {Name: "imagick", Kind: catalog.ExtensionKindPECL, Versions: []string{"3.8.1"}, RuntimeDeps: map[string][]string{"linux": {"libfontconfig1", "libx11-6", "libxext6", "liblcms2-2", "liblqr-1-0", "libfftw3-double3", "libbz2-1.0"}}},
@@ -553,19 +578,34 @@ func installRuntimeDeps(goos string, resolved []resolve.ResolvedBundle, cat *cat
 	return installer(pkgs)
 }
 
+// aptArgv returns the argv that the apt-get invocation should use. If euid
+// is 0 (running as root — typical inside a bare docker container),
+// the sudo prefix is omitted because sudo may not be installed. For any
+// other euid, the sudo prefix is preserved — matches the historical
+// behaviour on a GitHub-hosted runner where phpup runs as the runner user.
+func aptArgv(euid int, op string, extra ...string) []string {
+	args := append([]string{"apt-get", op}, extra...)
+	if euid == 0 {
+		return args
+	}
+	return append([]string{"sudo"}, args...)
+}
+
 // aptInstaller is the production installer used when not testing.
-// Runs `sudo apt-get update -qq` then `sudo apt-get install -y -qq --no-install-recommends <pkgs...>`.
+// Runs `apt-get update -qq` then `apt-get install -y -qq --no-install-recommends <pkgs...>`,
+// prefixing with sudo when euid != 0 (see aptArgv).
 // Update failure is a ::warning:: (transient mirror issues); install failure is a hard error.
 func aptInstaller(pkgs []string) error {
 	log.Printf("installRuntimeDeps: apt-get install %s", strings.Join(pkgs, " "))
-	upd := exec.Command("sudo", "apt-get", "update", "-qq")
+	uargs := aptArgv(os.Geteuid(), "update", "-qq")
+	upd := exec.Command(uargs[0], uargs[1:]...) //nolint:gosec // G204: argv composed from compile-time constants in aptArgv (apt-get + sudo literals)
 	upd.Stdout = os.Stdout
 	upd.Stderr = os.Stderr
 	if err := upd.Run(); err != nil {
 		log.Printf("::warning::apt-get update failed (%v); proceeding to install", err)
 	}
-	args := append([]string{"apt-get", "install", "-y", "-qq", "--no-install-recommends"}, pkgs...)
-	inst := exec.Command("sudo", args...) //nolint:gosec // G204: args built from catalog-provided package names (compile-time constant, non-user-controlled)
+	iargs := aptArgv(os.Geteuid(), "install", append([]string{"-y", "-qq", "--no-install-recommends"}, pkgs...)...)
+	inst := exec.Command(iargs[0], iargs[1:]...) //nolint:gosec // G204: args built from catalog-provided package names (compile-time constant, non-user-controlled)
 	inst.Stdout = os.Stdout
 	inst.Stderr = os.Stderr
 	if err := inst.Run(); err != nil {

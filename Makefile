@@ -49,8 +49,12 @@ fmt:
 	npx prettier --write src/ test/
 
 # Check formatting without modifying (CI mode)
+# Skip build/, out/, .cache/ — phpup build writes OCI layouts + extracted
+# third-party source trees (e.g. swoole's Go test fixtures) under them,
+# which gofmt would otherwise flag as drift.
 fmt-check:
-	@test -z "$$(gofmt -s -l .)" || (echo "Files need gofmt:"; gofmt -s -l .; exit 1)
+	@drift=$$(find . -name '*.go' -not -path './build/*' -not -path './out/*' -not -path './.cache/*' -not -path './.git/*' -print0 | xargs -0 gofmt -s -l); \
+	  test -z "$$drift" || (echo "Files need gofmt:"; echo "$$drift"; exit 1)
 	npx prettier --check src/ test/
 
 # Go vet
@@ -149,6 +153,12 @@ ci-cell:
 	esac; \
 	$(MAKE) "$$phpup_linux_bin" && \
 	$(MAKE) $(PHPUP_BIN) && \
+	$(PHPUP_BIN) build cell \
+	    --os $(OS) \
+	    --arch $(ARCH) \
+	    --php $(PHP) \
+	    --registry $(or $(REGISTRY),oci-layout:./out/oci-layout) \
+	    --repo . && \
 	$(PHPUP_BIN) test \
 	    --os $(OS) \
 	    --arch $(ARCH) \

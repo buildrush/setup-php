@@ -45,6 +45,18 @@ All code changes MUST pass `make check` before committing. This runs:
 - Verify `make check` passes before every commit AND before every push. `make check` now includes the docker-backed `local-ci` smoke that exercises the currently-published bundles on both jammy and noble runners (~3-5 min cold); use `make check-fast` during rapid iteration, then `make check` before the push.
 - **Exception — builder/catalog bootstrap**: commits that change `builders/linux/*.sh`, `builders/common/*.sh`, `builders/common/*.env`, or `catalog/**` invalidate the published bundles by design. `local-ci` on such a commit exercises the OLD bundles (not what the commit produces) and will fail until the pipeline rebuilds and publishes. In that case: run `make check-fast` before pushing, note the pending rebuild in the commit message, and re-run full `make check` after the pipeline's bot-committed lockfile lands to confirm the fix.
 
+## CI failures: reproduce locally first
+
+**Rule:** Any CI failure must be reproduced locally before attempting a fix. Never iterate by push-and-observe.
+
+Workflow:
+1. **Adjust local checks** so they exercise the same code path the failing CI job does. If `make check` doesn't already cover the regression (e.g., it uses pre-built bundles but CI builds from source), extend it — add a new target, widen the gate, or call the exact CI command locally (`make ci-cell OS=... ARCH=... PHP=...` reproduces one pipeline cell).
+2. **Fix locally** until the reproduction passes green.
+3. **Push once** and verify CI turns green.
+4. **Repeat** steps 1–3 if CI exposes a new failure — don't skip the local repro.
+
+Why: CI cycle times are 15–60 minutes; local iterations are seconds to minutes. Push-and-observe also masks drift between local and CI environments (different tool presets, different base images, different cached state). Forcing local repro keeps the two environments in sync.
+
 ## Testing
 
 - TDD: write failing test first, then implement.

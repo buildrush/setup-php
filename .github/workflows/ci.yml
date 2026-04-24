@@ -1,0 +1,161 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Prepare embedded lockfile
+        run: cp bundles.lock cmd/phpup/bundles.lock
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+      - name: Install node deps
+        run: npm ci
+      - name: ESLint
+        run: npx eslint src/ test/
+      - name: Prettier
+        run: npx prettier --check src/ test/
+      - name: go mod tidy check
+        run: |
+          go mod tidy
+          if ! git diff --quiet go.mod go.sum; then
+            echo "go.mod / go.sum drift — run 'go mod tidy' locally" >&2
+            git diff go.mod go.sum
+            exit 1
+          fi
+      - name: gofmt check
+        run: |
+          fmt_out=$(gofmt -s -l .)
+          if [ -n "$fmt_out" ]; then
+            echo "gofmt -s drift in:" >&2
+            echo "$fmt_out" >&2
+            exit 1
+          fi
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Prepare embedded lockfile
+        run: cp bundles.lock cmd/phpup/bundles.lock
+      - name: Install node deps
+        run: npm ci
+      - run: make test test-node
+
+  pipeline:
+    name: "Pipeline ${{ matrix.os }}/${{ matrix.arch }} PHP ${{ matrix.php }}"
+    needs: [lint, unit]
+    strategy:
+      fail-fast: false
+      matrix:
+        os:   [jammy, noble]
+        arch: [x86_64, aarch64]
+        # NOTE: PHP 8.5 omitted pending a builder fix — capture-hermetic-libs
+        # reports "php has no DT_RUNPATH/DT_RPATH" after compile, meaning
+        # builders/linux/build-php.sh's patchelf step doesn't land on 8.5
+        # binaries. Pre-existing issue, not introduced by this PR; tracked
+        # as follow-up. Add "8.5" back once the builder applies rpath.
+        php:  ["8.1", "8.2", "8.3", "8.4"]
+    runs-on: >-
+      ${{ matrix.arch == 'aarch64'
+          && (matrix.os == 'jammy' && 'ubuntu-22.04-arm' || 'ubuntu-24.04-arm')
+          || (matrix.os == 'jammy' && 'ubuntu-22.04' || 'ubuntu-24.04') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Restore oci-layout cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            out/oci-layout
+            .cache/phpup-build
+          key: phpup-ci-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.php }}-${{ hashFiles('builders/**', 'catalog/**') }}
+          restore-keys: |
+            phpup-ci-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.php }}-
+      - name: Run ci-cell (build + test)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make ci-cell OS=${{ matrix.os }} ARCH=${{ matrix.arch }} PHP=${{ matrix.php }}
+      - name: Upload oci-layout artifact (main only)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: oci-layout-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.php }}
+          path: out/oci-layout
+          retention-days: 7
+
+  publish:
+    name: Publish to GHCR (gated)
+    needs: pipeline
+    if: github.ref == 'refs/heads/main' && vars.PHPUP_NEW_CI_PUBLISH == '1'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # lockfile update push needs full history
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build phpup
+        run: make bin/phpup
+      - name: Download all oci-layout artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: oci-layout-*
+          path: out/merged-layout
+          merge-multiple: true
+      - name: Promote to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bin/phpup push \
+            --from "oci-layout:$(pwd)/out/merged-layout" \
+            --to "ghcr.io/${{ github.repository_owner }}"
+      - name: Update lockfile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          go run ./cmd/lockfile-update \
+            -catalog ./catalog \
+            -lockfile ./bundles.lock \
+            -registry "ghcr.io/${{ github.repository_owner }}"
+      - name: Commit lockfile (if changed)
+        run: |
+          git config user.name "buildrush-bot"
+          git config user.email "buildrush-bot@users.noreply.github.com"
+          git add bundles.lock
+          if git diff --cached --quiet; then
+            echo "No lockfile changes to commit."
+          else
+            git commit -m "chore: update bundles.lock (new ci.yml)"
+            git push
+          fi

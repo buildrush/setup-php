@@ -149,7 +149,7 @@ func TestLayoutStore_Push_EmptyAnnotationsFallsBackToRefName(t *testing.T) {
 		bytes.NewReader([]byte("x")), nil, Annotations{}); err != nil {
 		t.Fatalf("Push: %v", err)
 	}
-	got, err := s.list(ctx)
+	got, err := s.List(ctx)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
