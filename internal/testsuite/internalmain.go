@@ -17,6 +17,8 @@ func InternalMain(args []string) error {
 		return errors.New("phpup internal: usage: phpup internal <subcommand> [flags]")
 	}
 	switch args[0] {
+	case "golden-capture":
+		return MainGoldenCapture(args[1:])
 	case "test-cell":
 		return RunTestCell(context.Background(), args[1:])
 	default:
