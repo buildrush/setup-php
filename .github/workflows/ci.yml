@@ -121,9 +121,76 @@ jobs:
           path: out/oci-layout
           retention-days: 7
 
+  smoke-action:
+    name: "Smoke action surface (${{ matrix.os }}/${{ matrix.arch }})"
+    needs: pipeline
+    # Exercises the public action.yml + src/index.js wrapper end-to-end
+    # the way a user's `uses: buildrush/setup-php@v1` would, against the
+    # PR's HEAD binary. `runMain()` in src/index.js short-circuits the
+    # GitHub-release download when the expected cache path already
+    # contains a binary — so we build phpup from the PR and drop it at
+    # that exact path *before* invoking `uses: ./`.
+    #
+    # Matrix is deliberately narrower than `pipeline` (which covers 20
+    # OS/arch/PHP combos at the CLI level): the wrapper itself is thin
+    # and OS-invariant, so 2 OS × 2 arch × 1 PHP catches wrapper
+    # regressions without multiplying CI time.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: jammy
+            arch: amd64
+            runner: ubuntu-22.04
+          - os: noble
+            arch: amd64
+            runner: ubuntu-24.04
+          - os: jammy
+            arch: arm64
+            runner: ubuntu-22.04-arm
+          - os: noble
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Prepare embedded lockfile
+        run: cp bundles.lock cmd/phpup/bundles.lock
+      - name: Build phpup from PR HEAD into the runner cache
+        # src/index.js:runMain() resolves its cached binary path as
+        # $RUNNER_TOOL_CACHE/buildrush-bin/phpup (linux) and skips the
+        # release-asset download when existsSync() returns true. That's
+        # the hook we use to run the wrapper against *this PR's* phpup
+        # binary rather than whatever the latest release carries.
+        run: |
+          mkdir -p "$RUNNER_TOOL_CACHE/buildrush-bin"
+          go build -o "$RUNNER_TOOL_CACHE/buildrush-bin/phpup" ./cmd/phpup
+          chmod +x "$RUNNER_TOOL_CACHE/buildrush-bin/phpup"
+      - name: Invoke action (uses ./)
+        uses: ./
+        with:
+          php-version: "8.4"
+          extensions: "redis, intl"
+          ini-values: "memory_limit=256M"
+      - name: Assert PHP is installed + inputs honored
+        run: |
+          set -euo pipefail
+          php -v
+          php -r 'exit(extension_loaded("redis") ? 0 : 1);' \
+            || { echo "::error::redis extension not loaded"; exit 1; }
+          php -r 'exit(extension_loaded("intl") ? 0 : 1);' \
+            || { echo "::error::intl extension not loaded"; exit 1; }
+          memlim=$(php -r 'echo ini_get("memory_limit");')
+          test "$memlim" = "256M" \
+            || { echo "::error::memory_limit=$memlim, want 256M"; exit 1; }
+          echo "smoke-action: action surface OK"
+
   publish:
     name: Publish to GHCR
-    needs: pipeline
+    needs: [pipeline, smoke-action]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
