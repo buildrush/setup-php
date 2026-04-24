@@ -236,7 +236,10 @@ jobs:
               echo ""
               for f in /tmp/compat-deviations/*.json; do
                 cell=$(jq -r '.cell' "$f")
-                jq -r --arg cell "$cell" '.fixtures[] | "**Fixture \`\(.name)\` (\($cell))**\n" + (.deviations[:20] | map("- \`\(.Path)\`: ours=\`\(.Ours)\`, theirs=\`\(.Theirs)\`") | join("\n")) + "\n"' "$f"
+                # jq's JSON-string escape rules reject `\``; build the
+                # markdown with string concatenation and literal
+                # backticks instead.
+                jq -r --arg cell "$cell" '.fixtures[] | "**Fixture `" + .name + "` (" + $cell + ")**\n" + (.deviations[:20] | map("- `" + .Path + "`: ours=`" + .Ours + "`, theirs=`" + .Theirs + "`") | join("\n")) + "\n"' "$f"
               done
               echo ""
               echo "### What to do"
