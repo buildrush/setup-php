@@ -808,8 +808,15 @@ func UbuntuImage(osFlag string) (string, error) {
 		return "ubuntu:22.04", nil
 	case "noble", "ubuntu-24.04":
 		return "ubuntu:24.04", nil
+	case "linux":
+		// Legacy catalog abi_matrix uses "os: linux" as the family axis
+		// (POSIX family; actual runner flavor comes separately). The old
+		// build-php-core.yml / build-extension.yml workflows pass this
+		// value straight through to phpup build. Default to jammy for
+		// back-compat; callers that need noble pass "noble" explicitly.
+		return "ubuntu:22.04", nil
 	default:
-		return "", fmt.Errorf("unknown os %q (want jammy|noble)", osFlag)
+		return "", fmt.Errorf("unknown os %q (want jammy|noble|linux)", osFlag)
 	}
 }
 
