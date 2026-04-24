@@ -98,7 +98,10 @@ func TestRunAllCells_AllPass(t *testing.T) {
 	restore := build.SetRunner(func(_ context.Context, ro *build.DockerRunOpts) error {
 		runnerCalls++
 		// Sanity: the mounted /registry exists, the cmd is correct.
-		if len(ro.Cmd) < 3 || ro.Cmd[0] != "/usr/local/bin/phpup" || ro.Cmd[1] != "internal" || ro.Cmd[2] != "test-cell" {
+		// Cmd is wrapped as bash -c "<preamble> /usr/local/bin/phpup internal test-cell …"
+		// so probe.sh has PHP's runtime libs at invocation time.
+		if len(ro.Cmd) != 3 || ro.Cmd[0] != "bash" || ro.Cmd[1] != "-c" ||
+			!strings.Contains(ro.Cmd[2], "/usr/local/bin/phpup internal test-cell") {
 			return errors.New("unexpected Cmd: " + strings.Join(ro.Cmd, " "))
 		}
 		return nil

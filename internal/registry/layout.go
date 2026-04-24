@@ -327,4 +327,51 @@ func (s *layoutStore) List(_ context.Context) ([]Ref, error) {
 	return refs, nil
 }
 
+// ListKeyed walks the layout index and returns per-manifest entries
+// including the io.buildrush.bundle.key annotation (canonical lockfile
+// key, e.g. "php:8.4:linux:x86_64:nts"). Used by phpup test to
+// synthesize a lockfile override pointing at local-layout digests.
+// Manifests without a bundle-key annotation are filtered out.
+func (s *layoutStore) ListKeyed(_ context.Context) ([]KeyedRef, error) {
+	p, err := layout.FromPath(s.root)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("layout.ListKeyed: open %q: %w", s.root, err)
+	}
+	idx, err := p.ImageIndex()
+	if err != nil {
+		return nil, fmt.Errorf("layout.ListKeyed: load index: %w", err)
+	}
+	manifest, err := idx.IndexManifest()
+	if err != nil {
+		return nil, fmt.Errorf("layout.ListKeyed: parse index: %w", err)
+	}
+	out := make([]KeyedRef, 0, len(manifest.Manifests))
+	for i := range manifest.Manifests {
+		m := &manifest.Manifests[i]
+		key := m.Annotations[annotationBundleKey]
+		if key == "" {
+			continue
+		}
+		out = append(out, KeyedRef{
+			Key:      key,
+			Name:     m.Annotations[annotationBundleName],
+			Digest:   m.Digest.String(),
+			SpecHash: m.Annotations[annotationSpecHash],
+		})
+	}
+	return out, nil
+}
+
+// KeyedRef bundles a manifest's lockfile key with its digest + metadata,
+// produced by layoutStore.ListKeyed. See ListKeyed for the use case.
+type KeyedRef struct {
+	Key      string
+	Name     string
+	Digest   string
+	SpecHash string
+}
+
 var _ Store = (*layoutStore)(nil)

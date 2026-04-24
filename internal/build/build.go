@@ -15,7 +15,7 @@ import (
 	"github.com/buildrush/setup-php/internal/registry"
 )
 
-// linuxAptPreamble installs the minimal host-side packages needed for
+// LinuxAptPreamble installs the minimal host-side packages needed for
 // the Ubuntu build containers to run the builder scripts. Shared
 // between build-php and build-ext; keep in sync with Makefile's
 // bundle-php / bundle-ext targets. Output is NOT silenced so apt
@@ -31,7 +31,7 @@ import (
 // Must match what builders/common/fetch-core.sh expects on the PATH.
 const orasVersion = "1.3.1"
 
-const linuxAptPreamble = "apt-get update && " +
+const LinuxAptPreamble = "apt-get update && " +
 	"apt-get install -y --no-install-recommends curl xz-utils ca-certificates file jq zstd && " +
 	// fetch-core.sh (called by build-ext.sh) shells out to `oras pull`.
 	// Install the same oras version the existing build-extension.yml uses.
@@ -40,6 +40,26 @@ const linuxAptPreamble = "apt-get update && " +
 	"ARCH_ORAS=$(uname -m); case \"$ARCH_ORAS\" in x86_64) ORAS_ARCH=amd64 ;; aarch64) ORAS_ARCH=arm64 ;; esac; " +
 	"curl -sSfL https://github.com/oras-project/oras/releases/download/v" + orasVersion +
 	"/oras_" + orasVersion + "_linux_${ORAS_ARCH}.tar.gz | tar -xz -C /usr/local/bin oras && "
+
+// LinuxExtAptPreamble extends LinuxAptPreamble with PHP's runtime shared-
+// library dependencies. The ext build (build-ext.sh) invokes the extracted
+// php-core binary (e.g., `php parse_stub.php` via phpize/arginfo generation
+// for stubs). The hermetic-libs catalog only captures libicu; all other
+// transitive libs (libpq, libssl, libcurl, libonig, libzip, libxml2,
+// libsodium, libsqlite3, zlib, libjpeg, libpng, libwebp, libfreetype,
+// libffi, libreadline) rely on the runtime host having them preinstalled.
+// GitHub-hosted runners do; bare ubuntu:22.04 doesn't.
+//
+// Installing the runtime (not -dev) packages keeps the ext-container's
+// php invocations working without bloating the core-build container or
+// expanding the hermetic-libs catalog (which would drift spec-hashes
+// for existing bundles).
+const LinuxExtAptPreamble = LinuxAptPreamble +
+	"apt-get install -y --no-install-recommends " +
+	"libpq5 libssl3 libcurl4 libonig5 libzip4 libsqlite3-0 libxml2 " +
+	"libsodium23 libreadline8 zlib1g libffi8 libicu70 " +
+	"libpng16-16 libjpeg-turbo8 libwebp7 libfreetype6 libxslt1.1 " +
+	"&& "
 
 // Main is the entry point for `phpup build …`. args is the tail after
 // the "build" subcommand token (so args[0] is "php", "ext", or "cell").
@@ -149,7 +169,7 @@ func BuildPHP(ctx context.Context, args []string) error {
 			"OUTPUT_DIR":  "/tmp/out",
 			"WORKSPACE":   "/workspace",
 		},
-		Cmd: []string{"bash", "-c", linuxAptPreamble + "/workspace/builders/linux/build-php.sh"},
+		Cmd: []string{"bash", "-c", LinuxAptPreamble + "/workspace/builders/linux/build-php.sh"},
 	}
 	if err := DockerRun(ctx, runOpts); err != nil {
 		return fmt.Errorf("phpup build php: docker: %w", err)
@@ -173,7 +193,8 @@ func BuildPHP(ctx context.Context, args []string) error {
 
 	// 6. Push to the store.
 	pushRef := registry.Ref{Name: "php-core"}
-	ann := registry.Annotations{BundleName: "php-core", SpecHash: specHash}
+	bundleKey := "php:" + opts.Version + ":linux:" + opts.Arch + ":" + opts.TS
+	ann := registry.Annotations{BundleName: "php-core", SpecHash: specHash, BundleKey: bundleKey}
 	if err := store.Push(ctx, pushRef, bundle, meta, ann); err != nil {
 		return fmt.Errorf("phpup build php: push bundle: %w", err)
 	}
@@ -314,10 +335,11 @@ func BuildExt(ctx context.Context, args []string) error {
 			// ghcr.io/buildrush but honours REGISTRY if set. We point
 			// it at the sidecar so the builder pulls the seeded
 			// php-core without any script change.
-			"REGISTRY":   sc.InNetworkHost + "/buildrush",
-			"BUILD_DEPS": buildDeps,
+			"REGISTRY":                 sc.InNetworkHost + "/buildrush",
+			"PHPUP_REGISTRY_PLAIN_HTTP": "1", // sidecar is HTTP-only; fetch-core.sh adds --plain-http
+			"BUILD_DEPS":                buildDeps,
 		},
-		Cmd: []string{"bash", "-c", linuxAptPreamble + "/workspace/builders/linux/build-ext.sh"},
+		Cmd: []string{"bash", "-c", LinuxExtAptPreamble + "/workspace/builders/linux/build-ext.sh"},
 	}
 	if err := DockerRun(ctx, runOpts); err != nil {
 		return fmt.Errorf("phpup build ext: docker: %w", err)
@@ -338,7 +360,16 @@ func BuildExt(ctx context.Context, args []string) error {
 
 	// 8. Push to the store.
 	pushRef := registry.Ref{Name: bundleName}
-	ann := registry.Annotations{BundleName: bundleName, SpecHash: specHash}
+	// Lockfile key shape matches the planner's output: split PHPABI
+	// "8.4-nts" back into php="8.4", ts="nts" so the key is
+	// ext:<name>:<ver>:<php>:<os>:<arch>:<ts> (7 segments).
+	phpVer, ts := opts.PHPABI, "nts"
+	if idx := strings.LastIndex(opts.PHPABI, "-"); idx > 0 {
+		phpVer = opts.PHPABI[:idx]
+		ts = opts.PHPABI[idx+1:]
+	}
+	bundleKey := "ext:" + opts.Name + ":" + opts.Version + ":" + phpVer + ":linux:" + opts.Arch + ":" + ts
+	ann := registry.Annotations{BundleName: bundleName, SpecHash: specHash, BundleKey: bundleKey}
 	if err := store.Push(ctx, pushRef, bundle, meta, ann); err != nil {
 		return fmt.Errorf("phpup build ext: push bundle: %w", err)
 	}

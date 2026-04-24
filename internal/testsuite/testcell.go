@@ -103,6 +103,92 @@ func composeEnv(base []string, overlay map[string]string) []string {
 	return out
 }
 
+// composeProbeEnv parses GITHUB_ENV (KEY=value per line) and GITHUB_PATH
+// (one entry per line) written by phpup install during its GHA-runner
+// emulation, then applies them on top of os.Environ() to produce the env
+// for the probe.sh invocation. This mirrors what GitHub Actions does
+// between steps: post-step processing reads these files and rolls them
+// into the next step's env.
+//
+// Without this, phpup install succeeds but the path additions it emits
+// (notably, the directory containing the freshly-installed php binary)
+// stay trapped in the two files and probe.sh fails with
+// "php: command not found".
+// parseGitHubEnv reads a GITHUB_ENV file written by the GHA-runner-style
+// writer in internal/env (which emits heredoc for every SetEnv, including
+// scalars: `KEY<<DELIM\nVALUE\nDELIM\n`). Also tolerates the simpler
+// `KEY=value` form GHA's own docs describe. Unknown lines are ignored.
+func parseGitHubEnv(envFile string) map[string]string {
+	overlay := map[string]string{}
+	data, err := os.ReadFile(filepath.Clean(envFile))
+	if err != nil {
+		return overlay
+	}
+	lines := strings.Split(string(data), "\n")
+	i := 0
+	for i < len(lines) {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			i++
+			continue
+		}
+		// Heredoc: KEY<<DELIM
+		if idx := strings.Index(line, "<<"); idx > 0 && !strings.ContainsRune(line[:idx], '=') {
+			key := strings.TrimSpace(line[:idx])
+			delim := strings.TrimSpace(line[idx+2:])
+			i++
+			var value []string
+			for i < len(lines) && lines[i] != delim {
+				value = append(value, lines[i])
+				i++
+			}
+			if i < len(lines) {
+				i++ // consume closing delim
+			}
+			overlay[key] = strings.Join(value, "\n")
+			continue
+		}
+		// Simple KEY=VALUE line.
+		if eq := strings.IndexByte(line, '='); eq > 0 {
+			overlay[strings.TrimSpace(line[:eq])] = line[eq+1:]
+		}
+		i++
+	}
+	return overlay
+}
+
+func composeProbeEnv(envFile, pathFile string) ([]string, error) {
+	base := os.Environ()
+
+	// Parse GITHUB_ENV. Supports both KEY=value single-line form AND the
+	// heredoc form GHA uses: `KEY<<DELIM\nVALUE\nDELIM`. phpup install's
+	// internal/env exporter emits heredoc even for simple scalar values
+	// so we must handle both.
+	overlay := parseGitHubEnv(envFile)
+
+	// Parse GITHUB_PATH: one entry per line; prepend to PATH.
+	var prefix []string
+	if data, err := os.ReadFile(filepath.Clean(pathFile)); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				prefix = append(prefix, line)
+			}
+		}
+	}
+	if len(prefix) > 0 {
+		// Prepend to the current PATH, preserving existing overlay value if set.
+		currentPath := overlay["PATH"]
+		if currentPath == "" {
+			currentPath = os.Getenv("PATH")
+		}
+		overlay["PATH"] = strings.Join(append(prefix, currentPath), ":")
+	}
+
+	return composeEnv(base, overlay), nil
+}
+
 // testCellOpts is the parsed flag set for `phpup internal test-cell`.
 type testCellOpts struct {
 	OS, Arch, PHP string
@@ -234,10 +320,35 @@ func runFixture(ctx context.Context, opts *testCellOpts, f *Fixture) fixtureOutc
 	}
 	defer func() { _ = stderrFile.Close() }()
 
+	// Create GITHUB_ENV / GITHUB_PATH files phpup install writes to during
+	// the simulated GHA runner dance. Parse them afterwards so probe.sh
+	// inherits the exported env/PATH — otherwise php's location isn't on
+	// PATH and probe.sh fails with "php: command not found".
+	gitEnvFile := filepath.Join(workDir, "github-env")
+	gitPathFile := filepath.Join(workDir, "github-path")
+	if err := os.WriteFile(gitEnvFile, nil, 0o600); err != nil {
+		out.Err = fmt.Errorf("create github-env: %w", err)
+		return out
+	}
+	if err := os.WriteFile(gitPathFile, nil, 0o600); err != nil {
+		out.Err = fmt.Errorf("create github-path: %w", err)
+		return out
+	}
+
 	installEnv := composeInstallEnv(opts, f)
+	installEnv["GITHUB_ENV"] = gitEnvFile
+	installEnv["GITHUB_PATH"] = gitPathFile
 	if err := getInstaller()(ctx, installEnv, stdoutFile, stderrFile); err != nil {
 		stderrBytes, _ := os.ReadFile(stderrLog)
 		out.Err = fmt.Errorf("phpup install failed: %w; stderr tail:\n%s", err, tailBytes(stderrBytes, 20))
+		return out
+	}
+
+	// Build probe env: phpup install's GITHUB_ENV + GITHUB_PATH exports
+	// must reach probe.sh. Parse the files into env vars / a PATH prefix.
+	probeEnv, err := composeProbeEnv(gitEnvFile, gitPathFile)
+	if err != nil {
+		out.Err = fmt.Errorf("compose probe env: %w", err)
 		return out
 	}
 
@@ -250,6 +361,7 @@ func runFixture(ctx context.Context, opts *testCellOpts, f *Fixture) fixtureOutc
 	// set of filepath.Join-derived temp paths.
 	cmd := exec.CommandContext(ctx, "bash", opts.ProbePath,
 		probeOut, envBefore, pathBefore, iniKeys)
+	cmd.Env = probeEnv
 	probeStdout, err := cmd.CombinedOutput()
 	if err != nil {
 		out.Err = fmt.Errorf("probe.sh failed: %w; output:\n%s", err, string(probeStdout))

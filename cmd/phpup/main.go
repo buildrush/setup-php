@@ -123,10 +123,22 @@ func main() {
 			p.PHPVersion, p.Extensions, p.OS, p.Arch, p.ThreadSafety, p.Coverage)
 	}
 
-	// 2. Load embedded lockfile
-	lf, err := lockfile.Parse(embeddedLockfile)
+	// 2. Load lockfile — PHPUP_LOCKFILE env overrides the embedded copy.
+	// Used by `phpup test`'s inner test-cell to point at a lockfile
+	// derived from the local oci-layout (where bundle digests differ
+	// from what GHCR-published bundles carry). Empty env = production
+	// path, which uses the embedded bundles.lock.
+	lockBytes := embeddedLockfile
+	if override := os.Getenv("PHPUP_LOCKFILE"); override != "" {
+		data, err := os.ReadFile(filepath.Clean(override))
+		if err != nil {
+			log.Fatalf("read PHPUP_LOCKFILE %q: %v", override, err)
+		}
+		lockBytes = data
+	}
+	lf, err := lockfile.Parse(lockBytes)
 	if err != nil {
-		log.Fatalf("parse embedded lockfile: %v", err)
+		log.Fatalf("parse lockfile: %v", err)
 	}
 
 	// 3. Build minimal catalog for resolution. The runtime keys the Versions

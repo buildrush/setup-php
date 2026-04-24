@@ -2,6 +2,7 @@ package testsuite
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/buildrush/setup-php/internal/build"
+	"github.com/buildrush/setup-php/internal/registry"
 )
 
 // Main is the entry point for `phpup test …`. Parses flags, expands the
@@ -277,17 +280,22 @@ func runCell(ctx context.Context, opts *testOpts, set *FixtureSet, cellOS, cellA
 		return res
 	}
 
+	// The test container is bare ubuntu:22.04; PHP's runtime libs aren't
+	// preinstalled. Wrap the test-cell invocation with the same apt
+	// preamble that build-ext uses so probe.sh's `php -v` has its
+	// shared libs available (libreadline, libpq, libssl, libxml2, etc.).
+	cellCmd := strings.Join([]string{"/usr/local/bin/phpup", "internal", "test-cell",
+		"--os", cellOS, "--arch", cellArch, "--php", cellPHP,
+		"--fixtures", "/test-compat/fixtures.yaml",
+		"--probe", "/test-compat/probe.sh",
+		"--registry", "oci-layout:/registry",
+	}, " ")
 	runOpts := &build.DockerRunOpts{
 		Image:    image,
 		Platform: platform,
 		Mounts:   mounts,
 		Env:      env,
-		Cmd: []string{"/usr/local/bin/phpup", "internal", "test-cell",
-			"--os", cellOS, "--arch", cellArch, "--php", cellPHP,
-			"--fixtures", "/test-compat/fixtures.yaml",
-			"--probe", "/test-compat/probe.sh",
-			"--registry", "oci-layout:/registry",
-		},
+		Cmd:      []string{"bash", "-c", build.LinuxExtAptPreamble + cellCmd},
 	}
 
 	fmt.Printf("phpup test: [run] cell os=%s arch=%s php=%s (%d fixtures)\n", cellOS, cellArch, cellPHP, len(fixtures))
@@ -331,15 +339,76 @@ func buildCellMounts(opts *testOpts, _, _, _ string) ([]build.Mount, map[string]
 		return nil, nil, fmt.Errorf("self binary missing: %w", err)
 	}
 
+	// Synthesize a lockfile override from the layout's annotated manifests.
+	// `phpup install` inside the container reads PHPUP_LOCKFILE (env) as an
+	// alternative to its embedded bundles.lock. This lets test fixtures
+	// resolve bundle refs against the layout's actual digests (which differ
+	// from GHCR-published digests because meta.json carries a build-time
+	// timestamp that isn't reproducible byte-for-byte).
+	overridePath, err := writeLayoutLockfileOverride(absLayout, opts.AbsRepo)
+	if err != nil {
+		return nil, nil, fmt.Errorf("synthesize lockfile override: %w", err)
+	}
+
 	mounts := []build.Mount{
 		{Host: absLayout, Container: "/registry", ReadOnly: true},
 		{Host: opts.SelfBinary, Container: "/usr/local/bin/phpup", ReadOnly: true},
 		{Host: testCompat, Container: "/test-compat", ReadOnly: true},
+		{Host: overridePath, Container: "/tmp/bundles-override.lock", ReadOnly: true},
 	}
 	env := map[string]string{
 		"PHPUP_REGISTRY": "oci-layout:/registry",
+		"PHPUP_LOCKFILE": "/tmp/bundles-override.lock",
 	}
 	return mounts, env, nil
+}
+
+// writeLayoutLockfileOverride walks the oci-layout's annotated manifests and
+// emits a lockfile JSON file mapping each manifest's io.buildrush.bundle.key
+// annotation to its actual digest. Written under <absRepo>/.cache/phpup-test/
+// so it's inside the gitignored cache tree; returns the absolute path for
+// mounting into the test container.
+func writeLayoutLockfileOverride(absLayout, absRepo string) (string, error) {
+	store, err := registry.Open("oci-layout:" + absLayout)
+	if err != nil {
+		return "", fmt.Errorf("open layout: %w", err)
+	}
+	type lister interface {
+		ListKeyed(ctx context.Context) ([]registry.KeyedRef, error)
+	}
+	listerStore, ok := store.(lister)
+	if !ok {
+		return "", fmt.Errorf("layout store does not implement ListKeyed")
+	}
+	refs, err := listerStore.ListKeyed(context.Background())
+	if err != nil {
+		return "", fmt.Errorf("list keyed refs: %w", err)
+	}
+	bundles := make(map[string]map[string]string, len(refs))
+	for _, r := range refs {
+		bundles[r.Key] = map[string]string{"digest": r.Digest}
+		if r.SpecHash != "" {
+			bundles[r.Key]["spec_hash"] = r.SpecHash
+		}
+	}
+	doc := map[string]any{
+		"schema_version": 2,
+		"generated_at":   time.Now().UTC().Format(time.RFC3339),
+		"bundles":        bundles,
+	}
+	data, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal lockfile: %w", err)
+	}
+	outDir := filepath.Join(absRepo, ".cache", "phpup-test")
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
+		return "", fmt.Errorf("mkdir cache: %w", err)
+	}
+	outPath := filepath.Join(outDir, "bundles-override.lock")
+	if err := os.WriteFile(outPath, data, 0o644); err != nil { //nolint:gosec // non-sensitive override file; mounted read-only into ephemeral test container.
+		return "", fmt.Errorf("write lockfile: %w", err)
+	}
+	return outPath, nil
 }
 
 // printCellSummary writes a per-cell summary table to w. Entries are
