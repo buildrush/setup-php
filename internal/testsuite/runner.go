@@ -310,10 +310,13 @@ func runCell(ctx context.Context, opts *testOpts, set *FixtureSet, cellOS, cellA
 // remote URI, returns an error because mounting a remote registry inside
 // the test container isn't wired up yet (PR 4 scope).
 //
-// Three mounts are produced:
+// Mounts produced (in order):
 //   - oci-layout directory → /registry (read-only)
-//   - phpup self-binary   → /usr/local/bin/phpup (read-only)
-//   - repo's test/compat  → /test-compat (read-only)
+//   - phpup self-binary    → /usr/local/bin/phpup (read-only)
+//   - repo's test/compat   → /test-compat (read-only)
+//   - lockfile override    → /tmp/bundles-override.lock (read-only)
+//   - docs/compat-matrix.md → /compat-matrix.md (read-only; REQUIRED, errors if missing)
+//   - goldens dir          → /golden (read-only; OPTIONAL, silently skipped if dir absent)
 //
 // Env is minimal: PHPUP_REGISTRY=oci-layout:/registry so the inner
 // phpup invocation inherits the right registry without needing to pass
@@ -360,6 +363,28 @@ func buildCellMounts(opts *testOpts, _, _, _ string) ([]build.Mount, map[string]
 		"PHPUP_REGISTRY": "oci-layout:/registry",
 		"PHPUP_LOCKFILE": "/tmp/bundles-override.lock",
 	}
+
+	// Compat-diff inputs: matrix markdown (for allowlist parsing) and the
+	// goldens directory (for byte-for-byte comparison against v2). Matrix
+	// is a repo-integrity requirement; goldens dir is optional — missing
+	// dir means a fresh checkout that hasn't run the refresh workflow
+	// yet. The fixture-level compat-diff gate in runFixture (added in a
+	// later PR of feat/pr-gated-v2-compat) will handle per-fixture-missing
+	// cases with an actionable error.
+	compatMatrix := filepath.Join(opts.AbsRepo, "docs", "compat-matrix.md")
+	if _, err := os.Stat(compatMatrix); err != nil {
+		return nil, nil, fmt.Errorf("docs/compat-matrix.md missing under repo: %w", err)
+	}
+	mounts = append(mounts,
+		build.Mount{Host: compatMatrix, Container: "/compat-matrix.md", ReadOnly: true},
+	)
+	goldenDir := filepath.Join(opts.AbsRepo, "test", "compat", "testdata", "golden")
+	if _, err := os.Stat(goldenDir); err == nil {
+		mounts = append(mounts,
+			build.Mount{Host: goldenDir, Container: "/golden", ReadOnly: true},
+		)
+	}
+
 	return mounts, env, nil
 }
 
