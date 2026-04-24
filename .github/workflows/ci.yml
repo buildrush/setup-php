@@ -113,6 +113,14 @@ jobs:
           # "do the normal cache-probe".
           FORCE: ${{ inputs.force && '1' || '' }}
         run: make ci-cell OS=${{ matrix.os }} ARCH=${{ matrix.arch }} PHP=${{ matrix.php }} FORCE="$FORCE"
+      - name: Upload deviation artifacts (compat fail only)
+        if: failure() && matrix.os == 'noble' && matrix.arch == 'x86_64' && matrix.php == '8.4'
+        uses: actions/upload-artifact@v7
+        with:
+          name: compat-deviations-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.php }}
+          path: .cache/phpup-test/deviations/${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.php }}.json
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload oci-layout artifact (main only)
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v7
@@ -187,6 +195,101 @@ jobs:
           test "$memlim" = "256M" \
             || { echo "::error::memory_limit=$memlim, want 256M"; exit 1; }
           echo "smoke-action: action surface OK"
+
+  compat-report:
+    name: Compat report (PR comment)
+    needs: pipeline
+    if: always() && github.event_name == 'pull_request' && needs.pipeline.result != 'skipped'
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: compat-deviations-*
+          path: /tmp/compat-deviations
+          merge-multiple: true
+      - name: Render comment body
+        id: render
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/compat-deviations
+          body_file=/tmp/compat-report-body.md
+          found=0
+          for f in /tmp/compat-deviations/*.json; do
+            [ -f "$f" ] || continue
+            found=1
+            break
+          done
+          if [ $found -eq 1 ]; then
+            {
+              echo "## ⚠️ Compat-diff detected deviations from shivammathur/setup-php@v2"
+              echo ""
+              echo "<!-- compat-report-comment-v1 -->"
+              echo ""
+              echo "This PR's \`phpup install\` behavior diverges from the pinned v2 baseline in ways the compat-matrix allowlist doesn't cover."
+              echo ""
+              echo "### Deviations"
+              echo ""
+              for f in /tmp/compat-deviations/*.json; do
+                cell=$(jq -r '.cell' "$f")
+                jq -r --arg cell "$cell" '.fixtures[] | "**Fixture \`\(.name)\` (\($cell))**\n" + (.deviations[:20] | map("- \`\(.Path)\`: ours=\`\(.Ours)\`, theirs=\`\(.Theirs)\`") | join("\n")) + "\n"' "$f"
+              done
+              echo ""
+              echo "### What to do"
+              echo ""
+              echo "1. **If this is a regression in your change** — fix it, or add an entry to the deviations allowlist in [\`docs/compat-matrix.md\`](../blob/main/docs/compat-matrix.md) with a \`reason:\` explaining why it's intentional. The YAML block is delimited by \`<!-- compat-harness:deviations:start -->\` / \`<!-- compat-harness:deviations:end -->\`."
+              echo ""
+              echo "2. **If this looks like upstream v2 drift** (e.g., the PPA shipped a new package between golden refreshes) — ask a maintainer to force-refresh the goldens:"
+              echo ""
+              echo "   \`\`\`"
+              echo "   gh workflow run compat-golden-refresh.yml"
+              echo "   \`\`\`"
+              echo ""
+              echo "   Merge the resulting drift PR (\`chore: refresh v2 compat goldens\`), then rebase this PR onto \`main\`."
+            } > "$body_file"
+            echo "status=deviations" >> "$GITHUB_OUTPUT"
+          else
+            # No deviations this run.
+            {
+              echo "✅ Compat-diff cleared — this PR's \`phpup install\` now matches the pinned v2 baseline on all 8 axis fixtures."
+              echo ""
+              echo "<!-- compat-report-comment-v1 -->"
+            } > "$body_file"
+            echo "status=cleared" >> "$GITHUB_OUTPUT"
+          fi
+          {
+            echo "body_path=$body_file"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Find existing sticky comment
+        id: find
+        uses: peter-evans/find-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: github-actions[bot]
+          body-includes: <!-- compat-report-comment-v1 -->
+
+      - name: Post/update deviations comment
+        if: steps.render.outputs.status == 'deviations'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find.outputs.comment-id }}
+          body-path: ${{ steps.render.outputs.body_path }}
+          edit-mode: replace
+
+      - name: Update cleared comment (only if sticky exists)
+        if: steps.render.outputs.status == 'cleared' && steps.find.outputs.comment-id != ''
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find.outputs.comment-id }}
+          body-path: ${{ steps.render.outputs.body_path }}
+          edit-mode: replace
 
   publish:
     name: Publish to GHCR
