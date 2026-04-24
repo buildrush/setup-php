@@ -37,6 +37,17 @@ All code changes MUST pass `make check` before committing. This runs:
 - Workflow YAML follows the reusable workflow pattern documented in the spec.
 - Lint errors MUST be fixed in code, not silenced. `//nolint` comments are only acceptable for genuine false positives and must include a justification. Existing `//nolint` comments should be removed whenever the underlying issue can be properly fixed.
 
+## Branch Workflow
+
+- Before starting work on a feature branch or worktree, sync with the origin target branch (usually `origin/main`): `git fetch origin` then branch from / rebase onto `origin/main`. Never branch from a stale local `main`.
+- Rebase onto `origin/main` again before every push, not just at branch creation — keeps PRs current and surfaces conflicts early.
+
+## Deferred Work
+
+- Any deferred or postponed task, known issue, TODO, or follow-up that is **not** already covered by an upcoming phase in `docs/superpowers/specs/` or an existing plan in `docs/superpowers/plans/` MUST be filed as a GitHub issue (`gh issue create`) so it is tracked.
+- This applies to things discovered mid-change and punted: incomplete edge cases, skipped tests, temporary workarounds, `// TODO`s that outlive the PR, scope cut from a plan, etc.
+- Link the created issue from the PR description or commit so the deferral is auditable. Do not rely on memory, chat, or inline TODOs alone.
+
 ## Commits
 
 - Use conventional commit messages (feat:, fix:, chore:, docs:, test:, refactor:).
