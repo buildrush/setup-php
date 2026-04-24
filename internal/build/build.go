@@ -129,16 +129,23 @@ func BuildPHP(ctx context.Context, args []string) error {
 	// Remote backends return ErrUnsupported for LookupBySpec; treat that
 	// as a soft miss so callers without an oci-layout cache fall through
 	// to building. Hard errors from a layout backend still propagate.
-	ref, hit, err := store.LookupBySpec(ctx, "php-core", specHash)
-	if errors.Is(err, registry.ErrUnsupported) {
-		hit, err = false, nil
-	}
-	if err != nil {
-		return fmt.Errorf("phpup build php: lookup by spec: %w", err)
-	}
-	if hit {
-		fmt.Printf("phpup build php: cache hit %s (spec-hash %s)\n", ref.Digest, specHash)
-		return nil
+	// --force bypasses the probe entirely so security rebuilds / manual
+	// dispatches always produce fresh artifacts even when the spec-hash
+	// matches a published bundle.
+	if opts.Force {
+		fmt.Printf("phpup build php: --force, skipping cache-probe (spec-hash %s)\n", specHash)
+	} else {
+		ref, hit, err := store.LookupBySpec(ctx, "php-core", specHash)
+		if errors.Is(err, registry.ErrUnsupported) {
+			hit, err = false, nil
+		}
+		if err != nil {
+			return fmt.Errorf("phpup build php: lookup by spec: %w", err)
+		}
+		if hit {
+			fmt.Printf("phpup build php: cache hit %s (spec-hash %s)\n", ref.Digest, specHash)
+			return nil
+		}
 	}
 
 	// 3. Prepare output mount dir. Default is <repo>/build/php/<slug>/ so
@@ -260,16 +267,21 @@ func BuildExt(ctx context.Context, args []string) error {
 	// Remote backends return ErrUnsupported for LookupBySpec; treat that
 	// as a soft miss so callers without an oci-layout cache fall through
 	// to building. Hard errors from a layout backend still propagate.
-	ref, hit, err := store.LookupBySpec(ctx, bundleName, specHash)
-	if errors.Is(err, registry.ErrUnsupported) {
-		hit, err = false, nil
-	}
-	if err != nil {
-		return fmt.Errorf("phpup build ext: lookup by spec: %w", err)
-	}
-	if hit {
-		fmt.Printf("phpup build ext: cache hit %s (spec-hash %s)\n", ref.Digest, specHash)
-		return nil
+	// --force bypasses the probe (see BuildPHP for rationale).
+	if opts.Force {
+		fmt.Printf("phpup build ext: --force, skipping cache-probe (spec-hash %s)\n", specHash)
+	} else {
+		ref, hit, err := store.LookupBySpec(ctx, bundleName, specHash)
+		if errors.Is(err, registry.ErrUnsupported) {
+			hit, err = false, nil
+		}
+		if err != nil {
+			return fmt.Errorf("phpup build ext: lookup by spec: %w", err)
+		}
+		if hit {
+			fmt.Printf("phpup build ext: cache hit %s (spec-hash %s)\n", ref.Digest, specHash)
+			return nil
+		}
 	}
 
 	// 3. Start sidecar + seed prerequisite core. The sidecar is tied to
@@ -450,6 +462,9 @@ func BuildCell(ctx context.Context, args []string) error {
 	if opts.OutDir != "" {
 		phpArgs = append(phpArgs, "--out-dir", opts.OutDir)
 	}
+	if opts.Force {
+		phpArgs = append(phpArgs, "--force")
+	}
 	fmt.Printf("phpup build cell: [1/%d] build php %s\n", total, opts.Version)
 	if err := BuildPHP(ctx, phpArgs); err != nil {
 		return fmt.Errorf("phpup build cell: build php: %w", err)
@@ -500,6 +515,9 @@ func BuildCell(ctx context.Context, args []string) error {
 			// /tmp mount.
 			extArgs = append(extArgs, "--out-dir", filepath.Join(opts.OutDir, "ext", ext.Name+"-"+ext.Version))
 		}
+		if opts.Force {
+			extArgs = append(extArgs, "--force")
+		}
 		fmt.Printf("phpup build cell: [%d/%d] build ext %s %s\n", i+2, total, ext.Name, ext.Version)
 		if err := BuildExt(ctx, extArgs); err != nil {
 			return fmt.Errorf("phpup build cell: build ext %s: %w", ext.Name, err)
@@ -522,6 +540,7 @@ type cellOpts struct {
 	Registry string // "oci-layout:./out/oci-layout" or "ghcr.io/..."
 	Repo     string // absolute path to setup-php repo root
 	OutDir   string // --out-dir override; empty = let BuildPHP/BuildExt derive
+	Force    bool   // --force: skip the spec-hash cache-probe and rebuild unconditionally
 }
 
 // parseCellFlags parses the flag tail for `phpup build cell`. The shape
@@ -540,6 +559,7 @@ func parseCellFlags(args []string) (*cellOpts, error) {
 	repo := fs.String("repo", ".", "Path to setup-php repo root")
 	outDir := fs.String("out-dir", "",
 		"Shared docker output directory root (defaults to <repo>/build/ derivation for each build subcommand)")
+	force := fs.Bool("force", false, "Skip the spec-hash cache-probe and rebuild every sub-build unconditionally")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -565,6 +585,7 @@ func parseCellFlags(args []string) (*cellOpts, error) {
 		Registry: *registryFlag,
 		Repo:     absRepo,
 		OutDir:   *outDir,
+		Force:    *force,
 	}, nil
 }
 
@@ -584,6 +605,7 @@ type extOpts struct {
 	Repo       string
 	OutDir     string
 	CoreDigest string // "sha256:..." — required; resolved by caller
+	Force      bool   // --force: skip the spec-hash cache-probe and rebuild unconditionally
 }
 
 // parseExtFlags parses the flag tail for `phpup build ext`. The FlagSet
@@ -603,6 +625,7 @@ func parseExtFlags(args []string) (*extOpts, error) {
 		"Docker output directory (defaults to <repo>/build/ext/<name>-<version>-<php_abi>-<os>-<arch>/)")
 	coreDigest := fs.String("php-core-digest", "",
 		"Digest of the prerequisite php-core bundle (sha256:...). Required.")
+	force := fs.Bool("force", false, "Skip the spec-hash cache-probe and rebuild unconditionally")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -638,6 +661,7 @@ func parseExtFlags(args []string) (*extOpts, error) {
 		Repo:       absRepo,
 		OutDir:     *outDir,
 		CoreDigest: *coreDigest,
+		Force:      *force,
 	}, nil
 }
 
@@ -713,6 +737,10 @@ type phpOpts struct {
 	// under <repo>/build/php/<version>-<os>-<arch>-<ts>/; non-empty =
 	// use verbatim (may be absolute or relative — absolutized in BuildPHP).
 	OutDir string
+	// Force skips the spec-hash cache-probe and rebuilds unconditionally.
+	// Used by security-rebuild and catalog-update dispatches to force a
+	// full rebuild even when the spec-hash matches an existing bundle.
+	Force bool
 }
 
 // parsePHPFlags parses the flag tail for `phpup build php`. The FlagSet
@@ -729,6 +757,7 @@ func parsePHPFlags(args []string) (*phpOpts, error) {
 	repo := fs.String("repo", ".", "Path to setup-php repo root")
 	outDir := fs.String("out-dir", "",
 		"Docker output directory (defaults to <repo>/build/php/<version>-<os>-<arch>-<ts>/)")
+	force := fs.Bool("force", false, "Skip the spec-hash cache-probe and rebuild unconditionally")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -758,6 +787,7 @@ func parsePHPFlags(args []string) (*phpOpts, error) {
 		Registry: *registryFlag,
 		Repo:     absRepo,
 		OutDir:   *outDir,
+		Force:    *force,
 	}, nil
 }
 

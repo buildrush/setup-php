@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   check:
@@ -14,9 +15,11 @@ jobs:
       - uses: actions/checkout@v6
       - name: Check runner images
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           LATEST=$(curl -sSf "https://api.github.com/repos/actions/runner-images/releases/latest" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" | jq -r .tag_name)
+            -H "Authorization: Bearer $GH_TOKEN" | jq -r .tag_name)
           CURRENT=$(cat .state/runner-images-tag.txt 2>/dev/null || echo "")
           if [ "$LATEST" != "$CURRENT" ]; then
             echo "$LATEST" > .state/runner-images-tag.txt
@@ -30,8 +33,20 @@ jobs:
           git add .state/
           git commit -m "chore: observed runner image update"
           git push
-      - name: Dispatch rebuild
+      - name: Dispatch ci.yml for rebuild
         if: steps.check.outputs.changed == 'true'
-        uses: peter-evans/repository-dispatch@v4
+        uses: actions/github-script@v7
         with:
-          event-type: runner-image-updated
+          # force=false — runner-image updates don't invalidate existing
+          # bundles on their own. ci.yml on main re-runs against the new
+          # runner release so any drift surfaces; operators decide whether
+          # to escalate to a force-rebuild via security-rebuild dispatch.
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ci.yml',
+              ref: 'main',
+              inputs: { force: 'false' },
+            });
+            core.info('Dispatched ci.yml on main after observing runner-image update');

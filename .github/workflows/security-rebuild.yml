@@ -1,17 +1,31 @@
 name: security-rebuild
+
+# Triggers a force-rebuild of the full bundle pipeline via ci.yml's
+# workflow_dispatch path. Fires on repository_dispatch so operators or
+# security automation can request a fresh build even when no source file
+# changed — useful when a system library (e.g. libssl, libxml2) ships a
+# CVE fix and the downstream bundles need re-linking against the patched
+# library.
 on:
   repository_dispatch:
     types: [security-rebuild]
 
+permissions:
+  actions: write
+
 jobs:
-  pipeline:
-    permissions:
-      contents: write
-      packages: write
-      pull-requests: write
-      id-token: write
-    uses: ./.github/workflows/plan-and-build.yml
-    with:
-      force: true
-      push: true
-    secrets: inherit
+  dispatch-rebuild:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Dispatch ci.yml with force=true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ci.yml',
+              ref: 'main',
+              inputs: { force: 'true' },
+            });
+            core.info('Dispatched ci.yml with force=true on main');
