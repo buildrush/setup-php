@@ -54,10 +54,23 @@ const LinuxAptPreamble = "apt-get update && " +
 // php invocations working without bloating the core-build container or
 // expanding the hermetic-libs catalog (which would drift spec-hashes
 // for existing bundles).
+//
+// Package naming: libicu is the only runtime lib whose SONAME-suffixed
+// package name differs across jammy/noble (libicu70 vs libicu74). The
+// others (libcurl4, libxml2, libjpeg-turbo8, libpng16-16, libonig5, …)
+// share names across both codenames — we verified via apt-cache probe
+// against both images. Codename-select libicu inline rather than
+// splitting the preamble into per-OS constants.
 const LinuxExtAptPreamble = LinuxAptPreamble +
+	". /etc/os-release && " +
+	"case \"$VERSION_CODENAME\" in " +
+	"jammy) LIBICU=libicu70 ;; " +
+	"noble) LIBICU=libicu74 ;; " +
+	"*) echo \"LinuxExtAptPreamble: unsupported codename $VERSION_CODENAME\" >&2; exit 1 ;; " +
+	"esac && " +
 	"apt-get install -y --no-install-recommends " +
 	"libpq5 libssl3 libcurl4 libonig5 libzip4 libsqlite3-0 libxml2 " +
-	"libsodium23 libreadline8 zlib1g libffi8 libicu70 " +
+	"libsodium23 libreadline8 zlib1g libffi8 \"$LIBICU\" " +
 	"libpng16-16 libjpeg-turbo8 libwebp7 libfreetype6 libxslt1.1 " +
 	"&& "
 
