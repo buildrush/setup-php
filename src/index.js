@@ -83,7 +83,7 @@ async function resolveReleaseTag(repo, ref, { token, apiBase } = {}) {
     } catch (err) {
       if (err.statusCode !== 404) throw err;
       if (isSpecificVersion) {
-        throw new Error(`No release found for pinned version ${ref}`);
+        throw new Error(`No release found for pinned version ${ref}`, { cause: err });
       }
       // Branch/SHA ref: fall through to latest (development use case).
     }
