@@ -179,3 +179,42 @@ func TestFilter_EmptyResult_NoMatch(t *testing.T) {
 		t.Fatalf("Filter returned %d fixtures for no-match PHP version; want 0", len(got))
 	}
 }
+
+// TestLoad_CompatField asserts that each axis-representative fixture
+// listed in docs/superpowers/specs/2026-04-24-pr-gated-v2-compat-design.md
+// is marked compat: true in the checked-in test/compat/fixtures.yaml.
+// The compat layer keys off this field to decide whether to diff a
+// fixture's probe against the committed v2 golden.
+func TestLoad_CompatField(t *testing.T) {
+	path := filepath.Join("..", "..", "test", "compat", "fixtures.yaml")
+	set, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load(%q): %v", path, err)
+	}
+	want := map[string]bool{
+		"bare":                 true,
+		"exclusion":            true,
+		"single-ext":           true,
+		"multi-ext":            true,
+		"none-reset":           true,
+		"coverage-pcov":        true,
+		"ini-and-coverage":     true,
+		"ini-file-development": true,
+	}
+	got := map[string]bool{}
+	for _, f := range set.Fixtures {
+		if f.Compat {
+			got[f.Name] = true
+		}
+	}
+	for name := range want {
+		if !got[name] {
+			t.Errorf("fixture %q: want Compat=true, got false", name)
+		}
+	}
+	for name := range got {
+		if !want[name] {
+			t.Errorf("fixture %q: Compat=true set unexpectedly (design scope is 8 fixtures)", name)
+		}
+	}
+}
