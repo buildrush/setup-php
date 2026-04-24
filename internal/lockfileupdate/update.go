@@ -1,10 +1,6 @@
-// Command lockfile-update regenerates bundles.lock from the current catalog
-// and the state of GHCR. Replaces the previous bash + Python implementation.
-//
-// Usage:
-//
-//	lockfile-update [-catalog ./catalog] [-lockfile ./bundles.lock] [-registry ghcr.io/buildrush]
-package main
+// Package lockfileupdate implements `phpup lockfile-update`, which
+// regenerates bundles.lock from the current catalog and the state of GHCR.
+package lockfileupdate
 
 import (
 	"context"
@@ -30,46 +26,52 @@ type resolvedEntry struct {
 	SpecHash string
 }
 
-func main() {
-	catalogDir := flag.String("catalog", "./catalog", "path to catalog directory")
-	lockfilePath := flag.String("lockfile", "./bundles.lock", "path to bundles.lock")
-	registry := flag.String("registry", "ghcr.io/buildrush", "OCI registry prefix")
-	commit := flag.Bool("commit", false, "commit + push the updated lockfile to HEAD (CI use)")
-	flag.Parse()
+// Main is the entry point for `phpup lockfile-update`. args is everything
+// after the subcommand token. Byte-identical stdout (the single "wrote …"
+// line) and lockfile output to the retired cmd/lockfile-update binary for
+// the same inputs.
+func Main(args []string) error {
+	fs := flag.NewFlagSet("phpup lockfile-update", flag.ContinueOnError)
+	catalogDir := fs.String("catalog", "./catalog", "path to catalog directory")
+	lockfilePath := fs.String("lockfile", "./bundles.lock", "path to bundles.lock")
+	registry := fs.String("registry", "ghcr.io/buildrush", "OCI registry prefix")
+	commit := fs.Bool("commit", false, "commit + push the updated lockfile to HEAD (CI use)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 
 	ctx := context.Background()
 
 	cat, err := catalog.LoadCatalog(*catalogDir)
 	if err != nil {
-		log.Fatalf("load catalog: %v", err)
+		return fmt.Errorf("load catalog: %w", err)
 	}
 	if err := cat.PHP.Validate(); err != nil {
-		log.Fatalf("validate catalog: %v", err)
+		return fmt.Errorf("validate catalog: %w", err)
 	}
 
 	token := os.Getenv("GHCR_TOKEN")
 	client, err := oci.NewClient(*registry, token)
 	if err != nil {
-		log.Fatalf("create OCI client: %v", err)
+		return fmt.Errorf("create OCI client: %w", err)
 	}
 
 	builderOS, err := readBuilderOS(filepath.Join("builders", "common", "builder-os.env"))
 	if err != nil {
-		log.Fatalf("read builder-os.env: %v", err)
+		return fmt.Errorf("read builder-os.env: %w", err)
 	}
 
-	// Hash builder scripts and schema version file
 	builderHashPHP, err := planner.HashFile(filepath.Join("builders", "linux", "build-php.sh"))
 	if err != nil {
-		log.Fatalf("hash php builder: %v", err)
+		return fmt.Errorf("hash php builder: %w", err)
 	}
 	builderHashExt, err := planner.HashFile(filepath.Join("builders", "linux", "build-ext.sh"))
 	if err != nil {
-		log.Fatalf("hash ext builder: %v", err)
+		return fmt.Errorf("hash ext builder: %w", err)
 	}
 	schemaEnvHash, err := planner.HashFile(filepath.Join("builders", "common", "bundle-schema-version.env"))
 	if err != nil {
-		log.Fatalf("hash schema env: %v", err)
+		return fmt.Errorf("hash schema env: %w", err)
 	}
 	builderHashPHP = builderHashPHP + ":" + schemaEnvHash
 	builderHashExt = builderHashExt + ":" + schemaEnvHash
@@ -88,7 +90,7 @@ func main() {
 		c := &phpCells[i]
 		yamlBytes, err := planner.PerVersionYAML(cat.PHP, c.Version)
 		if err != nil {
-			log.Fatalf("per-version yaml %s: %v", c.Version, err)
+			return fmt.Errorf("per-version yaml %s: %w", c.Version, err)
 		}
 		c.SpecHash = planner.ComputeSpecHash(c, yamlBytes, builderHashPHP, builderOS)
 
@@ -111,7 +113,7 @@ func main() {
 		}
 		extYAML, err := planner.ExtensionYAML(ext)
 		if err != nil {
-			log.Fatalf("ext yaml %s: %v", ext.Name, err)
+			return fmt.Errorf("ext yaml %s: %w", ext.Name, err)
 		}
 		cells := planner.ExpandExtMatrix(ext, coreDigestByKey)
 		for i := range cells {
@@ -139,14 +141,14 @@ func main() {
 	preserveGeneratedAtIfUnchanged(lf, *lockfilePath)
 
 	if err := lf.Write(*lockfilePath); err != nil {
-		log.Fatalf("write lockfile: %v", err)
+		return fmt.Errorf("write lockfile: %w", err)
 	}
 	fmt.Printf("wrote %s with %d entries\n", *lockfilePath, len(lf.Bundles))
 
 	if *commit {
 		branch := firstNonEmpty(os.Getenv("GITHUB_HEAD_REF"), os.Getenv("GITHUB_REF_NAME"))
 		if branch == "" {
-			log.Fatalf("--commit requires GITHUB_HEAD_REF or GITHUB_REF_NAME to be set")
+			return fmt.Errorf("--commit requires GITHUB_HEAD_REF or GITHUB_REF_NAME to be set")
 		}
 		runID := os.Getenv("GITHUB_RUN_ID")
 		if runID == "" {
@@ -159,9 +161,10 @@ func main() {
 			ActorName:    "github-actions[bot]",
 			ActorEmail:   "41898282+github-actions[bot]@users.noreply.github.com",
 		}); err != nil {
-			log.Fatalf("commit lockfile: %v", err)
+			return fmt.Errorf("commit lockfile: %w", err)
 		}
 	}
+	return nil
 }
 
 func firstNonEmpty(values ...string) string {

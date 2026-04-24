@@ -23,8 +23,7 @@ All code changes MUST pass `make check` before committing. This runs:
 
 ## Architecture
 
-- Go runtime binary (`cmd/phpup/`) resolves inputs against an embedded lockfile, fetches OCI bundles from GHCR, extracts, composes, and exports a PHP environment.
-- Go planner tool (`cmd/planner/`) expands catalog YAML into GitHub Actions build matrices.
+- Go runtime binary (`cmd/phpup/`) resolves inputs against an embedded lockfile, fetches OCI bundles from GHCR, extracts, composes, and exports a PHP environment. Also hosts maintainer subcommands: `phpup plan` (build-matrix planner), `phpup lockfile update`, `phpup gc-bundles`, `phpup hermetic-audit`, `phpup compat-diff` — all backed by packages in `internal/`.
 - Catalog (`catalog/`) is declarative YAML describing what to build.
 - Builders (`builders/`) are shell scripts that compile PHP and extensions.
 - Workflows (`.github/workflows/`) orchestrate the build pipeline.

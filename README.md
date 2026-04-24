@@ -85,7 +85,7 @@ OS × ARCH × PHP cell and executes the fixture matrix in
 The fixtures use v2-shaped inputs (`php-version`, `extensions`,
 `ini-values`, `coverage`), so any drift from v2 semantics surfaces as a
 fixture failure. A side-by-side diff against `shivammathur/setup-php@v2`
-can be reproduced on demand with `go run ./cmd/compat-diff`; the pinned
+can be reproduced on demand with `phpup compat-diff`; the pinned
 v2 SHA and the accepted-deviation allowlist live in
 [`docs/compat-matrix.md`](docs/compat-matrix.md).
 

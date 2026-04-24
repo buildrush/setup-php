@@ -12,8 +12,9 @@ import (
 
 // Client is a thin facade over an internal/registry.Store. Its public surface
 // is preserved for backwards compatibility with the pre-refactor call sites
-// in cmd/phpup, cmd/planner, and cmd/lockfile-update. The facade itself is
-// slated for deletion by end of PR 3 of the local+CI unification rollout.
+// (now consolidated as phpup subcommands in internal/planner,
+// internal/lockfileupdate, and cmd/phpup itself). Slated for deletion once
+// callers migrate to registry.Store directly.
 type Client struct {
 	registryURI string
 	token       string

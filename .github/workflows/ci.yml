@@ -145,11 +145,12 @@ jobs:
       - name: Update lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
         run: |
-          go run ./cmd/lockfile-update \
+          bin/phpup lockfile-update \
             -catalog ./catalog \
             -lockfile ./bundles.lock \
-            -registry "ghcr.io/${{ github.repository_owner }}"
+            -registry "ghcr.io/$OWNER"
       - name: Commit lockfile (if changed)
         run: |
           git config user.name "buildrush-bot"

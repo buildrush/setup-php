@@ -33,7 +33,7 @@ Practical implications:
 
 - **Don't force-push while CI is in flight.** The bot pushes with `--force-with-lease`; it will refuse to overwrite a newer tip, and the pipeline will fail the run. Wait for a green CI run before rebasing, then `git pull --rebase` to pick up the bot's commit.
 - **Fork PRs are blocked from auto-publishing.** GitHub does not grant fork PRs write access to the head ref or packages. A maintainer must label the PR `safe-to-build` and re-run the pipeline.
-- **Declined PRs leave no trace on main.** Orphan bundles accumulate on GHCR under the PR branch's lifetime; run `go run ./cmd/gc-bundles --org buildrush --min-age-days 30` periodically (or when GHCR quota pressure warrants) to reap them.
+- **Declined PRs leave no trace on main.** Orphan bundles accumulate on GHCR under the PR branch's lifetime; run `phpup gc-bundles --org buildrush --min-age-days 30` periodically (or when GHCR quota pressure warrants) to reap them.
 
 See `docs/superpowers/specs/2026-04-20-bundle-schema-and-rollout-design.md` for the full rollout design.
 
@@ -67,11 +67,16 @@ make build-linux-amd64    # Cross-compile for Linux
 ## Project Structure
 
 ```
-cmd/phpup/       — Runtime binary (what users execute)
-cmd/planner/     — Build matrix planner (CI tool)
-internal/        — Go packages (plan, resolve, oci, extract, compose, env, cache, catalog, lockfile, planner)
+cmd/phpup/       — Runtime binary (what users + CI execute). Hosts the
+                   runtime "install" flow plus maintainer subcommands:
+                   build, test, push, plan, lockfile-update, gc-bundles,
+                   hermetic-audit, compat-diff.
+internal/        — Go packages backing the phpup binary: plan, resolve,
+                   oci, extract, compose, env, cache, catalog, lockfile,
+                   planner, registry, build, testsuite, gcbundles,
+                   hermeticaudit, lockfileupdate, compatdiff.
 catalog/         — Declarative build specs (YAML)
 builders/        — Shell scripts that compile PHP and extensions
 .github/workflows/ — CI/CD pipeline
-test/            — Smoke and integration tests
+test/            — Smoke and compat fixtures
 ```
