@@ -137,7 +137,7 @@ jobs:
       - name: Build phpup
         run: make bin/phpup
       - name: Download all oci-layout artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: oci-layout-*
           path: out/merged-layout
