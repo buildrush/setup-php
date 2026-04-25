@@ -85,24 +85,21 @@ fixtures:
     coverage: 'none'
     ini-file: 'development'
 
-  # redis is excluded on 8.5 (see catalog/extensions/redis.yaml); these three
-  # fixtures substitute apcu to cover the same input-shape axes (multi-ext,
-  # none-reset, single-ext) against an extension that does build on 8.5.
   - name: multi-ext-85
     php-version: '8.5'
-    extensions: 'apcu, xdebug'
+    extensions: 'redis, xdebug'
     ini-values: ''
     coverage: 'none'
 
   - name: none-reset-85
     php-version: '8.5'
-    extensions: 'none, apcu'
+    extensions: 'none, redis'
     ini-values: ''
     coverage: 'none'
 
   - name: single-ext-85
     php-version: '8.5'
-    extensions: 'apcu'
+    extensions: 'redis'
     ini-values: ''
     coverage: 'none'
 
@@ -416,11 +413,11 @@ fixtures:
     ini-values: ''
     coverage: 'none'
 
-  # 8.5 omits redis + igbinary (php_smart_string.h upstream issue; see #38, #43).
+  # 8.5 omits igbinary (php_smart_string.h upstream issue; see #43).
   - name: multi-ext-top14-arm64-85
     php-version: '8.5'
     arch: 'aarch64'
-    extensions: 'xdebug, pcov, apcu, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
+    extensions: 'redis, xdebug, pcov, apcu, msgpack, uuid, ssh2, yaml, memcached, amqp, event, rdkafka, protobuf'
     ini-values: ''
     coverage: 'none'
 
