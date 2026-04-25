@@ -10,24 +10,28 @@ fixtures:
     extensions: ''
     ini-values: ''
     coverage: 'none'
+    compat: true
 
   - name: exclusion
     php-version: '8.4'
     extensions: ':opcache'
     ini-values: ''
     coverage: 'none'
+    compat: true
 
   - name: coverage-pcov
     php-version: '8.4'
     extensions: ''
     ini-values: ''
     coverage: 'pcov'
+    compat: true
 
   - name: ini-and-coverage
     php-version: '8.4'
     extensions: ''
     ini-values: 'memory_limit=256M,date.timezone=UTC'
     coverage: 'xdebug'
+    compat: true
 
   - name: ini-file-development
     php-version: '8.4'
@@ -35,24 +39,28 @@ fixtures:
     ini-values: ''
     coverage: 'none'
     ini-file: 'development'
+    compat: true
 
   - name: multi-ext
     php-version: '8.4'
     extensions: 'redis, xdebug'
     ini-values: ''
     coverage: 'none'
+    compat: true
 
   - name: none-reset
     php-version: '8.4'
     extensions: 'none, redis'
     ini-values: ''
     coverage: 'none'
+    compat: true
 
   - name: single-ext
     php-version: '8.4'
     extensions: 'redis'
     ini-values: ''
     coverage: 'none'
+    compat: true
 
   - name: bare-85
     php-version: '8.5'

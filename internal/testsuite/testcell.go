@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/buildrush/setup-php/internal/compatdiff"
 )
 
 // InstallFunc runs `phpup install` for a single fixture with the given env
@@ -190,11 +192,20 @@ func composeProbeEnv(envFile, pathFile string) ([]string, error) {
 }
 
 // testCellOpts is the parsed flag set for `phpup internal test-cell`.
+// The Compat* paths are container-side absolute paths populated by the
+// outer runner (runCell in runner.go) when the compat gate should be
+// active. Non-canonical cells and the standalone `phpup install` path
+// leave them empty — runFixture's shouldRunCompat gate short-circuits
+// on any empty value, so the compat-diff step becomes a no-op without
+// requiring the CLI user to know about it.
 type testCellOpts struct {
-	OS, Arch, PHP string
-	FixturesPath  string
-	ProbePath     string
-	RegistryURI   string
+	OS, Arch, PHP  string
+	FixturesPath   string
+	ProbePath      string
+	RegistryURI    string
+	CompatMatrix   string // path to compat-matrix.md; "" = compat off
+	GoldenDir      string // directory containing <fixture>.json goldens; "" = compat off
+	DeviationsPath string // path to append deviation artifacts to; "" = compat off
 }
 
 // parseTestCellFlags parses the flag tail for `phpup internal test-cell`.
@@ -208,6 +219,9 @@ func parseTestCellFlags(args []string) (*testCellOpts, error) {
 	fixturesFlag := fs.String("fixtures", "/test-compat/fixtures.yaml", "Path to fixtures YAML")
 	probeFlag := fs.String("probe", "/test-compat/probe.sh", "Path to probe.sh")
 	registryFlag := fs.String("registry", "", "Registry URI for phpup install (propagated via PHPUP_REGISTRY env)")
+	compatMatrixFlag := fs.String("compat-matrix", "", "Path to compat-matrix.md; empty disables compat-diff")
+	goldenDirFlag := fs.String("golden-dir", "", "Directory containing v2 golden probe JSONs; empty disables compat-diff")
+	deviationsFlag := fs.String("deviations", "", "Path to append deviation artifact JSON; empty disables artifact writes")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -216,8 +230,12 @@ func parseTestCellFlags(args []string) (*testCellOpts, error) {
 	}
 	return &testCellOpts{
 		OS: *osFlag, Arch: *archFlag, PHP: *phpFlag,
-		FixturesPath: *fixturesFlag, ProbePath: *probeFlag,
-		RegistryURI: *registryFlag,
+		FixturesPath:   *fixturesFlag,
+		ProbePath:      *probeFlag,
+		RegistryURI:    *registryFlag,
+		CompatMatrix:   *compatMatrixFlag,
+		GoldenDir:      *goldenDirFlag,
+		DeviationsPath: *deviationsFlag,
 	}, nil
 }
 
@@ -386,7 +404,57 @@ func runFixture(ctx context.Context, opts *testCellOpts, f *Fixture) fixtureOutc
 		out.Err = err
 		return out
 	}
+
+	// 6. Compat-diff gate (canonical cell + fixture.Compat + golden exists).
+	if shouldRunCompat(opts, f) {
+		goldenPath := filepath.Join(opts.GoldenDir, f.Name+".json")
+		if _, err := os.Stat(goldenPath); err != nil {
+			// Missing golden on a fixture that opted in is a hard error: it
+			// means the refresh workflow has never captured this fixture, or
+			// a golden was deleted. Better to fail loudly than silently skip.
+			out.Err = fmt.Errorf("compat: golden missing for fixture %q at %s: run `gh workflow run compat-golden-refresh.yml` to capture it", f.Name, goldenPath)
+			return out
+		}
+		devs, err := compatdiff.DiffFiles(probeOut, goldenPath, opts.CompatMatrix, f.Name)
+		if err != nil {
+			out.Err = fmt.Errorf("compat: diff failed for fixture %q: %w", f.Name, err)
+			return out
+		}
+		if len(devs) > 0 {
+			if opts.DeviationsPath != "" {
+				cell := opts.OS + "-" + opts.Arch + "-" + opts.PHP
+				if werr := AppendDeviations(opts.DeviationsPath, cell, f.Name, devs); werr != nil {
+					// Artifact write failure is diagnostic, not compat-diff
+					// failure; log but don't overwrite the deviation error.
+					fmt.Fprintf(os.Stderr, "compat: append deviations artifact: %v\n", werr)
+				}
+			}
+			out.Err = fmt.Errorf("compat: fixture %q has %d unexplained deviation(s) vs v2 golden", f.Name, len(devs))
+			return out
+		}
+	}
 	return out
+}
+
+// shouldRunCompat returns true iff the current cell is the canonical
+// compat cell (noble/x86_64/8.4), the fixture opted in via Compat: true,
+// and the outer runner supplied both compat paths. Non-empty paths
+// indicate the outer runner intends compat to run in this cell; the
+// on-disk presence of the per-fixture golden file is re-verified
+// inside step 6 of runFixture (the `os.Stat(goldenPath)` check).
+func shouldRunCompat(opts *testCellOpts, f *Fixture) bool {
+	if !f.Compat {
+		return false
+	}
+	// Defense-in-depth: the CI-driven path (runner.go:runCell) always
+	// passes both flags with constant non-empty values, so this branch
+	// is only reachable by test-direct callers that build testCellOpts
+	// by hand. Guard kept so a future bug in flag threading fails
+	// closed (compat off) rather than open (nil-deref in DiffFiles).
+	if opts.CompatMatrix == "" || opts.GoldenDir == "" {
+		return false
+	}
+	return opts.OS == "noble" && opts.Arch == "x86_64" && opts.PHP == "8.4"
 }
 
 // writeEnvSnapshot captures os.Environ() into path, one KEY=value per line,

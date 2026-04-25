@@ -1,6 +1,6 @@
 .PHONY: check fmt fmt-check vet lint tidy tidy-check test test-node build clean \
         build-linux-amd64 build-linux-arm64 bundle-php bundle-ext gc-bundles-dry-run \
-        ci-cell ci
+        ci-cell ci compat-refresh-goldens
 
 # Path to the native phpup binary used by bundle-php / bundle-ext. Overridable
 # so CI / power users can point at a pre-built binary.
@@ -178,6 +178,18 @@ ci: $(PHPUP_BIN)
 	    done; \
 	  done; \
 	done
+
+# compat-refresh-goldens: run `phpup internal golden-capture` against the
+# current PHP environment. Intended for use INSIDE the
+# compat-golden-refresh.yml workflow after `shivammathur/setup-php@<sha>`
+# has populated the runner. Running it on a developer laptop without
+# having first installed v2 will produce a golden that reflects the
+# laptop's PHP, not v2's — do not commit that output.
+compat-refresh-goldens: $(PHPUP_BIN)
+	$(PHPUP_BIN) internal golden-capture \
+	  --fixtures test/compat/fixtures.yaml \
+	  --probe test/compat/probe.sh \
+	  --out-dir test/compat/testdata/golden/v2
 
 # Clean build artifacts
 clean:

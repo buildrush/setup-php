@@ -284,12 +284,17 @@ func runCell(ctx context.Context, opts *testOpts, set *FixtureSet, cellOS, cellA
 	// preinstalled. Wrap the test-cell invocation with the same apt
 	// preamble that build-ext uses so probe.sh's `php -v` has its
 	// shared libs available (libreadline, libpq, libssl, libxml2, etc.).
-	cellCmd := strings.Join([]string{"/usr/local/bin/phpup", "internal", "test-cell",
+	cellCmdParts := []string{
+		"/usr/local/bin/phpup", "internal", "test-cell",
 		"--os", cellOS, "--arch", cellArch, "--php", cellPHP,
 		"--fixtures", "/test-compat/fixtures.yaml",
 		"--probe", "/test-compat/probe.sh",
 		"--registry", "oci-layout:/registry",
-	}, " ")
+		"--compat-matrix", "/compat-matrix.md",
+		"--golden-dir", "/golden",
+		"--deviations", "/deviations/" + cellOS + "-" + cellArch + "-" + cellPHP + ".json",
+	}
+	cellCmd := strings.Join(cellCmdParts, " ")
 	runOpts := &build.DockerRunOpts{
 		Image:    image,
 		Platform: platform,
@@ -310,10 +315,14 @@ func runCell(ctx context.Context, opts *testOpts, set *FixtureSet, cellOS, cellA
 // remote URI, returns an error because mounting a remote registry inside
 // the test container isn't wired up yet (PR 4 scope).
 //
-// Three mounts are produced:
+// Mounts produced (in order):
 //   - oci-layout directory → /registry (read-only)
-//   - phpup self-binary   → /usr/local/bin/phpup (read-only)
-//   - repo's test/compat  → /test-compat (read-only)
+//   - phpup self-binary    → /usr/local/bin/phpup (read-only)
+//   - repo's test/compat   → /test-compat (read-only)
+//   - lockfile override    → /tmp/bundles-override.lock (read-only)
+//   - docs/compat-matrix.md → /compat-matrix.md (read-only; REQUIRED, errors if missing)
+//   - goldens dir          → /golden (read-only; OPTIONAL, silently skipped if dir absent)
+//   - deviations dir        → /deviations (read-write; CI compat-report consumes)
 //
 // Env is minimal: PHPUP_REGISTRY=oci-layout:/registry so the inner
 // phpup invocation inherits the right registry without needing to pass
@@ -360,6 +369,47 @@ func buildCellMounts(opts *testOpts, _, _, _ string) ([]build.Mount, map[string]
 		"PHPUP_REGISTRY": "oci-layout:/registry",
 		"PHPUP_LOCKFILE": "/tmp/bundles-override.lock",
 	}
+
+	// Compat-diff inputs: matrix markdown (for allowlist parsing) and the
+	// goldens directory (for byte-for-byte comparison against v2). Matrix
+	// is a repo-integrity requirement; goldens dir is optional — missing
+	// dir means a fresh checkout that hasn't run the refresh workflow
+	// yet. The fixture-level compat-diff gate in runFixture (added in a
+	// later PR of feat/pr-gated-v2-compat) will handle per-fixture-missing
+	// cases with an actionable error.
+	compatMatrix := filepath.Join(opts.AbsRepo, "docs", "compat-matrix.md")
+	if _, err := os.Stat(compatMatrix); err != nil {
+		return nil, nil, fmt.Errorf("docs/compat-matrix.md missing under repo: %w", err)
+	}
+	mounts = append(mounts,
+		build.Mount{Host: compatMatrix, Container: "/compat-matrix.md", ReadOnly: true},
+	)
+	// Goldens live under a version-namespaced subdirectory
+	// (test/compat/testdata/golden/v2/<fixture>.json) so future alternate
+	// sources can coexist (e.g. golden/v3/ when a new upstream baseline
+	// is pinned). The container mount flattens that namespace to /golden
+	// so runFixture can read /golden/<fixture>.json without knowing the
+	// version subpath convention. See internal/testsuite/testcell.go
+	// shouldRunCompat for the consumer path.
+	goldenDir := filepath.Join(opts.AbsRepo, "test", "compat", "testdata", "golden", "v2")
+	if _, err := os.Stat(goldenDir); err == nil {
+		mounts = append(mounts,
+			build.Mount{Host: goldenDir, Container: "/golden", ReadOnly: true},
+		)
+	}
+
+	// Deviations output directory: RW mount so runFixture can write per-cell
+	// artifact JSONs that ci.yml::compat-report consumes via upload-artifact.
+	// Directory is created here (not lazily inside the container) so the
+	// bind mount has a valid host path before `docker run`.
+	deviationsDir := filepath.Join(opts.AbsRepo, ".cache", "phpup-test", "deviations")
+	if err := os.MkdirAll(deviationsDir, 0o750); err != nil {
+		return nil, nil, fmt.Errorf("mkdir deviations: %w", err)
+	}
+	mounts = append(mounts,
+		build.Mount{Host: deviationsDir, Container: "/deviations", ReadOnly: false},
+	)
+
 	return mounts, env, nil
 }
 

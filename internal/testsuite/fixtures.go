@@ -36,6 +36,14 @@ type Fixture struct {
 	Arch string `yaml:"arch,omitempty"`
 	// RunnerOS is optional; e.g. "ubuntu-22.04". Empty means any OS.
 	RunnerOS string `yaml:"runner_os,omitempty"`
+	// Compat, when true, opts this fixture into the PR-time drop-in-v2
+	// compat-diff gate: the runner compares the fixture's probe output
+	// against a committed v2 golden at
+	// test/compat/testdata/golden/v2/<Name>.json. The comparison runs
+	// only in the canonical cell (noble/x86_64/8.4); non-canonical
+	// cells skip compat-diff even when this is true. Absent == false.
+	// See docs/superpowers/specs/2026-04-24-pr-gated-v2-compat-design.md.
+	Compat bool `yaml:"compat,omitempty"`
 }
 
 // FixtureSet is the top-level document shape of test/compat/fixtures.yaml.

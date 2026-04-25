@@ -15,6 +15,7 @@ import (
 // writeTestsuiteFixture creates a minimal repo layout under dir with:
 //   - test/compat/fixtures.yaml (a small synthetic FixtureSet)
 //   - test/compat/probe.sh (empty but exists)
+//   - docs/compat-matrix.md (compat matrix stub, required by buildCellMounts)
 //   - out/oci-layout/ (empty dir to pass stat check)
 //   - a fake "phpup" binary file (content doesn't matter — only presence is checked)
 //
@@ -42,6 +43,7 @@ func writeTestsuiteFixture(t *testing.T, dir string) string {
     coverage: none
 `, 0o644)
 	mustWrite("test/compat/probe.sh", "#!/bin/bash\n", 0o755)
+	mustWrite("docs/compat-matrix.md", "# compat matrix stub\n", 0o644)
 	if err := os.MkdirAll(filepath.Join(dir, "out", "oci-layout"), 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -214,6 +216,95 @@ func TestCellSummary_FormatsOK(t *testing.T) {
 	for _, want := range []string{"jammy/x86_64 php=8.4 fixtures=3 — OK", "SKIP (no fixtures)", "FAIL: boom"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("summary missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+// TestBuildCellMounts_MountsCompatMatrix asserts that the compat-matrix
+// markdown doc and the goldens directory (when it exists) are mounted
+// read-only into the test-cell container so compatdiff.DiffFiles can
+// read them via their container-side paths. The matrix file is a hard
+// requirement (error if missing); the goldens dir is optional (absent
+// = degraded compat-skip mode in runFixture).
+func TestBuildCellMounts_MountsCompatMatrix(t *testing.T) {
+	dir := t.TempDir()
+	fakeBinary := writeTestsuiteFixture(t, dir)
+
+	// writeTestsuiteFixture already wrote docs/compat-matrix.md.
+	matrixPath := filepath.Join(dir, "docs", "compat-matrix.md")
+	goldenDir := filepath.Join(dir, "test", "compat", "testdata", "golden", "v2")
+	if err := os.MkdirAll(goldenDir, 0o755); err != nil {
+		t.Fatalf("mkdir golden: %v", err)
+	}
+
+	opts := testOptsWith(t, dir, fakeBinary, []string{"noble"}, []string{"x86_64"}, []string{"8.4"})
+	mounts, _, err := buildCellMounts(opts, "noble", "x86_64", "8.4")
+	if err != nil {
+		t.Fatalf("buildCellMounts: %v", err)
+	}
+	var sawMatrix, sawGoldens bool
+	for _, m := range mounts {
+		if m.Host == matrixPath && m.Container == "/compat-matrix.md" && m.ReadOnly {
+			sawMatrix = true
+		}
+		if m.Host == goldenDir && m.Container == "/golden" && m.ReadOnly {
+			sawGoldens = true
+		}
+	}
+	if !sawMatrix {
+		t.Errorf("buildCellMounts did not mount docs/compat-matrix.md -> /compat-matrix.md (ro); mounts=%+v", mounts)
+	}
+	if !sawGoldens {
+		t.Errorf("buildCellMounts did not mount test/compat/testdata/golden/v2 -> /golden (ro); mounts=%+v", mounts)
+	}
+}
+
+// TestBuildCellMounts_MissingCompatMatrix asserts that buildCellMounts
+// returns an error (not silently skips) when docs/compat-matrix.md is
+// absent from the repo. This is a repo-integrity signal: any checkout
+// in which that file is missing should fail loudly.
+func TestBuildCellMounts_MissingCompatMatrix(t *testing.T) {
+	dir := t.TempDir()
+	fakeBinary := writeTestsuiteFixture(t, dir)
+	// Remove docs/compat-matrix.md that writeTestsuiteFixture created.
+	matrixPath := filepath.Join(dir, "docs", "compat-matrix.md")
+	if err := os.Remove(matrixPath); err != nil {
+		t.Fatalf("remove compat-matrix.md: %v", err)
+	}
+
+	opts := testOptsWith(t, dir, fakeBinary, []string{"noble"}, []string{"x86_64"}, []string{"8.4"})
+	_, _, err := buildCellMounts(opts, "noble", "x86_64", "8.4")
+	if err == nil {
+		t.Fatalf("buildCellMounts: want error for missing compat-matrix.md, got nil")
+	}
+	if !strings.Contains(err.Error(), "compat-matrix.md") {
+		t.Errorf("error message should mention compat-matrix.md; got %v", err)
+	}
+}
+
+// TestBuildCellMounts_GoldensDirOptional asserts that an absent
+// goldens directory is NOT an error from buildCellMounts — it's the
+// degraded mode that a fresh checkout (pre-refresh-workflow) sits in.
+// Note: on a canonical-cell run, opted-in fixtures whose per-fixture
+// golden file is missing are a HARD error at the runFixture level
+// (step 6), not a silent skip. This test only covers the mount-
+// construction layer; the per-fixture error is covered in
+// testcell_compat_test.go.
+func TestBuildCellMounts_GoldensDirOptional(t *testing.T) {
+	dir := t.TempDir()
+	fakeBinary := writeTestsuiteFixture(t, dir)
+
+	// writeTestsuiteFixture already wrote docs/compat-matrix.md.
+	// Deliberately do NOT create test/compat/testdata/golden.
+
+	opts := testOptsWith(t, dir, fakeBinary, []string{"noble"}, []string{"x86_64"}, []string{"8.4"})
+	mounts, _, err := buildCellMounts(opts, "noble", "x86_64", "8.4")
+	if err != nil {
+		t.Fatalf("buildCellMounts (no goldens dir): %v", err)
+	}
+	for _, m := range mounts {
+		if m.Container == "/golden" {
+			t.Errorf("no /golden mount expected when goldens dir is absent; got %+v", m)
 		}
 	}
 }

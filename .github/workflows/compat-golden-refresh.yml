@@ -1,0 +1,201 @@
+name: compat-golden-refresh
+
+# Re-captures v2 compat probes weekly and opens a drift PR if the bytes
+# changed. Also exposed via workflow_dispatch so maintainers can
+# force-refresh on demand (e.g. to unblock a feature PR that went red
+# on compat because v2 shipped something new between scheduled runs).
+#
+# The `pull_request` trigger (scoped to this file's own path) serves two
+# purposes: (1) it bootstraps the initial golden capture during the
+# feature PR that first introduces this workflow — workflow_dispatch
+# requires the workflow file to already live on the default branch, and
+# the pull_request trigger sidesteps that chicken-and-egg; (2) any
+# subsequent edit to this workflow re-runs it, so we never merge a
+# broken capture pipeline. Scoped to just this file so unrelated PRs
+# don't redundantly re-capture.
+
+on:
+  schedule:
+    - cron: "0 12 * * MON"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/compat-golden-refresh.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Serialize refresh runs on the shared `chore/compat-golden-refresh`
+# branch. Without this, a Monday cron firing while a PR-trigger run
+# from a workflow-file edit is still in-flight would race on
+# peter-evans/create-pull-request — both fighting over the same
+# branch would either force-push each other's commits or open
+# duplicate PRs. cancel-in-progress=false lets the earlier run
+# finish cleanly before the newer one starts, which is the correct
+# posture for a side-effecting (PR-opening) workflow.
+concurrency:
+  group: compat-golden-refresh
+  cancel-in-progress: false
+
+env:
+  # Pinned v2 SHA. MUST match `## Pinning` in docs/compat-matrix.md.
+  # The sanity-check job reads the markdown and refuses to run if the
+  # two values disagree.
+  PINNED_V2_SHA: accd6127cb78bee3e8082180cb391013d204ef9f
+
+jobs:
+  sanity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      last_refreshed: ${{ steps.stamp.outputs.date }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify PINNED_V2_SHA matches docs/compat-matrix.md
+        run: |
+          # Extract the SHA from the "Commit SHA (dereferenced)" row of the
+          # compat-matrix.md pinning table. Using awk with backtick as the
+          # field separator keeps this self-consistent even when the env's
+          # PINNED_V2_SHA changes — we read what's in the doc, then
+          # compare. Any drift between doc and env fails the workflow
+          # fast with an informative message.
+          doc_sha="$(awk -F'`' '/Commit SHA \(dereferenced\)/ {print $2; exit}' docs/compat-matrix.md)"
+          if [ "$doc_sha" != "$PINNED_V2_SHA" ]; then
+            echo "::error::docs/compat-matrix.md pins '$doc_sha' but workflow env is '$PINNED_V2_SHA' — update one to match the other"
+            exit 1
+          fi
+      - id: stamp
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+  capture:
+    needs: sanity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture:
+          - { name: bare,                 php: "8.4", extensions: "",              ini_values: "",                                   coverage: "none",   ini_file: "" }
+          - { name: exclusion,            php: "8.4", extensions: ":opcache",      ini_values: "",                                   coverage: "none",   ini_file: "" }
+          - { name: single-ext,           php: "8.4", extensions: "redis",         ini_values: "",                                   coverage: "none",   ini_file: "" }
+          - { name: multi-ext,            php: "8.4", extensions: "redis, xdebug", ini_values: "",                                   coverage: "none",   ini_file: "" }
+          - { name: none-reset,           php: "8.4", extensions: "none, redis",   ini_values: "",                                   coverage: "none",   ini_file: "" }
+          - { name: coverage-pcov,        php: "8.4", extensions: "",              ini_values: "",                                   coverage: "pcov",   ini_file: "" }
+          - { name: ini-and-coverage,     php: "8.4", extensions: "",              ini_values: "memory_limit=256M,date.timezone=UTC", coverage: "xdebug", ini_file: "" }
+          - { name: ini-file-development, php: "8.4", extensions: "",              ini_values: "",                                   coverage: "none",   ini_file: "development" }
+    steps:
+      - uses: actions/checkout@v6
+      - name: Snapshot env + PATH before setup-php
+        run: |
+          env > /tmp/env-before
+          printf "%s" "$PATH" > /tmp/path-before
+      - name: Setup PHP (pinned v2)
+        uses: shivammathur/setup-php@accd6127cb78bee3e8082180cb391013d204ef9f
+        with:
+          php-version: ${{ matrix.fixture.php }}
+          extensions: ${{ matrix.fixture.extensions }}
+          ini-values: ${{ matrix.fixture.ini_values }}
+          coverage: ${{ matrix.fixture.coverage }}
+          ini-file: ${{ matrix.fixture.ini_file }}
+      - name: Probe
+        run: |
+          chmod +x test/compat/probe.sh
+          bash test/compat/probe.sh \
+            /tmp/golden-${{ matrix.fixture.name }}.json \
+            /tmp/env-before \
+            /tmp/path-before \
+            test/compat/ini-keys.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: golden-${{ matrix.fixture.name }}
+          path: /tmp/golden-${{ matrix.fixture.name }}.json
+          retention-days: 3
+
+  aggregate:
+    needs: [sanity, capture]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: golden-*
+          path: /tmp/golden-raw
+          merge-multiple: true
+      - name: Stage captured goldens into the repo tree
+        run: |
+          mkdir -p test/compat/testdata/golden/v2
+          # Each artifact name is golden-<fixture>; the file inside is
+          # named golden-<fixture>.json. Normalize to <fixture>.json.
+          for f in /tmp/golden-raw/golden-*.json; do
+            name="$(basename "$f" .json)"
+            dest_name="${name#golden-}"
+            cp "$f" "test/compat/testdata/golden/v2/${dest_name}.json"
+          done
+          ls -la test/compat/testdata/golden/v2/
+      - name: Detect drift
+        id: drift
+        run: |
+          # Use `git status --porcelain` rather than `git diff --quiet`
+          # because the latter ignores untracked files — on the initial
+          # capture (goldens dir previously empty) every JSON is a new
+          # file, not a modification to a tracked one. The porcelain
+          # output is non-empty iff anything under the path differs
+          # from HEAD, covering adds, modifications, and deletions.
+          if [ -z "$(git status --porcelain test/compat/testdata/golden/v2/)" ]; then
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "No v2 drift detected." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Per-fixture golden changes"
+              git status --porcelain test/compat/testdata/golden/v2/
+              echo
+              echo "### Per-fixture diff stats (modifications only)"
+              git diff --stat test/compat/testdata/golden/v2/ || true
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Open drift PR
+        if: steps.drift.outputs.drift == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: refresh v2 compat goldens"
+          branch: chore/compat-golden-refresh
+          delete-branch: true
+          # Base branch picker by event type:
+          #   - schedule / workflow_dispatch: github.ref_name is the
+          #     branch the workflow is running against (`main` for
+          #     scheduled runs; maintainer-chosen ref for dispatch).
+          #   - pull_request: github.ref_name is the synthetic
+          #     `<pr-number>/merge` ref (not a real branch) — we need
+          #     github.head_ref, which is the PR's source branch.
+          # This ternary keeps a single rolling drift PR targeting
+          # whatever branch the workflow fired from.
+          base: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+          title: "chore: refresh v2 compat goldens"
+          body: |
+            Weekly (or on-demand) refresh of the pinned v2 compat probes.
+
+            **Pinned v2 SHA:** `${{ env.PINNED_V2_SHA }}`
+            **Captured at:** `${{ needs.sanity.outputs.last_refreshed }}` UTC
+
+            ### Drift summary
+
+            Review `git diff` on `test/compat/testdata/golden/v2/` to see
+            which fixture(s) shifted and which JSON paths moved.
+
+            ### How to decide
+
+            - **Allowlist already tolerates the drift** — safe to merge;
+              PR-time compat-diff would not have flagged it. Merging just
+              keeps goldens close to live v2.
+            - **Allowlist does NOT tolerate the drift** — merging this PR
+              makes the new v2 behavior the PR-time baseline. Open a
+              separate PR to either (a) match the new v2 behavior in our
+              action or (b) extend the allowlist in `docs/compat-matrix.md`
+              with a `reason:`.
+
+            Opened by `.github/workflows/compat-golden-refresh.yml`.
+          labels: compat-refresh, chore
