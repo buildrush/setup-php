@@ -247,18 +247,36 @@ jobs:
       - name: Build phpup
         run: make bin/phpup
       - name: Download all oci-layout artifacts
+        # Each cell's artifact lands in its own subdirectory:
+        #   out/oci-layout-<os>-<arch>-<php>/<oci-layout files>
+        # We deliberately do NOT use merge-multiple here — that flag
+        # overwrites colliding files (every cell's oci-layout/index.json
+        # lives at the same relative path), losing 19 cells' worth of
+        # manifest entries even though the blob bytes survive in
+        # blobs/sha256/. Promote walks each layout separately instead.
         uses: actions/download-artifact@v8
         with:
           pattern: oci-layout-*
-          path: out/merged-layout
-          merge-multiple: true
+          path: out
       - name: Promote to GHCR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
         run: |
-          bin/phpup push \
-            --from "oci-layout:$(pwd)/out/merged-layout" \
-            --to "ghcr.io/${{ github.repository_owner }}"
+          set -euo pipefail
+          shopt -s nullglob
+          layouts=(out/oci-layout-*/)
+          if [ "${#layouts[@]}" -eq 0 ]; then
+            echo "::error::no oci-layout-* artifacts found under out/"
+            exit 1
+          fi
+          for layoutdir in "${layouts[@]}"; do
+            echo "::group::Promote $layoutdir"
+            bin/phpup push \
+              --from "oci-layout:$(pwd)/${layoutdir%/}" \
+              --to "ghcr.io/$OWNER"
+            echo "::endgroup::"
+          done
       - name: Update lockfile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
