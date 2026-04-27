@@ -229,6 +229,13 @@ jobs:
     needs: [pipeline, smoke-action]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    permissions:
+      # Override the workflow-level contents:read so this job can push
+      # the bundles.lock auto-update commit back to main. Other jobs keep
+      # the read-only default — only publish needs write access.
+      contents: write
+      packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v6
         with:
