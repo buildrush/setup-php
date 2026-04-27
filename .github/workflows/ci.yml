@@ -113,8 +113,9 @@ jobs:
           # "do the normal cache-probe".
           FORCE: ${{ inputs.force && '1' || '' }}
         run: make ci-cell OS=${{ matrix.os }} ARCH=${{ matrix.arch }} PHP=${{ matrix.php }} FORCE="$FORCE"
-      - name: Upload oci-layout artifact (main only)
-        if: github.ref == 'refs/heads/main'
+      - name: Upload oci-layout artifact
+        # Uploaded on every run (PR and main). PR runs use it for
+        # smoke-action self-containment; main runs feed publish.
         uses: actions/upload-artifact@v7
         with:
           name: oci-layout-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.php }}
@@ -169,7 +170,42 @@ jobs:
           mkdir -p "$RUNNER_TOOL_CACHE/buildrush-bin"
           go build -o "$RUNNER_TOOL_CACHE/buildrush-bin/phpup" ./cmd/phpup
           chmod +x "$RUNNER_TOOL_CACHE/buildrush-bin/phpup"
+      - name: Translate arch label for artifact lookup
+        # pipeline matrix uses x86_64/aarch64; smoke matrix uses amd64/arm64.
+        # Compute the pipeline-style arch for the download-artifact name.
+        id: archlabel
+        run: |
+          case "${{ matrix.arch }}" in
+            amd64) echo "value=x86_64"  >> "$GITHUB_OUTPUT" ;;
+            arm64) echo "value=aarch64" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::unknown matrix.arch=${{ matrix.arch }}"; exit 2 ;;
+          esac
+      - name: Download pipeline oci-layout for this cell
+        # PHP 8.4 hardcoded — the smoke matrix is fixed at 8.4 (see comment
+        # on the matrix definition above). Keep the version aligned with the
+        # `php-version:` input passed to `uses: ./` below.
+        uses: actions/download-artifact@v8
+        with:
+          name: oci-layout-${{ matrix.os }}-${{ steps.archlabel.outputs.value }}-8.4
+          path: out/oci-layout
+      - name: Synthesize PR-local lockfile from layout
+        # Resolves bundle keys against the just-built layout's digests rather
+        # than the (possibly stale) committed bundles.lock + GHCR. The action
+        # invocation below picks this up via PHPUP_REGISTRY/PHPUP_LOCKFILE.
+        run: |
+          "$RUNNER_TOOL_CACHE/buildrush-bin/phpup" internal lockfile-from-layout \
+            --layout "oci-layout:$PWD/out/oci-layout" \
+            --out "$RUNNER_TEMP/bundles-override.lock"
       - name: Invoke action (uses ./)
+        env:
+          # Point phpup install at the PR-local oci-layout + synthesized
+          # lockfile so smoke validates the public action surface end-to-end
+          # against the bundles this PR's pipeline actually built. Without
+          # these env overrides, phpup install would query the committed
+          # bundles.lock + GHCR — which lags behind any PR that bumps a
+          # bundle version and causes a deadlock with the `publish` job.
+          PHPUP_REGISTRY: oci-layout:${{ github.workspace }}/out/oci-layout
+          PHPUP_LOCKFILE: ${{ runner.temp }}/bundles-override.lock
         uses: ./
         with:
           php-version: "8.4"
