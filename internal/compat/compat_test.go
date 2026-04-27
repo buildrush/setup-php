@@ -39,8 +39,8 @@ func TestUnimplementedInputWarning(t *testing.T) {
 }
 
 func TestDefaultIniValuesMatchesGolden(t *testing.T) {
-	// The golden file pins x86_64's expected keys. aarch64 branch has its
-	// own targeted cases in TestDefaultIniValues_PHP8xOpcacheJIT below.
+	// The golden file pins the expected 2-key set, version/arch invariant.
+	// Opcache tests (with arch-aware jit_buffer_size) are below.
 	got := DefaultIniValues("8.4", "x86_64")
 
 	want := map[string]string{}
