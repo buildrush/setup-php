@@ -22,7 +22,7 @@ type Annotations struct {
 	SpecHash string
 
 	// BundleKey is the canonical lockfile key, e.g.
-	// "php:8.4:linux:x86_64:nts" or "ext:redis:6.2.0:8.4-nts:linux:x86_64".
+	// "php:8.4:linux:x86_64:nts" or "ext:redis:6.2.0:8.4:linux:x86_64:nts".
 	// Set by phpup build php|ext; read by phpup test's lockfile-override
 	// synthesis so test containers can resolve bundles against a local
 	// layout whose digests differ from the embedded bundles.lock.

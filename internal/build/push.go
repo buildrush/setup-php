@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/buildrush/setup-php/internal/registry"
 )
@@ -25,25 +26,19 @@ func PushMain(args []string) error {
 	return PushAll(context.Background(), *from, *to)
 }
 
-// PushAll promotes every bundle in source to dest. Source MUST be an
-// oci-layout (remote->remote copy isn't supported in PR 4; use oras for
-// that case) — a remote source is rejected up front with an error
-// mentioning the supported URI form.
+// PushAll promotes every keyed bundle in source to dest. Source MUST be
+// an oci-layout populated by `phpup build`, where each manifest carries
+// the `io.buildrush.bundle.key` annotation — that's what lets us recover
+// the canonical publication tag (e.g. "6.3.0-8.5-nts-linux-x86_64" for
+// `ext:redis:6.3.0:8.5:linux:x86_64:nts`) on the destination.
 //
-// The walk reads the source layout's index, and for each manifest
-// re-pushes the layer bytes + meta to the destination via Store.Push.
-// Tag derivation is currently lossy: the source manifest's original
-// publication tag isn't recoverable from Fetch, so deriveTagForPromotion
-// falls back to a digest-prefix tag like "sha256-abc123…". PR 6 will
-// carry the original tag via a manifest annotation.
+// Manifests without a bundle-key annotation are skipped silently by
+// ListKeyed; the `phpup build` path always sets it. Forward push paths
+// only see build-produced layouts, so this exposure is bounded.
 //
-// The bundle-name annotation is preserved (via Annotations.BundleName)
-// so the destination still resolves through LookupBySpec / Has for
-// downstream consumers. The source-side spec-hash is not propagated —
-// Fetch doesn't surface manifest annotations, so the promoted manifest
-// ends up annotated only by what ref.Name implies. When/if LookupBySpec
-// on a promoted remote becomes required, the Store interface will need
-// an annotations-accessor.
+// The destination manifest is annotated with BundleName/BundleKey/SpecHash
+// so consumers can resolve via canonical tag (lockfile-update) AND via
+// LookupBySpec (build-cache probe).
 func PushAll(ctx context.Context, sourceURI, destURI string) error {
 	src, err := registry.Open(sourceURI)
 	if err != nil {
@@ -53,75 +48,77 @@ func PushAll(ctx context.Context, sourceURI, destURI string) error {
 	if err != nil {
 		return fmt.Errorf("phpup push: open dest %s: %w", destURI, err)
 	}
-	// Source MUST expose an index walk. Only the layout backend does so
-	// natively in PR 4; a remote source would need a custom API to
-	// enumerate tagged manifests (deferred to PR 6 consolidation).
+	// Source MUST expose ListKeyed so we can recover the canonical tag
+	// from each manifest's bundle-key annotation. Only the layout backend
+	// implements it natively; a remote source would need a custom API to
+	// enumerate annotated manifests.
 	lister, ok := src.(interface {
-		List(ctx context.Context) ([]registry.Ref, error)
+		ListKeyed(ctx context.Context) ([]registry.KeyedRef, error)
 	})
 	if !ok {
-		return fmt.Errorf("phpup push: source %q doesn't support index walk (use oci-layout:<path>)", sourceURI)
+		return fmt.Errorf("phpup push: source %q doesn't support ListKeyed (use oci-layout:<path>)", sourceURI)
 	}
-	refs, err := lister.List(ctx)
+	refs, err := lister.ListKeyed(ctx)
 	if err != nil {
 		return fmt.Errorf("phpup push: list source: %w", err)
 	}
 	fmt.Printf("phpup push: promoting %d manifests from %s to %s\n", len(refs), sourceURI, destURI)
-	for _, ref := range refs {
-		if err := promoteOne(ctx, src, dst, ref); err != nil {
-			return fmt.Errorf("phpup push: promote %s: %w", ref, err)
+	for _, kref := range refs {
+		if err := promoteOne(ctx, src, dst, kref); err != nil {
+			return fmt.Errorf("phpup push: promote %s: %w", kref.Key, err)
 		}
 	}
 	return nil
 }
 
-// promoteOne fetches a single source manifest's bundle + meta and
-// pushes the payload to the destination under a derived tag. Close
-// failures on the source reader are swallowed — the push has already
-// succeeded at that point and the caller's next action is typically to
-// print a success line and exit.
-func promoteOne(ctx context.Context, src, dst registry.Store, ref registry.Ref) error {
-	rc, meta, err := src.Fetch(ctx, ref)
+// promoteOne fetches a single source manifest's bundle + meta and pushes
+// the payload to the destination under the canonical tag derived from
+// the bundle key. The destination manifest carries the propagated
+// BundleKey + SpecHash annotations so post-push lockfile-update and
+// LookupBySpec both resolve correctly.
+func promoteOne(ctx context.Context, src, dst registry.Store, kref registry.KeyedRef) error {
+	imageName, tag, err := canonicalRefFromBundleKey(kref.Key)
+	if err != nil {
+		return err
+	}
+	rc, meta, err := src.Fetch(ctx, registry.Ref{Name: kref.Name, Digest: kref.Digest})
 	if err != nil {
 		return fmt.Errorf("fetch: %w", err)
 	}
 	defer func() { _ = rc.Close() }()
-	tag := deriveTagForPromotion(ref)
-	if tag == "" {
-		return fmt.Errorf("couldn't derive tag for %s (ref has no digest)", ref)
+	dstRef := registry.Ref{Name: imageName, Tag: tag}
+	ann := registry.Annotations{
+		BundleName: imageName,
+		BundleKey:  kref.Key,
+		SpecHash:   kref.SpecHash,
 	}
-	if ref.Name == "" {
-		return fmt.Errorf("couldn't derive name for %s (ref has no bundle-name annotation)", ref)
-	}
-	dstRef := registry.Ref{Name: ref.Name, Tag: tag}
-	ann := registry.Annotations{BundleName: ref.Name}
 	return dst.Push(ctx, dstRef, rc, meta, ann)
 }
 
-// deriveTagForPromotion produces a tag string for a manifest based on
-// its digest. The canonical publication tag shape
-// (e.g. "<php-ver>-<os>-<arch>-<ts>" for php-core) isn't recoverable
-// from the Fetch return — go-containerregistry's layout reader doesn't
-// expose per-manifest tags on the index, and the digest alone doesn't
-// encode them. For PR 4 we fall back to "sha256-<first12hex>" so the
-// destination registry has SOMETHING to address, at the cost of losing
-// human-readable tag semantics. PR 6's CLI consolidation will thread
-// the original tag via the source manifest's annotation so promotions
-// stay addressable under their published names.
-func deriveTagForPromotion(ref registry.Ref) string {
-	if ref.Digest == "" {
-		return ""
+// canonicalRefFromBundleKey parses a bundle key produced by
+// internal/lockfile.{PHPBundleKey,ExtBundleKey} and returns the
+// (image-name, tag) pair that mirrors what `phpup lockfile-update`
+// queries against ghcr.io. The two paths must agree for `phpup push` →
+// `lockfile-update` to round-trip.
+//
+//	php:<ver>:<os>:<arch>:<ts>
+//	  → ("php-core",       "<ver>-<os>-<arch>-<ts>")
+//	ext:<name>:<ver>:<phpver>:<os>:<arch>:<ts>
+//	  → ("php-ext-<name>", "<ver>-<phpver>-<ts>-<os>-<arch>")
+//
+// Tool keys aren't supported yet — `phpup build` doesn't produce them
+// and `lockfile-update` doesn't query them. Returns an explicit error
+// rather than guessing a layout.
+func canonicalRefFromBundleKey(key string) (imageName, tag string, err error) {
+	parts := strings.Split(key, ":")
+	switch {
+	case len(parts) == 5 && parts[0] == "php":
+		ver, osName, arch, ts := parts[1], parts[2], parts[3], parts[4]
+		return "php-core", fmt.Sprintf("%s-%s-%s-%s", ver, osName, arch, ts), nil
+	case len(parts) == 7 && parts[0] == "ext":
+		name, ver, phpver, osName, arch, ts := parts[1], parts[2], parts[3], parts[4], parts[5], parts[6]
+		return "php-ext-" + name, fmt.Sprintf("%s-%s-%s-%s-%s", ver, phpver, ts, osName, arch), nil
+	default:
+		return "", "", fmt.Errorf("canonicalRefFromBundleKey: unrecognized bundle key shape %q", key)
 	}
-	// "sha256:" prefix is 7 characters; the hex payload that follows is
-	// 64 characters for sha256. Take 12 hex chars after the prefix —
-	// enough to avoid collisions in any realistic layout, short enough
-	// to stay within the OCI tag length limit (128 chars).
-	d := ref.Digest
-	if len(d) > 19 {
-		return "sha256-" + d[7:19]
-	}
-	// Pathological fallback — ref.Digest looks like "sha256:<short>"
-	// which shouldn't happen in practice but we keep the behavior
-	// defined rather than panicking.
-	return "sha256-" + d[7:]
 }
