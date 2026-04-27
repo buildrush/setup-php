@@ -32,10 +32,11 @@ func startPushTestRegistry(t *testing.T) string {
 	return u.Host
 }
 
-// seedLayoutForPush writes a bundle into a fresh oci-layout at
-// <dir>/layout, then returns the URI. Used to populate a source layout
-// for PushAll round-trip tests.
-func seedLayoutForPush(t *testing.T, dir, bundleName string, body []byte, meta *registry.Meta) string {
+// seedKeyedLayoutForPush writes a bundle into a fresh oci-layout at
+// <dir>/layout with full annotations (name + key + spec_hash) so the
+// PushAll path can recover the canonical tag from the key. Mirrors what
+// `phpup build php|ext` writes for produced bundles.
+func seedKeyedLayoutForPush(t *testing.T, dir, bundleName, bundleKey, specHash string, body []byte, meta *registry.Meta) string {
 	t.Helper()
 	layoutDir := filepath.Join(dir, "layout")
 	s, err := registry.Open("oci-layout:" + layoutDir)
@@ -45,31 +46,38 @@ func seedLayoutForPush(t *testing.T, dir, bundleName string, body []byte, meta *
 	if err := s.Push(context.Background(),
 		registry.Ref{Name: bundleName},
 		bytes.NewReader(body), meta,
-		registry.Annotations{BundleName: bundleName}); err != nil {
+		registry.Annotations{BundleName: bundleName, BundleKey: bundleKey, SpecHash: specHash}); err != nil {
 		t.Fatalf("seed layout: %v", err)
 	}
 	return "oci-layout:" + layoutDir
 }
 
 // TestPushAll_RoundTrip_LayoutToInProcessRegistry is the happy-path
-// end-to-end: seed an oci-layout with two manifests (php-core + one
-// ext), run PushAll against an in-process registry as destination, and
-// verify both manifests are fetchable on the destination under the
-// digest-derived tag.
+// end-to-end: seed an oci-layout with two annotated manifests (php-core +
+// one ext), run PushAll against an in-process registry as destination,
+// and verify both manifests are fetchable on the destination under the
+// canonical publication tag derived from the bundle key. Also verifies
+// that BundleKey and SpecHash annotations are propagated.
 func TestPushAll_RoundTrip_LayoutToInProcessRegistry(t *testing.T) {
 	ctx := context.Background()
 	tmp := t.TempDir()
 	phpCoreBytes := []byte("fake php-core bundle")
 	phpExtBytes := []byte("fake php-ext-redis bundle")
 
-	// Seed source layout with two bundles.
-	layoutURI := seedLayoutForPush(t, tmp, "php-core", phpCoreBytes, &registry.Meta{SchemaVersion: 3, Kind: "php-core"})
-	// Second push lands in the same layout path.
+	const phpKey = "php:8.5:linux:x86_64:nts"
+	const phpHash = "sha256:phpspecdigesthex0000000000000000000000000000000000000000000000"
+	const extKey = "ext:redis:6.3.0:8.5:linux:x86_64:nts"
+	const extHash = "sha256:extspecdigesthex0000000000000000000000000000000000000000000000"
+
+	// Seed source layout with two keyed bundles.
+	layoutURI := seedKeyedLayoutForPush(t, tmp, "php-core", phpKey, phpHash, phpCoreBytes,
+		&registry.Meta{SchemaVersion: 3, Kind: "php-core"})
 	layoutDir := filepath.Join(tmp, "layout")
 	s, _ := registry.Open("oci-layout:" + layoutDir)
 	if err := s.Push(ctx, registry.Ref{Name: "php-ext-redis"},
-		bytes.NewReader(phpExtBytes), &registry.Meta{SchemaVersion: 3, Kind: "php-ext"},
-		registry.Annotations{BundleName: "php-ext-redis"}); err != nil {
+		bytes.NewReader(phpExtBytes),
+		&registry.Meta{SchemaVersion: 3, Kind: "php-ext"},
+		registry.Annotations{BundleName: "php-ext-redis", BundleKey: extKey, SpecHash: extHash}); err != nil {
 		t.Fatalf("push ext: %v", err)
 	}
 
@@ -80,63 +88,63 @@ func TestPushAll_RoundTrip_LayoutToInProcessRegistry(t *testing.T) {
 		t.Fatalf("PushAll: %v", err)
 	}
 
-	// Re-open source to enumerate digest-derived tags the push would
-	// have used, so we can fetch back from the destination under the
-	// same tag.
-	lister := s.(interface {
-		List(ctx context.Context) ([]registry.Ref, error)
-	})
-	refs, err := lister.List(ctx)
-	if err != nil {
-		t.Fatalf("source List: %v", err)
+	// Each seeded bundle should land at the canonical tag derived from
+	// its bundle key — the same tag shape `lockfile-update` queries.
+	cases := []struct {
+		key      string
+		wantName string
+		wantTag  string
+		wantBody []byte
+	}{
+		{phpKey, "php-core", "8.5-linux-x86_64-nts", phpCoreBytes},
+		{extKey, "php-ext-redis", "6.3.0-8.5-nts-linux-x86_64", phpExtBytes},
 	}
-	if len(refs) != 2 {
-		t.Fatalf("source layout has %d manifests, want 2", len(refs))
-	}
-
-	// For each seeded bundle, verify the destination has a manifest at
-	// the derived tag with the same layer 0 bytes.
-	byName := map[string][]byte{
-		"php-core":      phpCoreBytes,
-		"php-ext-redis": phpExtBytes,
-	}
-	for _, r := range refs {
-		tag := deriveTagForPromotion(r)
-		if tag == "" {
-			t.Fatalf("empty derived tag for %s", r)
-		}
-		want, ok := byName[r.Name]
-		if !ok {
-			t.Fatalf("unexpected source ref %s", r)
-		}
-		dest, err := name.ParseReference(destURI + "/" + r.Name + ":" + tag)
-		if err != nil {
-			t.Fatalf("parse dest ref: %v", err)
-		}
-		desc, err := remote.Get(dest)
-		if err != nil {
-			t.Fatalf("remote.Get %s: %v", dest, err)
-		}
-		img, err := desc.Image()
-		if err != nil {
-			t.Fatalf("image: %v", err)
-		}
-		layers, err := img.Layers()
-		if err != nil {
-			t.Fatalf("layers: %v", err)
-		}
-		if len(layers) < 1 {
-			t.Fatalf("manifest has %d layers, want >=1", len(layers))
-		}
-		rc, err := layers[0].Compressed()
-		if err != nil {
-			t.Fatalf("layer 0: %v", err)
-		}
-		got, _ := io.ReadAll(rc)
-		_ = rc.Close()
-		if !bytes.Equal(got, want) {
-			t.Errorf("bundle %s: got %q, want %q", r.Name, got, want)
-		}
+	for _, tc := range cases {
+		t.Run(tc.wantName, func(t *testing.T) {
+			dest, err := name.ParseReference(destURI + "/" + tc.wantName + ":" + tc.wantTag)
+			if err != nil {
+				t.Fatalf("parse dest ref: %v", err)
+			}
+			desc, err := remote.Get(dest)
+			if err != nil {
+				t.Fatalf("remote.Get %s: %v (canonical tag missing — phpup push regression)", dest, err)
+			}
+			img, err := desc.Image()
+			if err != nil {
+				t.Fatalf("image: %v", err)
+			}
+			// Verify layer 0 bytes match the seeded body.
+			layers, err := img.Layers()
+			if err != nil {
+				t.Fatalf("layers: %v", err)
+			}
+			if len(layers) < 1 {
+				t.Fatalf("manifest has %d layers, want >=1", len(layers))
+			}
+			rc, err := layers[0].Compressed()
+			if err != nil {
+				t.Fatalf("layer 0: %v", err)
+			}
+			got, _ := io.ReadAll(rc)
+			_ = rc.Close()
+			if !bytes.Equal(got, tc.wantBody) {
+				t.Errorf("bundle %s: got %q, want %q", tc.wantName, got, tc.wantBody)
+			}
+			// Verify destination annotations propagated.
+			mf, err := img.Manifest()
+			if err != nil {
+				t.Fatalf("manifest: %v", err)
+			}
+			if got := mf.Annotations["io.buildrush.bundle.key"]; got != tc.key {
+				t.Errorf("dest bundle.key = %q, want %q", got, tc.key)
+			}
+			if got := mf.Annotations["io.buildrush.bundle.name"]; got != tc.wantName {
+				t.Errorf("dest bundle.name = %q, want %q", got, tc.wantName)
+			}
+			if got := mf.Annotations["io.buildrush.bundle.spec-hash"]; got == "" {
+				t.Errorf("dest bundle.spec-hash missing (want propagated from source)")
+			}
+		})
 	}
 }
 
@@ -152,8 +160,8 @@ func TestPushAll_RemoteSourceRejected(t *testing.T) {
 	if err == nil {
 		t.Fatal("PushAll with remote source: want error, got nil")
 	}
-	if !strings.Contains(err.Error(), "doesn't support index walk") {
-		t.Errorf("err = %v, want containing \"doesn't support index walk\"", err)
+	if !strings.Contains(err.Error(), "doesn't support ListKeyed") {
+		t.Errorf("err = %v, want containing \"doesn't support ListKeyed\"", err)
 	}
 }
 
@@ -179,14 +187,11 @@ func TestPushMain_MissingFlags_Errors(t *testing.T) {
 }
 
 // TestPushMain_EmptyLayoutSucceeds: a source layout that exists but
-// holds zero manifests is a legal no-op (symmetry with
-// List's ErrNotExist handling). Covers the case where PushAll is
-// invoked against a fresh build directory before any bundles have been
-// pushed. Must print 0-manifests banner and return nil.
+// holds zero manifests is a legal no-op (symmetry with ListKeyed's
+// ErrNotExist handling). Covers the case where PushAll is invoked
+// against a fresh build directory before any bundles have been pushed.
+// Must print 0-manifests banner and return nil.
 func TestPushMain_EmptyLayoutSucceeds(t *testing.T) {
-	// An empty directory makes layout.FromPath fail with ErrNotExist on
-	// the first walk — List returns (nil, nil) for that case, so
-	// PushAll should successfully iterate over zero refs.
 	host := startPushTestRegistry(t)
 	tmp := t.TempDir()
 	err := PushMain([]string{
@@ -198,36 +203,81 @@ func TestPushMain_EmptyLayoutSucceeds(t *testing.T) {
 	}
 }
 
-// TestDeriveTagForPromotion_DigestShortPrefix pins the fallback tag
-// format PushAll emits when the source manifest has no surface-level
-// tag info. Shape: "sha256-<first-12-hex>" — matches the comment on
-// deriveTagForPromotion. If a future PR threads the original tag via a
-// manifest annotation, this test will start failing and should be
-// updated to the new contract.
-func TestDeriveTagForPromotion_DigestShortPrefix(t *testing.T) {
+// TestCanonicalRefFromBundleKey covers every key shape the helper accepts
+// plus the rejection branch. The expected tag formats here are the same
+// strings `lockfile-update` queries against ghcr.io — keep this test in
+// lockstep with `internal/lockfileupdate.update.go`'s tag construction.
+func TestCanonicalRefFromBundleKey(t *testing.T) {
 	cases := []struct {
-		name   string
-		digest string
-		want   string
+		name       string
+		key        string
+		wantName   string
+		wantTag    string
+		wantErrSub string
 	}{
-		{"standard sha256", "sha256:abcdef012345678901234567890abcdefabcdefabcdefabcdefabcdefabcdef", "sha256-abcdef012345"},
-		{"short digest (pathological)", "sha256:abc", "sha256-abc"},
+		{
+			name:     "php core 8.5 linux x86_64 nts",
+			key:      "php:8.5:linux:x86_64:nts",
+			wantName: "php-core",
+			wantTag:  "8.5-linux-x86_64-nts",
+		},
+		{
+			name:     "php core 8.4 linux aarch64 nts",
+			key:      "php:8.4:linux:aarch64:nts",
+			wantName: "php-core",
+			wantTag:  "8.4-linux-aarch64-nts",
+		},
+		{
+			name:     "ext redis 6.3.0",
+			key:      "ext:redis:6.3.0:8.5:linux:x86_64:nts",
+			wantName: "php-ext-redis",
+			wantTag:  "6.3.0-8.5-nts-linux-x86_64",
+		},
+		{
+			name:     "ext xdebug 3.5.1",
+			key:      "ext:xdebug:3.5.1:8.4:linux:aarch64:nts",
+			wantName: "php-ext-xdebug",
+			wantTag:  "3.5.1-8.4-nts-linux-aarch64",
+		},
+		{
+			name:       "tool key not supported",
+			key:        "tool:composer:2.7.0:any:any",
+			wantErrSub: "unrecognized bundle key shape",
+		},
+		{
+			name:       "wrong prefix",
+			key:        "container:redis:7.0",
+			wantErrSub: "unrecognized bundle key shape",
+		},
+		{
+			name:       "ext with too few parts",
+			key:        "ext:redis:6.3.0:8.5:linux",
+			wantErrSub: "unrecognized bundle key shape",
+		},
+		{
+			name:       "empty",
+			key:        "",
+			wantErrSub: "unrecognized bundle key shape",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := deriveTagForPromotion(registry.Ref{Digest: tc.digest})
-			if got != tc.want {
-				t.Errorf("deriveTagForPromotion(%q) = %q, want %q", tc.digest, got, tc.want)
+			gotName, gotTag, err := canonicalRefFromBundleKey(tc.key)
+			if tc.wantErrSub != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErrSub) {
+					t.Errorf("err = %v, want containing %q", err, tc.wantErrSub)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+			if gotName != tc.wantName {
+				t.Errorf("name = %q, want %q", gotName, tc.wantName)
+			}
+			if gotTag != tc.wantTag {
+				t.Errorf("tag = %q, want %q", gotTag, tc.wantTag)
 			}
 		})
-	}
-}
-
-// TestDeriveTagForPromotion_EmptyDigest ensures the empty-digest input
-// produces an empty string (caller treats that as "can't derive a tag"
-// and errors at the promoteOne boundary).
-func TestDeriveTagForPromotion_EmptyDigest(t *testing.T) {
-	if got := deriveTagForPromotion(registry.Ref{}); got != "" {
-		t.Errorf("deriveTagForPromotion(empty) = %q, want empty", got)
 	}
 }
