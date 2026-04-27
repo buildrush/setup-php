@@ -1,10 +1,8 @@
-# Defaults set by shivammathur/setup-php@v2 on Linux runners for PHP 8.x.
-# Source: docs/compat-matrix.md §2.1 and §2.3, pinned SHA accd6127cb78bee3e8082180cb391013d204ef9f.
-# NOTE: extension-tied defaults (xdebug.mode=coverage) are handled at compose time, not here.
-# This golden is keyed to PHP 8.x (jit_versions = 8.[0-9]); non-8.x versions omit opcache.* lines.
+# Defaults set by shivammathur/setup-php@v2 on Linux runners.
+# Source: docs/compat-matrix.md §2.1 (base rows: date.timezone + memory_limit).
+# Opcache and xdebug defaults moved to OpcacheIniFragment / XdebugIniFragment
+# because their gates differ (opcache: PHP 8.x + opcache loaded;
+# xdebug: coverage: xdebug + xdebug3-supported version).
 
 date.timezone=UTC
 memory_limit=-1
-opcache.enable=1
-opcache.jit=1235
-opcache.jit_buffer_size=256M
