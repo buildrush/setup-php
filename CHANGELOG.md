@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.8.0](https://github.com/buildrush/setup-php/compare/v1.7.0...v1.8.0) (2026-04-27)
+
+
+### Features
+
+* **build:** phpup build php|ext subcommand (PR 2/6) ([#56](https://github.com/buildrush/setup-php/issues/56)) ([57f33c6](https://github.com/buildrush/setup-php/commit/57f33c6686f948bd2396321b131c766d25aace4d))
+* **catalog:** bump redis PECL 6.2.0 → 6.3.0 (restores PHP 8.5) ([#76](https://github.com/buildrush/setup-php/issues/76)) ([eb4f43d](https://github.com/buildrush/setup-php/commit/eb4f43d66ff7bc14844ec2bc07673e7917e14422))
+* **ci:** cut over to unified ci.yml, delete legacy workflows (PR 5/6) ([#60](https://github.com/buildrush/setup-php/issues/60)) ([34a9129](https://github.com/buildrush/setup-php/commit/34a912924e6bb4fec9c1d490f3ac4c178d37b9de))
+* **ci:** re-enable PHP 8.5 in pipeline matrix ([18c70c0](https://github.com/buildrush/setup-php/commit/18c70c024f93b8379b71d863bd4037d98091f8df))
+* **ci:** smoke-test the action surface on every PR ([eeb536b](https://github.com/buildrush/setup-php/commit/eeb536bc591b4f653141952e94b63631e8ec7682))
+* **ci:** unified ci.yml with thin 20-cell matrix (PR 4/6) ([#59](https://github.com/buildrush/setup-php/issues/59)) ([5db2578](https://github.com/buildrush/setup-php/commit/5db257810b2caa33c1e03d2c3c0aa6ebc178c927))
+* **ci:** workflow_dispatch + --force, rewire dead dispatches ([78da074](https://github.com/buildrush/setup-php/commit/78da07475a1a22aba36e15eb25fca8cf603c3997))
+* **compat:** emit stock PHP ini defaults to match v2 ([#79](https://github.com/buildrush/setup-php/issues/79)) ([#90](https://github.com/buildrush/setup-php/issues/90)) ([a3df8a2](https://github.com/buildrush/setup-php/commit/a3df8a2d40c7e6dc912d7558b4d70ec264a231ce))
+* cross-OS Ubuntu support via hermetic library capture (phase 2) ([#54](https://github.com/buildrush/setup-php/issues/54)) ([9a4e1cb](https://github.com/buildrush/setup-php/commit/9a4e1cba949dc6e79c3ba3f4e387e50fcd136522))
+* **phpup:** consolidate 5 CLI binaries as phpup subcommands (PR 6/6) ([#71](https://github.com/buildrush/setup-php/issues/71)) ([0ff12e4](https://github.com/buildrush/setup-php/commit/0ff12e40d87ecff5d1f87b8368c7645967b37805))
+* **registry:** introduce oci-layout backend + --registry flag (PR 1/6) ([#55](https://github.com/buildrush/setup-php/issues/55)) ([a853877](https://github.com/buildrush/setup-php/commit/a85387714829c2880a9f6b33740b3948b4a0c7b4))
+* **testsuite:** phpup test subcommand + ci-cell / ci make targets (PR 3/6) ([#58](https://github.com/buildrush/setup-php/issues/58)) ([eebefaa](https://github.com/buildrush/setup-php/commit/eebefaa0132e8e507a55127b535b34700c2dbedb))
+
+
+### Bug Fixes
+
+* **builders:** retry transient 5xx/timeout on source downloads ([dc72839](https://github.com/buildrush/setup-php/commit/dc72839863dc90c4d8ea73f1d78e460f9b967d00))
+* **ci:** complete ext-workflow cutover (PR 2.5/6) ([#57](https://github.com/buildrush/setup-php/issues/57)) ([7f83cce](https://github.com/buildrush/setup-php/commit/7f83cce584ca997d6c77205601ee2e1c938ab67a))
+* **lint:** attach cause to pinned-release lookup error ([0802fc8](https://github.com/buildrush/setup-php/commit/0802fc88d8cc3736b7b43c3cd344a9912684459f))
+* **phpup:** publish bundles under canonical tags, propagate annotations ([#87](https://github.com/buildrush/setup-php/issues/87)) ([eae118a](https://github.com/buildrush/setup-php/commit/eae118a12448f1ad488e1ccd4ff0dab1200c85f3))
+
+
+### Documentation
+
+* **claude:** require issues for deferred work and origin sync before branching ([47d050d](https://github.com/buildrush/setup-php/commit/47d050dc4cefeae12bd375c9d8edda4cee84f2da))
+* **compat-matrix:** drop post-merge-pending opcache allowlist + refresh extensions reason ([0a7a8d3](https://github.com/buildrush/setup-php/commit/0a7a8d323fcc0aa0c4edec9c4eb15049fabf3afc))
+
 ## [1.7.0](https://github.com/buildrush/setup-php/compare/v1.6.0...v1.7.0) (2026-04-22)
 
 
