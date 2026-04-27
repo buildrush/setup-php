@@ -145,15 +145,36 @@ per-SAPI `99-pecl.ini` scan-dir file when the version matches
 | --- | --- | --- |
 | `date.timezone` | `UTC` | `src/configs/ini/php.ini` L1 |
 | `memory_limit` | `-1` | `src/configs/ini/php.ini` L2 |
+| `expose_php` | `1` | `php.ini-production` L400; loaded via `add_php_config` (`src/scripts/linux.sh` L264-283) |
+| `log_errors` | `1` | `php.ini-production` L523; same load path |
+| `max_input_time` | `-1` | Compiled-in CLI-SAPI default; see note below |
+| `session.save_handler` | `files` | `php.ini-production` L1265; same load path |
+| `session.gc_maxlifetime` | `1440` | `php.ini-production` L1376; same load path |
+
+**Note on `max_input_time`:** stock `php.ini-production` declares
+`max_input_time = 60` (L419), but `max_input_time` is `PHP_INI_PERDIR` and
+only takes effect under FPM/CGI SAPIs. On CLI (the SAPI used by both v2's
+probe and our canonical-cell probe) the directive falls back to its
+compiled-in default of `-1`. Encoded as `-1` to match what
+`ini_get('max_input_time')` actually returns under v2.
+
+Source: stock `php.ini-production` at upstream commit
+`171b722edc1914a2d8f668e880febfa03a60af7e`
+(https://raw.githubusercontent.com/php/php-src/171b722edc1914a2d8f668e880febfa03a60af7e/php.ini-production).
+Encoded in `internal/compat.StockIniDefaults()`.
 
 ### 2.2 `src/configs/ini/xdebug.ini` (applied when PHP version matches `7.[2-4]|8.[0-9]`)
 
 | Key | Value | Condition | Source |
 | --- | --- | --- | --- |
 | `xdebug.mode` | `coverage` | Version matches `xdebug3_versions` — PHP 7.2 through 8.9. | `src/configs/ini/xdebug.ini` L1; `src/scripts/unix.sh` L9, L254 |
+| `xdebug.start_with_request` | `default` | Version matches `xdebug3_versions` — PHP 7.2 through 8.9. | xdebug compiled-in default (not set by v2's `xdebug.ini`); `src/scripts/unix.sh` L9, L254 |
 
-Note: this line is written even if xdebug is not installed. It is a no-op in
-that case because PHP ignores ini keys for unloaded extensions.
+Note: the `xdebug.mode` line is written even if xdebug is not installed. It
+is a no-op in that case because PHP ignores ini keys for unloaded extensions.
+`xdebug.start_with_request` is xdebug's own compiled-in default (`default`)
+and is not explicitly written by v2; it appears in the probe output whenever
+xdebug is loaded.
 
 ### 2.3 `src/configs/ini/jit.ini` (applied when PHP version matches `8.[0-9]`)
 
@@ -162,6 +183,16 @@ that case because PHP ignores ini keys for unloaded extensions.
 | `opcache.enable` | `1` | PHP 8.0–8.9 (`jit_versions` regex). | `src/configs/ini/jit.ini` L1; `src/scripts/unix.sh` L8, L256 |
 | `opcache.jit_buffer_size` | `256M` | PHP 8.0–8.9. | `src/configs/ini/jit.ini` L2 |
 | `opcache.jit` | `1235` | PHP 8.0–8.9. | `src/configs/ini/jit.ini` L3 |
+| `opcache.enable_cli` | `0` | PHP 8.0–8.9 (`jit_versions` regex). | `php.ini-production` L1669 at `171b722edc1914a2d8f668e880febfa03a60af7e`; load path same as §2.1 |
+| `opcache.memory_consumption` | `128` | PHP 8.0–8.9. | `php.ini-production` L1672 at `171b722edc1914a2d8f668e880febfa03a60af7e` |
+| `opcache.revalidate_freq` | `2` | PHP 8.0–8.9. | `php.ini-production` L1697 at `171b722edc1914a2d8f668e880febfa03a60af7e` |
+| `opcache.validate_timestamps` | `1` | PHP 8.0–8.9. | `php.ini-production` L1692 at `171b722edc1914a2d8f668e880febfa03a60af7e` |
+
+**Note:** these four keys originate from upstream `php.ini-production`, not
+v2's `src/configs/ini/jit.ini`. We ship them in the same Go fragment
+(`internal/compat.OpcacheIniFragment`) as the three jit.ini keys above
+because their applicability gate is identical (PHP 8.x AND opcache loaded)
+and the runtime overlays one merged map per run.
 
 The JIT block is written to `$pecl_file` (`$scan_dir/99-pecl.ini`) — not to
 the main `php.ini` — so user `ini-values` applied later (which tee into
