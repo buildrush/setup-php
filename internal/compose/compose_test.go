@@ -282,13 +282,14 @@ func TestMergeCompatLayers_OrderAndPrecedence(t *testing.T) {
 	xdebug := map[string]string{"xdebug.mode": "coverage"}
 	extra := map[string]string{"pcov.enabled": "1"}
 
-	// extra beats xdebug beats defaults, so test a conflict:
-	conflicting := map[string]string{"memory_limit": "512M"} // would overwrite default
-	got := MergeCompatLayers(defaults, nil, conflicting)
+	// Last write wins: extra beats defaults on a conflicting key.
+	conflicting := map[string]string{"memory_limit": "512M"}
+	got := MergeCompatLayers(defaults, conflicting)
 	if got["memory_limit"] != "512M" {
-		t.Errorf("extra should override defaults: got %q", got["memory_limit"])
+		t.Errorf("later layer should override: got %q", got["memory_limit"])
 	}
 
+	// All non-conflicting keys merge across layers.
 	got = MergeCompatLayers(defaults, xdebug, extra)
 	want := map[string]string{
 		"memory_limit":   "-1",
@@ -300,10 +301,33 @@ func TestMergeCompatLayers_OrderAndPrecedence(t *testing.T) {
 		t.Errorf("MergeCompatLayers = %v, want %v", got, want)
 	}
 
-	// nil layers treated as empty
-	got = MergeCompatLayers(defaults, nil, nil)
+	// nil layers treated as empty (no panic, no contribution).
+	got = MergeCompatLayers(defaults, nil, nil, nil)
 	if !reflect.DeepEqual(got, defaults) {
 		t.Errorf("with nil layers should equal defaults: got %v", got)
+	}
+}
+
+func TestMergeCompatLayers_VariadicEdgeCases(t *testing.T) {
+	// Zero layers: returns an empty (non-nil) map.
+	got := MergeCompatLayers()
+	if got == nil {
+		t.Error("MergeCompatLayers() returned nil; want empty map")
+	}
+	if len(got) != 0 {
+		t.Errorf("MergeCompatLayers() = %v; want empty map", got)
+	}
+
+	// Five layers (matches the new cmd/phpup wiring shape).
+	a := map[string]string{"k1": "v1"}
+	b := map[string]string{"k2": "v2"}
+	c := map[string]string{"k3": "v3"}
+	d := map[string]string{"k4": "v4"}
+	e := map[string]string{"k5": "v5"}
+	got = MergeCompatLayers(a, b, c, d, e)
+	want := map[string]string{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4", "k5": "v5"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("MergeCompatLayers (5 layers) = %v, want %v", got, want)
 	}
 }
 
