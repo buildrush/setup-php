@@ -215,17 +215,21 @@ func TestBaseIniFileName(t *testing.T) {
 }
 
 func TestXdebugIniFragment(t *testing.T) {
+	wantPresent := map[string]string{
+		"xdebug.mode":               "coverage",
+		"xdebug.start_with_request": "default",
+	}
 	cases := []struct {
 		php  string
 		want map[string]string
 	}{
-		{"8.4", map[string]string{"xdebug.mode": "coverage"}},
-		{"8.4.5", map[string]string{"xdebug.mode": "coverage"}},
-		{"8.0", map[string]string{"xdebug.mode": "coverage"}},
-		{"8.9.99", map[string]string{"xdebug.mode": "coverage"}},
-		{"7.4", map[string]string{"xdebug.mode": "coverage"}},
-		{"7.3", map[string]string{"xdebug.mode": "coverage"}},
-		{"7.2", map[string]string{"xdebug.mode": "coverage"}},
+		{"8.4", wantPresent},
+		{"8.4.5", wantPresent},
+		{"8.0", wantPresent},
+		{"8.9.99", wantPresent},
+		{"7.4", wantPresent},
+		{"7.3", wantPresent},
+		{"7.2", wantPresent},
 		{"7.1", nil}, // outside xdebug3_versions
 		{"9.0", nil}, // outside xdebug3_versions
 		{"", nil},

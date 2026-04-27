@@ -228,6 +228,9 @@ func OurBuildBundledExtras(phpVersion string) []string {
 // xdebug3 is active for the requested PHP version (matches regex 7.[2-4]|8.[0-9]
 // per docs/compat-matrix.md §2.2). Returns nil for any other version.
 //
+// The two keys are xdebug.mode=coverage and xdebug.start_with_request=default,
+// both shipped by v2's src/configs/ini/xdebug.ini (pinned SHA in §1).
+//
 // Deliberate divergence from v2's mechanism: v2 unconditionally writes this
 // fragment for every matching PHP version, even when xdebug is not installed
 // (PHP silently ignores ini keys for unloaded extensions). We take the
@@ -240,7 +243,10 @@ func XdebugIniFragment(phpVersion string) map[string]string {
 	if !xdebug3Supported(m) {
 		return nil
 	}
-	return map[string]string{"xdebug.mode": "coverage"}
+	return map[string]string{
+		"xdebug.mode":               "coverage",
+		"xdebug.start_with_request": "default",
+	}
 }
 
 func xdebug3Supported(minor string) bool {
