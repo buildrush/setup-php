@@ -39,8 +39,8 @@ func TestUnimplementedInputWarning(t *testing.T) {
 }
 
 func TestDefaultIniValuesMatchesGolden(t *testing.T) {
-	// The golden file pins x86_64's expected keys. aarch64 branch has its
-	// own targeted cases in TestDefaultIniValues_PHP8xOpcacheJIT below.
+	// The golden file pins the expected 2-key set, version/arch invariant.
+	// Opcache tests (with arch-aware jit_buffer_size) are below.
 	got := DefaultIniValues("8.4", "x86_64")
 
 	want := map[string]string{}
@@ -215,17 +215,21 @@ func TestBaseIniFileName(t *testing.T) {
 }
 
 func TestXdebugIniFragment(t *testing.T) {
+	wantPresent := map[string]string{
+		"xdebug.mode":               "coverage",
+		"xdebug.start_with_request": "default",
+	}
 	cases := []struct {
 		php  string
 		want map[string]string
 	}{
-		{"8.4", map[string]string{"xdebug.mode": "coverage"}},
-		{"8.4.5", map[string]string{"xdebug.mode": "coverage"}},
-		{"8.0", map[string]string{"xdebug.mode": "coverage"}},
-		{"8.9.99", map[string]string{"xdebug.mode": "coverage"}},
-		{"7.4", map[string]string{"xdebug.mode": "coverage"}},
-		{"7.3", map[string]string{"xdebug.mode": "coverage"}},
-		{"7.2", map[string]string{"xdebug.mode": "coverage"}},
+		{"8.4", wantPresent},
+		{"8.4.5", wantPresent},
+		{"8.0", wantPresent},
+		{"8.9.99", wantPresent},
+		{"7.4", wantPresent},
+		{"7.3", wantPresent},
+		{"7.2", wantPresent},
 		{"7.1", nil}, // outside xdebug3_versions
 		{"9.0", nil}, // outside xdebug3_versions
 		{"", nil},
@@ -240,49 +244,87 @@ func TestXdebugIniFragment(t *testing.T) {
 	}
 }
 
-func TestDefaultIniValues_PHP8xOpcacheJIT(t *testing.T) {
-	cases := []struct {
-		arch    string
-		wantBuf string
-	}{
-		{"x86_64", "256M"},
-		{"aarch64", "128M"},
+// After the OpcacheIniFragment split, DefaultIniValues returns the same 2-key
+// set on every PHP version and arch. Opcache.* moved to OpcacheIniFragment.
+func TestDefaultIniValues_VersionAndArchInvariant(t *testing.T) {
+	want := map[string]string{
+		"date.timezone": "UTC",
+		"memory_limit":  "-1",
 	}
-	for _, tc := range cases {
-		for _, php := range []string{"8.0", "8.1", "8.2", "8.3", "8.4", "8.5", "8.4.5", "8.9"} {
-			t.Run(tc.arch+"/"+php, func(t *testing.T) {
-				got := DefaultIniValues(php, tc.arch)
-				want := map[string]string{
-					"date.timezone":           "UTC",
-					"memory_limit":            "-1",
-					"opcache.enable":          "1",
-					"opcache.jit":             "1235",
-					"opcache.jit_buffer_size": tc.wantBuf,
-				}
+	for _, arch := range []string{"x86_64", "aarch64"} {
+		for _, php := range []string{"7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5", "8.4.5", "9.0"} {
+			t.Run(arch+"/"+php, func(t *testing.T) {
+				got := DefaultIniValues(php, arch)
 				if !reflect.DeepEqual(got, want) {
-					t.Errorf("DefaultIniValues(%q, %q) = %v, want %v", php, tc.arch, got, want)
+					t.Errorf("DefaultIniValues(%q, %q) = %v, want %v", php, arch, got, want)
 				}
 			})
 		}
 	}
 }
 
-func TestDefaultIniValues_NonPHP8(t *testing.T) {
-	// Below 8.x the opcache/JIT block does not apply on either arch;
-	// both archs return the same 2-key set.
-	for _, arch := range []string{"x86_64", "aarch64"} {
-		for _, php := range []string{"7.4", "9.0"} {
-			t.Run(arch+"/"+php, func(t *testing.T) {
-				got := DefaultIniValues(php, arch)
-				want := map[string]string{
-					"date.timezone": "UTC",
-					"memory_limit":  "-1",
+func TestOpcacheIniFragmentMatchesGoldens(t *testing.T) {
+	cases := []struct {
+		arch   string
+		golden string
+	}{
+		{"x86_64", "opcache_ini_fragment_x86_64.golden"},
+		{"aarch64", "opcache_ini_fragment_aarch64.golden"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.arch, func(t *testing.T) {
+			got := OpcacheIniFragment("8.4", tc.arch)
+			want := map[string]string{}
+			for _, line := range readGoldenLines(t, tc.golden) {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) != 2 {
+					t.Fatalf("bad golden line: %q", line)
 				}
-				if !reflect.DeepEqual(got, want) {
-					t.Errorf("DefaultIniValues(%q, %q) = %v, want %v", php, arch, got, want)
+				want[parts[0]] = parts[1]
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("OpcacheIniFragment(8.4, %q) = %v, want %v", tc.arch, got, want)
+			}
+		})
+	}
+}
+
+func TestOpcacheIniFragment_AppliesToAllPHP8x(t *testing.T) {
+	for _, php := range []string{"8.0", "8.1", "8.2", "8.3", "8.4", "8.5", "8.4.5", "8.9"} {
+		t.Run(php, func(t *testing.T) {
+			if got := OpcacheIniFragment(php, "x86_64"); got == nil {
+				t.Errorf("OpcacheIniFragment(%q, x86_64) = nil, want non-nil", php)
+			}
+		})
+	}
+}
+
+func TestOpcacheIniFragment_NilOutsidePHP8x(t *testing.T) {
+	for _, arch := range []string{"x86_64", "aarch64"} {
+		for _, php := range []string{"7.4", "9.0", ""} {
+			t.Run(arch+"/"+php, func(t *testing.T) {
+				if got := OpcacheIniFragment(php, arch); got != nil {
+					t.Errorf("OpcacheIniFragment(%q, %q) = %v, want nil", php, arch, got)
 				}
 			})
 		}
+	}
+}
+
+func TestStockIniDefaultsMatchesGolden(t *testing.T) {
+	got := StockIniDefaults()
+
+	want := map[string]string{}
+	for _, line := range readGoldenLines(t, "stock_ini_defaults.golden") {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			t.Fatalf("bad golden line: %q", line)
+		}
+		want[parts[0]] = parts[1]
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("StockIniDefaults() = %v, want %v", got, want)
 	}
 }
 

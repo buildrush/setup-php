@@ -126,17 +126,19 @@ func SelectBaseIniFile(layout *Layout, filename string) error {
 	return os.WriteFile(layout.IniFile, data, 0o600)
 }
 
-// MergeCompatLayers returns a single ini-key map composed of (lower-precedence
-// first): defaults → xdebug fragment → extra. Callers pass the result as the
-// `defaults` argument to WriteIniValuesWithDefaults, which then layers user
-// ini-values over the top. Any of the inputs may be nil.
+// MergeCompatLayers returns a single ini-key map composed of the given layers
+// in increasing precedence (last write wins). Any layer may be nil and is
+// treated as empty.
 //
-// The returned map is always non-nil (may be empty).
-func MergeCompatLayers(defaults, xdebugFragment, extra map[string]string) map[string]string {
-	merged := make(map[string]string, len(defaults)+len(xdebugFragment)+len(extra))
-	maps.Copy(merged, defaults)
-	maps.Copy(merged, xdebugFragment)
-	maps.Copy(merged, extra)
+// Callers pass the result as the `defaults` argument to
+// WriteIniValuesWithDefaults, which then layers user ini-values over the top.
+//
+// The returned map is always non-nil (may be empty for a zero-layer call).
+func MergeCompatLayers(layers ...map[string]string) map[string]string {
+	merged := make(map[string]string)
+	for _, layer := range layers {
+		maps.Copy(merged, layer)
+	}
 	return merged
 }
 

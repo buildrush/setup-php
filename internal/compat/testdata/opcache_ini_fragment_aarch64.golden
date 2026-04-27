@@ -1,0 +1,11 @@
+# v2's jit_aarch64.ini fragment + stock php.ini-production opcache lines.
+# Source: docs/compat-matrix.md §2.3 + §2.4.
+# aarch64 differs from x86_64 only on opcache.jit_buffer_size (128M vs 256M).
+
+opcache.enable=1
+opcache.enable_cli=0
+opcache.jit=1235
+opcache.jit_buffer_size=128M
+opcache.memory_consumption=128
+opcache.revalidate_freq=2
+opcache.validate_timestamps=1

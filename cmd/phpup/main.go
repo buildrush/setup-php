@@ -396,16 +396,29 @@ func main() {
 		log.Fatalf("select base ini file: %v", err)
 	}
 
-	// 9b. Compose compat ini layers: defaults → xdebug fragment (only when
-	// coverage: xdebug drives the install — matches v2, which applies
-	// xdebug.ini only in the coverage flow, NOT when xdebug is loaded via
-	// extensions:) → ExtraIni (e.g. pcov.enabled=1) → user ini-values.
+	// 9b. Compose compat ini layers in increasing precedence (last write wins):
+	//   1. StockIniDefaults — always (php.ini-production keys v2 ships)
+	//   2. DefaultIniValues — always (date.timezone, memory_limit)
+	//   3. OpcacheIniFragment — only when opcache is loaded (mirrors the
+	//      auto-load gate at step 8b above; reuses opcacheExcluded)
+	//   4. XdebugIniFragment — only when coverage: xdebug drove the install
+	//      (matches v2, which applies xdebug.ini only in the coverage flow,
+	//      NOT when xdebug is loaded via extensions:)
+	//   5. ExtraIni — caller-injected (e.g. pcov.enabled=1)
+	// User-supplied ini-values are then layered on top by
+	// WriteIniValuesWithDefaults.
+	var opcacheFrag map[string]string
+	if slices.Contains(bundled, "opcache") && !opcacheExcluded {
+		opcacheFrag = compat.OpcacheIniFragment(p.PHPVersion, p.Arch)
+	}
 	var xdebugFrag map[string]string
 	if p.Coverage == plan.CoverageXdebug {
 		xdebugFrag = compat.XdebugIniFragment(p.PHPVersion)
 	}
 	layered := compose.MergeCompatLayers(
+		compat.StockIniDefaults(),
 		compat.DefaultIniValues(p.PHPVersion, p.Arch),
+		opcacheFrag,
 		xdebugFrag,
 		p.ExtraIni,
 	)
