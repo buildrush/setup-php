@@ -1,0 +1,12 @@
+# Defaults set by shivammathur/setup-php@v2 on every Linux runner.
+# Source: docs/compat-matrix.md §2.1 (stock php.ini-production rows).
+# These keys are always-on (no version or arch gate). Encoded as the value
+# v2 actually emits, which may differ from php.ini-production's literal value
+# (e.g. max_input_time=-1, the CLI-SAPI compiled-in default, overrides the
+# file's "60" because max_input_time is PHP_INI_PERDIR).
+
+expose_php=1
+log_errors=1
+max_input_time=-1
+session.gc_maxlifetime=1440
+session.save_handler=files

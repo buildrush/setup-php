@@ -286,6 +286,23 @@ func TestDefaultIniValues_NonPHP8(t *testing.T) {
 	}
 }
 
+func TestStockIniDefaultsMatchesGolden(t *testing.T) {
+	got := StockIniDefaults()
+
+	want := map[string]string{}
+	for _, line := range readGoldenLines(t, "stock_ini_defaults.golden") {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			t.Fatalf("bad golden line: %q", line)
+		}
+		want[parts[0]] = parts[1]
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("StockIniDefaults() = %v, want %v", got, want)
+	}
+}
+
 // readGoldenLines reads testdata/<name>, strips blank lines and # comments,
 // returns the remaining non-empty lines in file order.
 func readGoldenLines(t *testing.T, name string) []string {

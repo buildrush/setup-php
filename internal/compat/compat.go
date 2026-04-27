@@ -110,6 +110,28 @@ func DefaultIniValues(phpVersion, arch string) map[string]string {
 	return base
 }
 
+// StockIniDefaults returns the ini key/value pairs that shivammathur/setup-php@v2
+// applies to every Linux run via the stock upstream php.ini-production it
+// ships. Always-on, no version or arch gate.
+//
+// Codifies values v2 actually emits (per the canonical-cell golden), not
+// necessarily the literal contents of php.ini-production. For example,
+// max_input_time=-1 reflects PHP's CLI-SAPI compiled-in default, which
+// overrides php.ini-production's "60" because max_input_time is PHP_INI_PERDIR
+// and only takes effect under FPM/CGI.
+//
+// Data source: docs/compat-matrix.md §2.1; golden file
+// testdata/stock_ini_defaults.golden.
+func StockIniDefaults() map[string]string {
+	return map[string]string{
+		"expose_php":             "1",
+		"log_errors":             "1",
+		"max_input_time":         "-1",
+		"session.save_handler":   "files",
+		"session.gc_maxlifetime": "1440",
+	}
+}
+
 func isPHP8x(minor string) bool {
 	// compat-matrix §2.3: jit_versions = 8.[0-9]
 	switch minor {
