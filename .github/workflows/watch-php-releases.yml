@@ -31,7 +31,7 @@ jobs:
           git push
       - name: Dispatch ci.yml for rebuild
         if: steps.poll.outputs.changed == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           # force=false — a new upstream PHP release alone doesn't
           # invalidate existing bundles. The .state/ commit above is the

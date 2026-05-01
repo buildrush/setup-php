@@ -35,7 +35,7 @@ jobs:
           git push
       - name: Dispatch ci.yml for rebuild
         if: steps.check.outputs.changed == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           # force=false — runner-image updates don't invalidate existing
           # bundles on their own. ci.yml on main re-runs against the new
